@@ -1,23 +1,15 @@
-import { defineRouter } from '@quasar/app-vite/wrappers'
+import { route } from 'quasar/wrappers'
 import {
   createMemoryHistory,
   createRouter,
   createWebHashHistory,
-  createWebHistory,
+  createWebHistory
 } from 'vue-router'
 
 import routes from './routes.js'
+import { useAuthStore } from '../stores/authStore'
 
-/*
- * If not building with SSR mode, you can
- * directly export the Router instantiation;
- *
- * The function below can be async too; either use
- * async/await or return a Promise which resolves
- * with the Router instance.
- */
-
-export default defineRouter((/* { store, ssrContext } */) => {
+export default route((/* { store, ssrContext } */) => {
   const createHistory = import.meta.env.QUASAR_SERVER
     ? createMemoryHistory
     : (import.meta.env.QUASAR_VUE_ROUTER_MODE === 'history' ? createWebHistory : createWebHashHistory)
@@ -25,11 +17,39 @@ export default defineRouter((/* { store, ssrContext } */) => {
   const Router = createRouter({
     scrollBehavior: () => ({ left: 0, top: 0 }),
     routes,
-
-    // Leave this as is and make changes in quasar.conf.js instead!
-    // quasar.conf.js -> build -> vueRouterMode
-    // quasar.conf.js -> build -> publicPath
     history: createHistory(import.meta.env.QUASAR_VUE_ROUTER_BASE)
+  })
+
+  // Role Protection Guard (Requirement J & TEST 8)
+  Router.beforeEach((to, from, next) => {
+    const authStore = useAuthStore()
+
+    // 1. If not logged in and accessing protected route
+    if (to.meta.requiresAuth && !authStore.isLoggedIn) {
+      return next({ name: 'login' })
+    }
+
+    // 2. If logged in and visiting login page
+    if (to.path === '/login' && authStore.isLoggedIn) {
+      if (authStore.isAdmin) return next({ name: 'admin-dashboard' })
+      if (authStore.isSupervisor) return next({ name: 'supervisor-dashboard' })
+      return next({ name: 'petugas-dashboard' })
+    }
+
+    // 3. Role Access Restrictions
+    if (authStore.isLoggedIn) {
+      // Petugas trying to access Admin or Supervisor routes
+      if (authStore.isPetugas && (to.path.startsWith('/admin') || to.path.startsWith('/supervisor'))) {
+        return next({ name: 'petugas-dashboard' })
+      }
+
+      // Supervisor trying to access Admin routes
+      if (authStore.isSupervisor && to.path.startsWith('/admin')) {
+        return next({ name: 'supervisor-dashboard' })
+      }
+    }
+
+    next()
   })
 
   return Router

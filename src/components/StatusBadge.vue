@@ -1,7 +1,7 @@
 <template>
   <q-chip
     :color="badgeColor"
-    text-color="white"
+    :text-color="textColor"
     :size="size"
     class="text-weight-bold shadow-1"
   >
@@ -33,11 +33,24 @@ const badgeColor = computed(() => {
       return 'positive'
     case 'DRAFT':
       return 'warning'
-    case 'SCANNED':
-      return 'info'
+    case 'SUCCESS':
+      return 'positive'
+    case 'DUPLICATE':
+      return 'warning'
+    case 'ONLINE':
+      return 'positive'
+    case 'OFFLINE':
+      return 'grey-6'
+    case 'DISABLED':
+      return 'negative'
     default:
       return 'grey-7'
   }
+})
+
+const textColor = computed(() => {
+  if (props.status === 'DUPLICATE' || props.status === 'DRAFT') return 'dark'
+  return 'white'
 })
 
 const badgeIcon = computed(() => {
@@ -48,8 +61,16 @@ const badgeIcon = computed(() => {
       return 'check_circle'
     case 'DRAFT':
       return 'edit_note'
-    case 'SCANNED':
-      return 'inventory_2'
+    case 'SUCCESS':
+      return 'task_alt'
+    case 'DUPLICATE':
+      return 'warning'
+    case 'ONLINE':
+      return 'sensors'
+    case 'OFFLINE':
+      return 'sensors_off'
+    case 'DISABLED':
+      return 'block'
     default:
       return 'help_outline'
   }
@@ -63,8 +84,16 @@ const formattedStatus = computed(() => {
       return 'SELESAI'
     case 'DRAFT':
       return 'DRAFT'
-    case 'SCANNED':
-      return 'SCANNED'
+    case 'SUCCESS':
+      return 'SUCCESS'
+    case 'DUPLICATE':
+      return 'DUPLICATE'
+    case 'ONLINE':
+      return 'ONLINE'
+    case 'OFFLINE':
+      return 'OFFLINE'
+    case 'DISABLED':
+      return 'DISABLED'
     default:
       return props.status
   }

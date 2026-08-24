@@ -1,0 +1,115 @@
+<template>
+  <q-page class="q-pa-md q-pa-lg-xl">
+    <div class="row items-center justify-between q-mb-md">
+      <div>
+        <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">Kelola Task / Batch System</h4>
+        <div class="text-subtitle2 text-grey-7">Daftar alokasi tugas pengindaian paket di seluruh gerai/petugas</div>
+      </div>
+
+      <q-btn
+        color="primary"
+        icon="add_task"
+        label="BUAT TASK BARU"
+        unelevated
+        class="text-weight-bold"
+        @click="openAddTaskModal"
+      />
+    </div>
+
+    <q-separator class="q-mb-lg" />
+
+    <div class="row q-col-gutter-md">
+      <div v-for="task in taskStore.allTasks" :key="task.task_id" class="col-12 col-sm-6 col-md-4">
+        <TaskCard :task="task" />
+      </div>
+    </div>
+
+    <!-- Create Task Dialog -->
+    <q-dialog v-model="showAddModal">
+      <q-card style="min-width: 360px; border-radius: 16px;">
+        <q-card-section class="row items-center justify-between q-pb-xs">
+          <div class="text-h6 text-weight-bold row items-center">
+            <q-icon name="add_task" color="primary" class="q-mr-xs" />
+            Buat Task / Batch Baru
+          </div>
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+
+        <q-separator />
+
+        <q-card-section class="q-pt-md">
+          <q-form @submit.prevent="saveNewTask" class="q-gutter-y-md">
+            <q-select
+              v-model="newTask.user_id"
+              :options="petugasSelectOptions"
+              emit-value
+              map-options
+              outlined
+              dense
+              label="Pilih Petugas"
+              required
+            />
+            <q-input v-model.number="newTask.target" type="number" outlined dense label="Target Scan" required />
+            <q-input v-model="newTask.shift" outlined dense label="Shift (e.g. Pagi, Sore)" required />
+            <q-input v-model="newTask.lokasi" outlined dense label="Lokasi Gerai/Rayon" required />
+            <q-card-actions align="right" class="q-px-none">
+              <q-btn flat label="BATAL" color="grey-7" v-close-popup class="text-weight-bold" />
+              <q-btn type="submit" label="SIMPAN TASK" color="primary" class="text-weight-bold" unelevated />
+            </q-card-actions>
+          </q-form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
+  </q-page>
+</template>
+
+<script setup>
+import { ref, computed } from 'vue'
+import { useQuasar } from 'quasar'
+import { useAuthStore } from '../../stores/authStore'
+import { useTaskStore } from '../../stores/taskStore'
+import TaskCard from '../../components/TaskCard.vue'
+
+const $q = useQuasar()
+const authStore = useAuthStore()
+const taskStore = useTaskStore()
+
+const showAddModal = ref(false)
+const newTask = ref({
+  user_id: 'USR-001',
+  target: 100,
+  shift: 'Pagi',
+  lokasi: 'CIPUTAT'
+})
+
+const petugasSelectOptions = computed(() => {
+  return authStore.allPetugas.map((p) => ({
+    label: `${p.name} (${p.id})`,
+    value: p.id
+  }))
+})
+
+const openAddTaskModal = () => {
+  newTask.value = { user_id: 'USR-001', target: 100, shift: 'Pagi', lokasi: 'CIPUTAT' }
+  showAddModal.value = true
+}
+
+const saveNewTask = () => {
+  const petugas = authStore.users.find((u) => u.id === newTask.value.user_id)
+  const res = taskStore.createNewTask({
+    ...newTask.value,
+    user_name: petugas ? petugas.name : 'Petugas'
+  })
+
+  if (res.success) {
+    $q.notify({
+      type: 'positive',
+      icon: 'check_circle',
+      message: `Task ${res.task.task_id} berhasil dibuat.`,
+      position: 'top',
+      timeout: 2000
+    })
+    showAddModal.value = false
+  }
+}
+</script>
