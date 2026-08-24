@@ -1,4 +1,4 @@
-import { defineRouter } from '#q-app'
+import { defineRouter } from '@quasar/app-vite/wrappers'
 import {
   createMemoryHistory,
   createRouter,
