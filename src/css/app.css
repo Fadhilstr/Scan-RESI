@@ -1,1 +1,134 @@
-/* app global css */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+/* Wahana Express Official Brand Color Palette */
+:root {
+  --q-primary: #0b2341;     /* Wahana Deep Navy Blue */
+  --q-secondary: #07172b;   /* Wahana Midnight Blue */
+  --q-accent: #ffc700;      /* Wahana Official Bright Yellow */
+  --q-dark: #051329;
+  --q-positive: #10b981;
+  --q-negative: #ef4444;
+  --q-warning: #f59e0b;
+  --q-info: #0284c7;
+}
+
+body {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #f8fafc;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Wahana Brand Color Classes */
+.bg-wahana-navy {
+  background-color: #0b2341 !important;
+}
+
+.text-wahana-navy {
+  color: #0b2341 !important;
+}
+
+.bg-wahana-yellow {
+  background-color: #ffc700 !important;
+}
+
+.text-wahana-yellow {
+  color: #d97706 !important;
+}
+
+.bg-wahana-gradient {
+  background: linear-gradient(135deg, #0b2341 0%, #173b6c 100%) !important;
+}
+
+/* Operational Font helper for barcodes/resi */
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Glassmorphism & Elevated Cards with Wahana Branding */
+.scan-card {
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 4px 20px -2px rgba(11, 35, 65, 0.06), 0 2px 6px -1px rgba(11, 35, 65, 0.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.scan-card:hover {
+  box-shadow: 0 10px 25px -3px rgba(11, 35, 65, 0.1), 0 4px 10px -2px rgba(11, 35, 65, 0.04);
+}
+
+.stat-card {
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e2e8f0;
+  border-top: 4px solid #ffc700; /* Wahana Gold Accent Top Border */
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  border-color: #cbd5e1;
+  border-top-color: #f59e0b;
+  box-shadow: 0 12px 24px -4px rgba(11, 35, 65, 0.12);
+}
+
+/* Scanner Input Glow Effect */
+.scanner-input-box .q-field__inner {
+  border-radius: 14px;
+  transition: all 0.3s ease;
+}
+
+.scanner-input-box.q-field--focused .q-field__control {
+  box-shadow: 0 0 0 4px rgba(255, 199, 0, 0.3) !important;
+  border-color: #ffc700 !important;
+}
+
+/* Pulsing Scanner Dot */
+.scanner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #ffc700;
+  display: inline-block;
+  box-shadow: 0 0 0 0 rgba(255, 199, 0, 0.8);
+  animation: pulse-yellow 1.8s infinite;
+}
+
+@keyframes pulse-yellow {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(255, 199, 0, 0.8);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(255, 199, 0, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(255, 199, 0, 0);
+  }
+}
+
+/* Custom Table Styling */
+.q-table__container {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.q-table th {
+  font-weight: 700;
+  font-size: 0.825rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #0b2341;
+  background-color: #f1f5f9;
+}
+
+/* Rounded Buttons */
+.q-btn {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 10px;
+}
