@@ -3,7 +3,7 @@
     <div class="row items-center justify-between q-mb-lg">
       <div>
         <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">Dashboard Admin</h4>
-        <div class="text-subtitle1 text-grey-7">Monitoring operasional seluruh sistem scan Wahana Express</div>
+        <div class="text-subtitle1 text-grey-7">Monitoring operasional seluruh sistem scan Dijak Express</div>
       </div>
 
       <div class="row q-gutter-sm">

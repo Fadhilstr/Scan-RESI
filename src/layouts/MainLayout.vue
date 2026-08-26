@@ -18,7 +18,7 @@
         </q-avatar>
 
         <q-toolbar-title class="text-weight-bolder text-h6 font-mono tracking-wide text-wahana-navy">
-          WAHANA <span class="text-slate-900 text-weight-bold">EXPRESS</span>
+          DIJAK <span class="text-slate-900 text-weight-bold">EXPRESS</span>
           <span class="text-caption text-slate-800 text-weight-medium q-ml-xs gt-xs">
             | Logistics Scanner
           </span>
@@ -67,7 +67,7 @@
             <q-icon name="local_shipping" size="26px" />
           </q-avatar>
           <div>
-            <div class="text-subtitle1 text-weight-bolder text-amber-4">WAHANA EXPRESS</div>
+            <div class="text-subtitle1 text-weight-bolder text-amber-4">DIJAK EXPRESS</div>
             <div class="text-caption text-grey-4">Logistics Scanner Platform</div>
           </div>
         </div>
@@ -199,7 +199,7 @@
     <q-footer class="bg-white text-grey-8 bordered-top q-py-xs q-px-md">
       <div class="row items-center justify-between text-caption font-mono">
         <div>
-          <span class="text-weight-bold text-wahana-navy">Wahana Express Scan Paket Berbasis Barcode</span> &copy; 2026
+          <span class="text-weight-bold text-wahana-navy">Dijak Express Scan Paket Berbasis Barcode</span> &copy; 2026
         </div>
         <div class="gt-xs text-grey-6">
           Status: Multi-Role Prototype ({{ roleLabel }})

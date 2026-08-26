@@ -7,7 +7,7 @@
           <q-icon name="local_shipping" size="40px" />
         </q-avatar>
         <h4 class="text-h4 text-weight-bolder text-amber-4 q-my-none font-mono tracking-wide">
-          WAHANA EXPRESS
+          DIJAK EXPRESS
         </h4>
         <div class="text-subtitle2 text-grey-4">Logistics Barcode Scan Platform</div>
       </div>
@@ -125,7 +125,7 @@
 
       <!-- Footer Info -->
       <div class="text-center text-caption text-grey-5 q-mt-md font-mono">
-        Wahana Express Barcode Prototype &copy; 2026
+        Dijak Express Barcode Prototype &copy; 2026
       </div>
     </div>
   </div>

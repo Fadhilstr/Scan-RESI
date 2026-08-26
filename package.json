@@ -1,8 +1,8 @@
 {
   "name": "wahana-express-scan",
   "version": "1.0.0",
-  "description": "Aplikasi Scan Paket Logistik Berbasis Barcode — Wahana Express",
-  "productName": "Wahana Express | Logistics Scanner",
+  "description": "Aplikasi Scan Paket Logistik Berbasis Barcode — Dijak Express",
+  "productName": "Dijak Express | Logistics Scanner",
   "author": "Fadhil <2111500233@student.budiluhur.ac.id>",
   "type": "module",
   "private": true,

@@ -1,4 +1,4 @@
-# Wahana Express — Aplikasi Scan Paket Logistik Berbasis Barcode
+# Dijak Express — Aplikasi Scan Paket Logistik Berbasis Barcode
 
 Implementasi full-stack sesuai **PRD v1.0.0**: frontend Quasar (Vue 3 + Pinia) dan backend REST Perl + MariaDB, disajikan lewat Nginx.
 
