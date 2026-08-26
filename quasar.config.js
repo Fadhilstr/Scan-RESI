@@ -190,6 +190,9 @@ export default defineConfig((/* ctx */) => {
 
     // https://v2.quasar.dev/quasar-cli-vite/developing-pwa/configuring-pwa
     pwa: {
+      // GenerateSW: service worker dibuat otomatis oleh Workbox.
+      // App shell (html/js/css) di-precache; request /api/* TIDAK di-cache
+      // (tanpa runtimeCaching) agar data scan/resi selalu fresh dari backend.
       workboxMode: 'GenerateSW' // 'GenerateSW' or 'InjectManifest'
       // swFilename: 'sw.js',
       // manifestFilename: 'manifest.json',
