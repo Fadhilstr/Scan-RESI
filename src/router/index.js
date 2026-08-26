@@ -33,6 +33,7 @@ export default route((/* { store, ssrContext } */) => {
     if (to.path === '/login' && authStore.isLoggedIn) {
       if (authStore.isAdmin) return next({ name: 'admin-dashboard' })
       if (authStore.isSupervisor) return next({ name: 'supervisor-dashboard' })
+      if (authStore.isCustomer) return next({ name: 'customer-dashboard' })
       return next({ name: 'petugas-dashboard' })
     }
 
@@ -46,6 +47,18 @@ export default route((/* { store, ssrContext } */) => {
       // Supervisor trying to access Admin routes
       if (authStore.isSupervisor && to.path.startsWith('/admin')) {
         return next({ name: 'supervisor-dashboard' })
+      }
+
+      // Customer hanya boleh portal customer
+      if (authStore.isCustomer && !to.path.startsWith('/customer')) {
+        return next({ name: 'customer-dashboard' })
+      }
+
+      // Role non-customer dilarang masuk portal customer
+      if (!authStore.isCustomer && to.path.startsWith('/customer')) {
+        if (authStore.isAdmin) return next({ name: 'admin-dashboard' })
+        if (authStore.isSupervisor) return next({ name: 'supervisor-dashboard' })
+        return next({ name: 'petugas-dashboard' })
       }
     }
 

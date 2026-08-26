@@ -59,7 +59,7 @@ sub create {
     return { success => \0, message => 'Nama dan username wajib diisi.' }
         unless length $name && length $username;
 
-    my %valid_roles = map { $_ => 1 } qw(ADMIN SUPERVISOR PETUGAS_SCAN);
+    my %valid_roles = map { $_ => 1 } qw(ADMIN SUPERVISOR PETUGAS_SCAN CUSTOMER);
     return { success => \0, message => 'Role tidak valid.' }
         unless $valid_roles{$role};
 

@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
   name          VARCHAR(100) NOT NULL,
   username      VARCHAR(50)  NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  role          ENUM('ADMIN','SUPERVISOR','PETUGAS_SCAN') NOT NULL,
+  role          ENUM('ADMIN','SUPERVISOR','PETUGAS_SCAN','CUSTOMER') NOT NULL,
   supervisor_id VARCHAR(32)  NULL,
   status        ENUM('ONLINE','OFFLINE','DISABLED') NOT NULL DEFAULT 'OFFLINE',
   last_login    DATETIME     NULL,
@@ -67,9 +67,35 @@ CREATE TABLE IF NOT EXISTS tasks (
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------
+-- Tabel PAKET
+-- Master data paket/barang. Nomor resi SELALU digenerate oleh backend
+-- (8 karakter alfanumerik acak tanpa I/O/0/1) — klien tidak pernah
+-- mengirim nomor resi buatannya sendiri.
+-- Alur: CUSTOMER generate resi (DRAFT) → isi data barang → TERDAFTAR.
+-- Hanya paket TERDAFTAR yang boleh discan petugas (validasi backend).
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS paket (
+  nomor_resi    VARCHAR(16)  NOT NULL,
+  nama_barang   VARCHAR(150) NULL,
+  pengirim      VARCHAR(100) NULL,
+  penerima      VARCHAR(100) NULL,
+  alamat_tujuan VARCHAR(255) NULL,
+  berat_kg      DECIMAL(6,2) NOT NULL DEFAULT 0,
+  jenis_layanan ENUM('REGULER','EXPRESS','SAME_DAY') NOT NULL DEFAULT 'REGULER',
+  status        ENUM('DRAFT','TERDAFTAR') NOT NULL DEFAULT 'DRAFT',
+  created_by    VARCHAR(32)  NULL,
+  created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (nomor_resi),
+  KEY idx_paket_created_by (created_by),
+  CONSTRAINT fk_paket_user
+    FOREIGN KEY (created_by) REFERENCES users (id)
+) ENGINE=InnoDB;
+
+-- ---------------------------------------------------------------------
 -- Tabel SCAN_EVENTS
 -- Satu nomor resi hanya boleh SUCCESS satu kali per task
 -- (validasi dilakukan transaksional di backend).
+-- FK ketat ke paket: hanya resi terdaftar yang bisa discan.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS scan_events (
   scan_id     VARCHAR(32) NOT NULL,
@@ -87,7 +113,8 @@ CREATE TABLE IF NOT EXISTS scan_events (
   KEY idx_scans_user (user_id),
   KEY idx_scans_resi (nomor_resi),
   CONSTRAINT fk_scans_user FOREIGN KEY (user_id) REFERENCES users (id),
-  CONSTRAINT fk_scans_task FOREIGN KEY (task_id) REFERENCES tasks (task_id)
+  CONSTRAINT fk_scans_task FOREIGN KEY (task_id) REFERENCES tasks (task_id),
+  CONSTRAINT fk_scans_resi FOREIGN KEY (nomor_resi) REFERENCES paket (nomor_resi)
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------
@@ -129,7 +156,11 @@ INSERT INTO users (id, name, username, password_hash, role, supervisor_id, statu
 ('USR-003', 'Andi',
  'andi',
  CONCAT('sha256$', '5d40fa88', '$', SHA2(CONCAT('5d40fa88', 'andi123'), 256)),
- 'PETUGAS_SCAN', 'USR-SPV-001', 'OFFLINE', '2026-08-23 17:30:00');
+ 'PETUGAS_SCAN', 'USR-SPV-001', 'OFFLINE', '2026-08-23 17:30:00'),
+('USR-CUST-001', 'Customer Demo',
+ 'customer',
+ CONCAT('sha256$', 'a1b2c3d4', '$', SHA2(CONCAT('a1b2c3d4', 'cust123'), 256)),
+ 'CUSTOMER', NULL, 'OFFLINE', '2026-08-24 09:00:00');
 
 -- =====================================================================
 -- SEED DATA — Task / Batch
@@ -138,6 +169,18 @@ INSERT INTO tasks (task_id, user_id, shift, tanggal, target, progress, status, l
 ('TASK-001', 'USR-001', 'Pagi', '2026-08-24', 100, 3, 'PROSES_SCAN', 'CIPUTAT'),
 ('TASK-002', 'USR-002', 'Pagi', '2026-08-24', 80,  2, 'PROSES_SCAN', 'CIPUTAT'),
 ('TASK-003', 'USR-003', 'Pagi', '2026-08-24', 120, 2, 'PROSES_SCAN', 'CIPUTAT');
+
+-- =====================================================================
+-- SEED DATA — Paket (wajib ada sebelum scan_events karena FK resi)
+-- =====================================================================
+INSERT INTO paket (nomor_resi, nama_barang, pengirim, penerima, alamat_tujuan, berat_kg, jenis_layanan, status, created_by, created_at) VALUES
+('GJXL8FLB',  'Dokumen Kontrak',   'PT Sinar Jaya', 'Rina Wulandari', 'Jl. Margonda Raya No. 12, Depok',    1.20, 'EXPRESS',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:10:00'),
+('AB123456',  'Sepatu Olahraga',   'Toko Amanah',   'Dedi Kurniawan', 'Jl. Raya Ciputat No. 45, Tangerang', 2.50, 'REGULER',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:12:00'),
+('WHN555555', 'Laptop Kerja',      'CV Techindo',   'Sari Melati',    'Jl. Sudirman Kav. 21, Jakarta',      3.80, 'SAME_DAY',  'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:15:00'),
+('XYZ123456', 'Buku Tulis (12 pcs)', 'Toko Buku Ilmu', 'Ahmad Fauzi',  'Jl. Kampus Barat No. 8, Ciputat',    4.00, 'REGULER',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:18:00'),
+('WHN777777', 'Kamera Mirrorless', 'PhotoMart',     'Bagas Pratama',  'Jl. Cempaka Putih No. 3, Jakarta',   2.10, 'EXPRESS',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:20:00'),
+('ABC111111', 'Serum Skincare',    'GlowStore',     'Nadia Putri',    'Jl. Kartini No. 19, South Tangerang',0.60, 'SAME_DAY',  'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:22:00'),
+('ABC222222', 'Helm Motor',        'RideSafe Shop', 'Yoga Saputra',   'Jl. Ir. Juanda No. 77, Depok',       1.90, 'REGULER',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:25:00');
 
 -- =====================================================================
 -- SEED DATA — Scan Events

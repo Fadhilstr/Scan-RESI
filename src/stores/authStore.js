@@ -39,6 +39,7 @@ export const useAuthStore = defineStore('auth', {
     isAdmin: (state) => state.currentUser?.role === 'ADMIN',
     isSupervisor: (state) => state.currentUser?.role === 'SUPERVISOR',
     isPetugas: (state) => state.currentUser?.role === 'PETUGAS_SCAN',
+    isCustomer: (state) => state.currentUser?.role === 'CUSTOMER',
 
     // Petugas yang diawasi oleh supervisor tertentu
     supervisedPetugas: (state) => (supervisorId) => {

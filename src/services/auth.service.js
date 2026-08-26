@@ -72,6 +72,16 @@ const LOCAL_USERS = [
     supervisor_id: 'USR-SPV-001',
     status: 'OFFLINE',
     lastLogin: '23-08-2026 17:30:00'
+  },
+  {
+    id: 'USR-CUST-001',
+    name: 'Customer Demo',
+    username: 'customer',
+    password: 'cust123',
+    role: 'CUSTOMER',
+    supervisor_id: null,
+    status: 'OFFLINE',
+    lastLogin: '24-08-2026 09:00:00'
   }
 ]
 

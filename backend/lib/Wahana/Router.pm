@@ -9,6 +9,7 @@ use Wahana::Controller::AuthController   ();
 use Wahana::Controller::UsersController  qw(get_user_role);
 use Wahana::Controller::TasksController  ();
 use Wahana::Controller::ScansController  ();
+use Wahana::Controller::PaketController  ();
 use Wahana::Controller::AuditController  ();
 
 our @EXPORT_OK = qw(handle_request);
@@ -31,6 +32,11 @@ my @ROUTES = (
     [ 'GET',    qr{^/api/scans$},                      \&Wahana::Controller::ScansController::list,          { auth => 1 } ],
     [ 'POST',   qr{^/api/scans$},                      \&Wahana::Controller::ScansController::create,        { auth => 1 } ],
     [ 'GET',    qr{^/api/scans/stats/([^/]+)$},        \&Wahana::Controller::ScansController::stats,         { auth => 1 } ],
+    # Paket: resi digenerate SERVER (CUSTOMER/ADMIN); petugas hanya scan & lookup
+    [ 'POST',   qr{^/api/paket/resi$},                 \&Wahana::Controller::PaketController::create_draft,  { auth => 1 } ],
+    [ 'GET',    qr{^/api/paket$},                      \&Wahana::Controller::PaketController::list,          { auth => 1 } ],
+    [ 'PATCH',  qr{^/api/paket/([^/]+)$},              \&Wahana::Controller::PaketController::update,        { auth => 1 } ],
+    [ 'GET',    qr{^/api/paket/([^/]+)$},              \&Wahana::Controller::PaketController::detail,        { auth => 1 } ],
     [ 'GET',    qr{^/api/audit-logs$},                 \&Wahana::Controller::AuditController::list,          { auth => 1, admin => 1 } ],
 );
 

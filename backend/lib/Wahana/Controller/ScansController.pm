@@ -101,6 +101,42 @@ sub create {
 
     my $dbh = Wahana::Db->connect();
 
+    # --- Validasi ketat: hanya resi TERDAFTAR di tabel paket yang boleh discan ---
+    # Resi tidak dikenal maupun masih DRAFT TIDAK dicatat sebagai scan event.
+    my $paket = $dbh->selectrow_hashref(
+        'SELECT nomor_resi, status FROM paket WHERE nomor_resi = ?', undef, $resi
+    );
+
+    unless ($paket) {
+        record_audit(
+            user_id    => $user_id,
+            action     => 'SCAN_REJECTED',
+            details    => "Resi: $resi, Status: UNKNOWN_RESI",
+            ip_address => $req->{ip},
+        );
+        return {
+            success => \0,
+            reason  => 'UNKNOWN_RESI',
+            status_scan => 'REJECTED',
+            message     => "Nomor resi $resi tidak terdaftar. Pastikan customer sudah membuat resi.",
+        };
+    }
+
+    if ($paket->{status} eq 'DRAFT') {
+        record_audit(
+            user_id    => $user_id,
+            action     => 'SCAN_REJECTED',
+            details    => "Resi: $resi, Status: DRAFT",
+            ip_address => $req->{ip},
+        );
+        return {
+            success => \0,
+            reason  => 'DRAFT',
+            status_scan => 'REJECTED',
+            message     => "Nomor resi $resi masih DRAFT — data barang belum disimpan customer.",
+        };
+    }
+
     $dbh->begin_work();
     my $failed = 0;
     my $result;

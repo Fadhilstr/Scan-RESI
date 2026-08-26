@@ -35,6 +35,18 @@ const routes = [
     ]
   },
 
+  // CUSTOMER PORTAL — pembuat paket & pemilik nomor resi
+  {
+    path: '/customer',
+    component: () => import('../layouts/MainLayout.vue'),
+    meta: { requiresAuth: true, role: 'CUSTOMER' },
+    children: [
+      { path: '', name: 'customer-dashboard', component: () => import('../pages/customer/CustomerDashboard.vue') },
+      { path: 'buat-paket', name: 'customer-buat-paket', component: () => import('../pages/customer/CustomerBuatPaketPage.vue') },
+      { path: 'paket', name: 'customer-paket', component: () => import('../pages/customer/CustomerPaketPage.vue') }
+    ]
+  },
+
   // PETUGAS OPERASIONAL PORTAL
   {
     path: '/petugas',
