@@ -2,7 +2,7 @@
   <q-page class="q-pa-md q-pa-lg-xl">
     <div class="row items-center justify-between q-mb-md">
       <div>
-        <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">Laporan Operasional Scan</h4>
+        <h4 class="page-title">Laporan Operasional Scan</h4>
         <div class="text-subtitle2 text-grey-7">Rekapitulasi statistik volume scan, duplikasi, dan performa petugas</div>
       </div>
 
@@ -19,7 +19,7 @@
         <q-card class="scan-card q-pa-md">
           <q-card-section>
             <div class="text-subtitle1 text-weight-bold text-slate-800 q-mb-xs">Kualitas Pengindaian</div>
-            <div class="text-h3 text-weight-bolder text-positive font-mono">{{ successRate }}%</div>
+            <div class="kpi-value text-positive font-mono">{{ successRate }}%</div>
             <div class="text-caption text-grey-7">Tingkat Keberhasilan (Non-Duplicate)</div>
           </q-card-section>
         </q-card>
@@ -29,7 +29,7 @@
         <q-card class="scan-card q-pa-md">
           <q-card-section>
             <div class="text-subtitle1 text-weight-bold text-slate-800 q-mb-xs">Rasio Duplikasi</div>
-            <div class="text-h3 text-weight-bolder" :class="duplicateRate > 5 ? 'text-negative' : 'text-amber-9'"> {{ duplicateRate }}%</div>
+            <div class="kpi-value font-mono" :class="duplicateRate > 5 ? 'text-negative' : 'text-amber-8'"> {{ duplicateRate }}%</div>
             <div class="text-caption text-grey-7">{{ stats.duplicate }} dari {{ stats.total }} scan event</div>
           </q-card-section>
         </q-card>
@@ -39,7 +39,7 @@
         <q-card class="scan-card q-pa-md">
           <q-card-section>
             <div class="text-subtitle1 text-weight-bold text-slate-800 q-mb-xs">Puncak Volume Shift</div>
-            <div class="text-h3 text-weight-bolder text-amber-9 font-mono">{{ peakShift.name }}</div>
+            <div class="kpi-value text-slate-900 font-mono">{{ peakShift.name }}</div>
             <div class="text-caption text-grey-7">{{ peakShift.count }} paket tercatat</div>
           </q-card-section>
         </q-card>
@@ -53,7 +53,7 @@
           <q-card-section>
             <div class="row items-center justify-between">
               <span class="text-weight-bold text-slate-900">Shift {{ shift.name }}</span>
-              <q-chip dense color="amber-5" text-color="slate-900" class="font-mono text-weight-bolder">
+              <q-chip dense color="amber-2" text-color="amber-9" class="font-mono text-weight-bolder">
                 {{ shift.success }} SUCCESS
               </q-chip>
             </div>

@@ -2,7 +2,7 @@
   <q-page class="q-pa-md q-pa-lg-xl">
     <div class="row items-center justify-between q-mb-md">
       <div>
-        <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">Task Tim Saya</h4>
+        <h4 class="page-title">Task Tim Saya</h4>
         <div class="text-subtitle2 text-grey-7">Daftar tugas/batch anggota petugas dalam tanggung jawab</div>
       </div>
     </div>

@@ -19,6 +19,7 @@
 import api, { USE_LOCAL_DATA } from './api'
 import { incrementTaskProgress } from './task.service'
 import { addAuditLog } from './audit.service'
+import { LOCAL_PAKETS } from './paket.service'
 
 // =====================================================================
 // LOCAL DUMMY DATA — Digunakan saat USE_LOCAL_DATA=true
@@ -178,7 +179,38 @@ export async function addScan({ resi, currentUser, activeTask, lokasi = 'CIPUTAT
   }
 
   if (USE_LOCAL_DATA) {
-    // --- LOCAL MODE: validasi duplikasi ---
+    // --- LOCAL MODE ---
+    // Validasi ketat (paritas dengan backend): hanya resi TERDAFTAR di
+    // tabel paket yang boleh discan — resi asing / DRAFT ditolak & tidak dicatat.
+    const paketTerdaftar = LOCAL_PAKETS.find((p) => p.nomor_resi.toUpperCase() === sanitizedResi)
+    if (!paketTerdaftar) {
+      await addAuditLog({
+        user_id: currentUser.id,
+        user_name: currentUser.name,
+        action: 'SCAN_REJECTED',
+        details: `Resi: ${sanitizedResi}, Status: UNKNOWN_RESI`
+      })
+      return {
+        success: false,
+        reason: 'UNKNOWN_RESI',
+        message: `Nomor resi ${sanitizedResi} tidak terdaftar. Pastikan customer sudah membuat resi.`
+      }
+    }
+    if (paketTerdaftar.status !== 'TERDAFTAR') {
+      await addAuditLog({
+        user_id: currentUser.id,
+        user_name: currentUser.name,
+        action: 'SCAN_REJECTED',
+        details: `Resi: ${sanitizedResi}, Status: DRAFT`
+      })
+      return {
+        success: false,
+        reason: 'DRAFT',
+        message: `Nomor resi ${sanitizedResi} masih DRAFT — data barang belum disimpan customer.`
+      }
+    }
+
+    // --- validasi duplikasi ---
     const isDuplicate = LOCAL_SCANS.some(
       (evt) =>
         evt.task_id === activeTask.task_id &&
@@ -230,8 +262,9 @@ export async function addScan({ resi, currentUser, activeTask, lokasi = 'CIPUTAT
 
   // --- API MODE ---
   // POST /api/scans
-  // Backend Perl menangani validasi duplikasi dan increment progress di database.
-  // Response: { success, status_scan, scan, message }
+  // Backend Perl menangani validasi resi terdaftar, duplikasi,
+  // dan increment progress secara transaksional di database.
+  // Response: { success, status_scan, reason?, scan?, message }
   try {
     const data = await api.post('/api/scans', {
       nomor_resi: sanitizedResi,
@@ -242,6 +275,15 @@ export async function addScan({ resi, currentUser, activeTask, lokasi = 'CIPUTAT
       device_id,
       jenis_scan
     })
+
+    // Resi tidak terdaftar / masih DRAFT — ditolak backend sebelum dicatat
+    if (data.reason === 'UNKNOWN_RESI' || data.reason === 'DRAFT') {
+      return {
+        success: false,
+        reason: data.reason,
+        message: data.message || `Nomor resi ${sanitizedResi} tidak dapat discan.`
+      }
+    }
 
     if (data.status_scan === 'DUPLICATE') {
       return {

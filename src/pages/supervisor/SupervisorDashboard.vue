@@ -2,14 +2,14 @@
   <q-page class="q-pa-md q-pa-lg-xl">
     <div class="row items-center justify-between q-mb-lg">
       <div>
-        <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">Dashboard Supervisor</h4>
+        <h4 class="page-title">Dashboard Supervisor</h4>
         <div class="text-subtitle2 text-grey-7">Pengawasan operasional tim petugas scan (Rayon A)</div>
       </div>
 
       <q-btn
         color="primary"
         icon="monitoring"
-        label="MONITORING SCAN TIM"
+        label="Monitoring Scan Tim" no-caps
         to="/supervisor/monitoring"
         unelevated
         class="text-weight-bold"
@@ -20,16 +20,16 @@
     <div class="row q-col-gutter-md q-mb-xl">
       <div class="col-12 col-sm-6 col-md-4">
         <q-card class="stat-card q-pa-md">
-          <q-card-section class="q-pa-xs">
+          <q-card-section class="q-pa-none">
             <div class="row items-center justify-between q-mb-sm">
-              <span class="text-caption text-weight-bold text-grey-7 text-uppercase">PETUGAS TIM</span>
-              <q-avatar icon="groups" color="blue-1" text-color="primary" size="40px" />
+              <span class="overline-label">Petugas Tim</span>
+              <q-avatar icon="groups" color="blue-1" text-color="primary" size="36px" style="border-radius: 10px;" />
             </div>
-            <div class="text-h3 text-weight-bolder text-wahana-navy font-mono">
+            <div class="kpi-value text-slate-900 font-mono">
               {{ teamMembers.length }}
             </div>
-            <div class="text-caption text-positive text-weight-bold q-mt-xs">
-              {{ onlineTeamCount }} Petugas Online
+            <div class="text-caption text-positive text-weight-medium q-mt-xs row items-center">
+              <q-icon name="circle" size="7px" class="q-mr-xs" /> {{ onlineTeamCount }} petugas online
             </div>
           </q-card-section>
         </q-card>
@@ -37,30 +37,30 @@
 
       <div class="col-12 col-sm-6 col-md-4">
         <q-card class="stat-card q-pa-md">
-          <q-card-section class="q-pa-xs">
+          <q-card-section class="q-pa-none">
             <div class="row items-center justify-between q-mb-sm">
-              <span class="text-caption text-weight-bold text-grey-7 text-uppercase">TOTAL SCAN TIM</span>
-              <q-avatar icon="qr_code_scanner" color="amber-1" text-color="amber-9" size="40px" />
+              <span class="overline-label">Total Scan Tim</span>
+              <q-avatar icon="qr_code_scanner" color="amber-2" text-color="amber-9" size="36px" style="border-radius: 10px;" />
             </div>
-            <div class="text-h3 text-weight-bolder text-amber-9 font-mono">
+            <div class="kpi-value text-slate-900 font-mono">
               {{ teamTotalScans }}
             </div>
-            <div class="text-caption text-grey-6 q-mt-xs">Total Scan Event Hari Ini</div>
+            <div class="text-caption text-grey-6 q-mt-xs">Total scan event hari ini</div>
           </q-card-section>
         </q-card>
       </div>
 
       <div class="col-12 col-sm-6 col-md-4">
         <q-card class="stat-card q-pa-md">
-          <q-card-section class="q-pa-xs">
+          <q-card-section class="q-pa-none">
             <div class="row items-center justify-between q-mb-sm">
-              <span class="text-caption text-weight-bold text-grey-7 text-uppercase">SCAN BERHASIL</span>
-              <q-avatar icon="task_alt" color="green-1" text-color="positive" size="40px" />
+              <span class="overline-label">Scan Berhasil</span>
+              <q-avatar icon="task_alt" color="green-1" text-color="positive" size="36px" style="border-radius: 10px;" />
             </div>
-            <div class="text-h3 text-weight-bolder text-positive font-mono">
+            <div class="kpi-value text-slate-900 font-mono">
               {{ teamSuccessScans }}
             </div>
-            <div class="text-caption text-grey-6 q-mt-xs">Non-Duplicate Events</div>
+            <div class="text-caption text-grey-6 q-mt-xs">Non-duplicate events</div>
           </q-card-section>
         </q-card>
       </div>
@@ -69,9 +69,9 @@
     <!-- Supervised Petugas Status List (Requirement O Example) -->
     <q-card class="scan-card q-pa-md q-mb-lg">
       <q-card-section>
-        <div class="text-subtitle1 text-weight-bold text-slate-900 q-mb-md row items-center">
-          <q-icon name="person_search" color="primary" class="q-mr-sm" size="24px" />
-          STATUS & PROGRESS PETUGAS BAWAHAN
+        <div class="section-title q-mb-md">
+          <q-icon name="person_search" size="20px" color="primary" class="q-mr-sm" />
+          Status &amp; Progress Petugas Bawahan
         </div>
 
         <div class="row q-col-gutter-md">

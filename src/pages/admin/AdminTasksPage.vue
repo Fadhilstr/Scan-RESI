@@ -2,14 +2,14 @@
   <q-page class="q-pa-md q-pa-lg-xl">
     <div class="row items-center justify-between q-mb-md">
       <div>
-        <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">Kelola Task / Batch System</h4>
+        <h4 class="page-title">Kelola Task / Batch System</h4>
         <div class="text-subtitle2 text-grey-7">Daftar alokasi tugas pengindaian paket di seluruh gerai/petugas</div>
       </div>
 
       <q-btn
         color="primary"
         icon="add_task"
-        label="BUAT TASK BARU"
+        label="Buat Task Baru" no-caps
         unelevated
         class="text-weight-bold"
         @click="openAddTaskModal"
@@ -53,8 +53,8 @@
             <q-input v-model="newTask.shift" outlined dense label="Shift (e.g. Pagi, Sore)" required />
             <q-input v-model="newTask.lokasi" outlined dense label="Lokasi Gerai/Rayon" required />
             <q-card-actions align="right" class="q-px-none">
-              <q-btn flat label="BATAL" color="grey-7" v-close-popup class="text-weight-bold" />
-              <q-btn type="submit" label="SIMPAN TASK" color="primary" class="text-weight-bold" unelevated />
+              <q-btn flat label="Batal" no-caps color="grey-7" v-close-popup />
+              <q-btn type="submit" label="Simpan Task" no-caps color="primary" class="text-weight-bold" unelevated />
             </q-card-actions>
           </q-form>
         </q-card-section>

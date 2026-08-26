@@ -2,14 +2,14 @@
   <q-page class="q-pa-md q-pa-lg-xl">
     <div class="row items-center justify-between q-mb-md">
       <div>
-        <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">User Management</h4>
+        <h4 class="page-title">User Management</h4>
         <div class="text-subtitle2 text-grey-7">Kelola akun, role, dan hak akses pengguna sistem</div>
       </div>
 
       <q-btn
         color="primary"
         icon="person_add"
-        label="TAMBAH USER BARU"
+        label="Tambah User Baru" no-caps
         unelevated
         class="text-weight-bold"
         @click="openAddDialog"
@@ -50,7 +50,7 @@
           <template v-slot:body-cell-role="props">
             <q-td :props="props">
               <q-badge
-                :color="props.row.role === 'ADMIN' ? 'red-9' : props.row.role === 'SUPERVISOR' ? 'indigo-9' : 'amber-9'"
+                :color="props.row.role === 'ADMIN' ? 'red-8' : props.row.role === 'SUPERVISOR' ? 'indigo-8' : props.row.role === 'CUSTOMER' ? 'green-8' : 'blue-grey-6'"
                 text-color="white"
                 class="font-mono text-weight-bold"
               >
@@ -109,14 +109,14 @@
             <q-input v-model="form.password" outlined dense type="password" label="Password" required />
             <q-select
               v-model="form.role"
-              :options="['ADMIN', 'SUPERVISOR', 'PETUGAS_SCAN']"
+              :options="['ADMIN', 'SUPERVISOR', 'PETUGAS_SCAN', 'CUSTOMER']"
               outlined
               dense
               label="Role"
             />
             <q-card-actions align="right" class="q-px-none">
-              <q-btn flat label="BATAL" color="grey-7" v-close-popup class="text-weight-bold" />
-              <q-btn type="submit" label="SIMPAN USER" color="primary" class="text-weight-bold" unelevated />
+              <q-btn flat label="Batal" no-caps color="grey-7" v-close-popup />
+              <q-btn type="submit" label="Simpan User" no-caps color="primary" class="text-weight-bold" unelevated />
             </q-card-actions>
           </q-form>
         </q-card-section>

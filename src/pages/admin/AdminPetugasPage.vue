@@ -2,7 +2,7 @@
   <q-page class="q-pa-md q-pa-lg-xl">
     <div class="row items-center justify-between q-mb-md">
       <div>
-        <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">Detail & Monitoring Petugas</h4>
+        <h4 class="page-title">Detail & Monitoring Petugas</h4>
         <div class="text-subtitle2 text-grey-7">Inspeksi aktivitas, task aktif, dan log scan per petugas operasional</div>
       </div>
     </div>
@@ -50,7 +50,7 @@
           <div class="row q-col-gutter-sm text-center">
             <div class="col-6 col-sm-3">
               <div class="bg-blue-1 q-pa-sm rounded-borders">
-                <div class="text-caption text-grey-7 text-weight-bold">TASK AKTIF</div>
+                <div class="overline-label">Task Aktif</div>
                 <div class="text-h6 text-weight-bolder text-primary font-mono q-mt-xs">
                   {{ activeTask?.task_id || 'Tidak Ada' }}
                 </div>
@@ -59,7 +59,7 @@
 
             <div class="col-6 col-sm-3">
               <div class="bg-slate-100 q-pa-sm rounded-borders">
-                <div class="text-caption text-grey-7 text-weight-bold">TOTAL SCAN</div>
+                <div class="overline-label">Total Scan</div>
                 <div class="text-h6 text-weight-bolder text-slate-900 font-mono q-mt-xs">
                   {{ userStats.total }}
                 </div>
@@ -68,7 +68,7 @@
 
             <div class="col-6 col-sm-3">
               <div class="bg-green-1 q-pa-sm rounded-borders">
-                <div class="text-caption text-grey-7 text-weight-bold">SUCCESS</div>
+                <div class="overline-label">Success</div>
                 <div class="text-h6 text-weight-bolder text-positive font-mono q-mt-xs">
                   {{ userStats.success }}
                 </div>
@@ -77,8 +77,8 @@
 
             <div class="col-6 col-sm-3">
               <div class="bg-amber-1 q-pa-sm rounded-borders">
-                <div class="text-caption text-grey-7 text-weight-bold">DUPLICATE</div>
-                <div class="text-h6 text-weight-bolder text-amber-9 font-mono q-mt-xs">
+                <div class="overline-label">Duplicate</div>
+                <div class="kpi-value text-amber-8 font-mono q-mt-xs">
                   {{ userStats.duplicate }}
                 </div>
               </div>

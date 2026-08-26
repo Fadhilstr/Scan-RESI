@@ -1,134 +1,244 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-/* Wahana Express Official Brand Color Palette */
+/* ============================================================
+   Dijak Express — Design Tokens
+   Brand: deep navy + restrained gold accent
+   ============================================================ */
 :root {
-  --q-primary: #0b2341;     /* Wahana Deep Navy Blue */
-  --q-secondary: #07172b;   /* Wahana Midnight Blue */
-  --q-accent: #ffc700;      /* Wahana Official Bright Yellow */
+  --q-primary: #0b2341;
+  --q-secondary: #173b6c;
+  --q-accent: #ffc700;
   --q-dark: #051329;
-  --q-positive: #10b981;
-  --q-negative: #ef4444;
-  --q-warning: #f59e0b;
-  --q-info: #0284c7;
+  --q-positive: #15803d;
+  --q-negative: #dc2626;
+  --q-warning: #d97706;
+  --q-info: #0369a1;
+
+  /* Neutral surface scale */
+  --dj-surface: #ffffff;
+  --dj-surface-2: #f8fafc;
+  --dj-border: #e2e8f0;
+  --dj-border-strong: #cbd5e1;
+  --dj-text: #0f172a;
+  --dj-text-muted: #64748b;
+
+  /* Elevation — subtle, single-source shadows */
+  --dj-shadow-sm: 0 1px 2px rgba(11, 35, 65, 0.05);
+  --dj-shadow-md: 0 2px 8px -1px rgba(11, 35, 65, 0.07), 0 1px 3px rgba(11, 35, 65, 0.04);
+  --dj-shadow-lg: 0 8px 24px -4px rgba(11, 35, 65, 0.1), 0 2px 8px -2px rgba(11, 35, 65, 0.05);
+
+  /* Radii */
+  --dj-radius-sm: 8px;
+  --dj-radius-md: 12px;
+  --dj-radius-lg: 16px;
 }
 
 body {
   font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: var(--dj-surface-2);
+  color: var(--dj-text);
+  font-size: 14.5px;
+  letter-spacing: 0.01em;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Custom Wahana Brand Color Classes */
-.bg-wahana-navy {
-  background-color: #0b2341 !important;
-}
-
-.text-wahana-navy {
-  color: #0b2341 !important;
-}
-
-.bg-wahana-yellow {
-  background-color: #ffc700 !important;
-}
-
-.text-wahana-yellow {
-  color: #d97706 !important;
-}
+/* ---------- Brand helpers (kept for existing templates) ---------- */
+.bg-wahana-navy { background-color: #0b2341 !important; }
+.text-wahana-navy { color: #0b2341 !important; }
+.bg-wahana-yellow { background-color: #ffc700 !important; }
+.text-wahana-yellow { color: #d97706 !important; }
 
 .bg-wahana-gradient {
-  background: linear-gradient(135deg, #0b2341 0%, #173b6c 100%) !important;
+  background: linear-gradient(150deg, #0b2341 0%, #12305a 60%, #173b6c 100%) !important;
 }
 
-/* Operational Font helper for barcodes/resi */
+/* ---------- Slate utility scale (used across templates) ---------- */
+.text-slate-900 { color: #0f172a !important; }
+.text-slate-800 { color: #1e293b !important; }
+.text-slate-700 { color: #334155 !important; }
+.text-slate-600 { color: #475569 !important; }
+.text-slate-500 { color: #64748b !important; }
+
+.bg-slate-50 { background-color: #f8fafc !important; }
+.bg-slate-100 { background-color: #f1f5f9 !important; }
+.bg-slate-800 { background-color: #1e293b !important; }
+
+/* Operational monospace for resi/barcode/ID values only */
 .font-mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* Glassmorphism & Elevated Cards with Wahana Branding */
+/* ---------- Page header pattern (sentence case) ---------- */
+.page-title {
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--dj-text);
+  margin: 0;
+}
+
+.page-subtitle {
+  font-size: 0.875rem;
+  color: var(--dj-text-muted);
+  margin-top: 2px;
+}
+
+.section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--dj-text);
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Overline label (small caps used sparingly for KPI labels) */
+.overline-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dj-text-muted);
+}
+
+/* ---------- Cards ---------- */
 .scan-card {
-  border-radius: 16px;
-  background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-shadow: 0 4px 20px -2px rgba(11, 35, 65, 0.06), 0 2px 6px -1px rgba(11, 35, 65, 0.03);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-radius: var(--dj-radius-lg);
+  background: var(--dj-surface);
+  border: 1px solid var(--dj-border);
+  box-shadow: var(--dj-shadow-sm);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .scan-card:hover {
-  box-shadow: 0 10px 25px -3px rgba(11, 35, 65, 0.1), 0 4px 10px -2px rgba(11, 35, 65, 0.04);
+  border-color: var(--dj-border-strong);
+  box-shadow: var(--dj-shadow-md);
 }
 
 .stat-card {
-  border-radius: 16px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid #e2e8f0;
-  border-top: 4px solid #ffc700; /* Wahana Gold Accent Top Border */
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: var(--dj-radius-lg);
+  background: var(--dj-surface);
+  border: 1px solid var(--dj-border);
+  box-shadow: var(--dj-shadow-sm);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
 }
 
 .stat-card:hover {
-  transform: translateY(-2px);
-  border-color: #cbd5e1;
-  border-top-color: #f59e0b;
-  box-shadow: 0 12px 24px -4px rgba(11, 35, 65, 0.12);
+  transform: translateY(-1px);
+  box-shadow: var(--dj-shadow-md);
 }
 
-/* Scanner Input Glow Effect */
-.scanner-input-box .q-field__inner {
-  border-radius: 14px;
-  transition: all 0.3s ease;
+/* KPI value styling */
+.kpi-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+/* ---------- Inputs ---------- */
+.q-field--outlined .q-field__control:before {
+  border-color: var(--dj-border-strong);
+}
+
+.scanner-input-box .q-field__control {
+  border-radius: var(--dj-radius-md);
+}
+
+.scanner-input-box.q-field--focused .q-field__control:after {
+  border-color: #0b2341 !important;
 }
 
 .scanner-input-box.q-field--focused .q-field__control {
-  box-shadow: 0 0 0 4px rgba(255, 199, 0, 0.3) !important;
-  border-color: #ffc700 !important;
+  box-shadow: 0 0 0 3px rgba(255, 199, 0, 0.28);
 }
 
-/* Pulsing Scanner Dot */
+/* ---------- Scanner live indicator ---------- */
 .scanner-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background-color: #ffc700;
+  background-color: var(--q-positive);
   display: inline-block;
-  box-shadow: 0 0 0 0 rgba(255, 199, 0, 0.8);
-  animation: pulse-yellow 1.8s infinite;
+  animation: pulse-dot 2s infinite;
 }
 
-@keyframes pulse-yellow {
-  0% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(255, 199, 0, 0.8);
-  }
-  70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 8px rgba(255, 199, 0, 0);
-  }
-  100% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(255, 199, 0, 0);
-  }
+@keyframes pulse-dot {
+  0% { box-shadow: 0 0 0 0 rgba(21, 128, 61, 0.35); }
+  70% { box-shadow: 0 0 0 7px rgba(21, 128, 61, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(21, 128, 61, 0); }
 }
 
-/* Custom Table Styling */
+/* ---------- Tables ---------- */
 .q-table__container {
-  border-radius: 12px;
+  border-radius: var(--dj-radius-md);
   overflow: hidden;
   box-shadow: none;
 }
 
-.q-table th {
-  font-weight: 700;
-  font-size: 0.825rem;
-  letter-spacing: 0.05em;
+.q-table thead th {
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #0b2341;
+  color: var(--dj-text-muted);
+  background-color: var(--dj-surface-2);
+  border-bottom: 1px solid var(--dj-border) !important;
+}
+
+.q-table tbody td {
+  font-size: 0.85rem;
+}
+
+.q-table tbody tr:hover td {
+  background-color: #f8fafc;
+}
+
+/* ---------- Buttons & chips ---------- */
+.q-btn {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border-radius: 10px;
+  text-transform: none;
+}
+
+.q-chip {
+  font-weight: 600;
+}
+
+/* ---------- Sidebar navigation ---------- */
+.nav-item {
+  border-radius: 10px;
+  margin-bottom: 2px;
+  transition: background-color 0.15s ease;
+}
+
+.nav-item:hover {
   background-color: #f1f5f9;
 }
 
-/* Rounded Buttons */
-.q-btn {
+.nav-item.is-active {
+  background-color: #eef2f7;
+  color: #0b2341;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  border-radius: 10px;
+}
+
+.nav-item.is-active .q-icon {
+  color: #0b2341;
+}
+
+.nav-item.is-active {
+  position: relative;
+}
+
+.nav-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 3px;
+  background: #ffc700;
 }

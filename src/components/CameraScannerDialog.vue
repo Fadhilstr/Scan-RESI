@@ -42,7 +42,7 @@
               <div class="text-caption text-grey-5 font-mono q-mt-sm" style="font-size: 10px">
                 {{ technicalError }}
               </div>
-              <q-btn outline dense color="amber-4" icon="refresh" label="COBA LAGI" class="q-mt-md" @click="startCamera" />
+              <q-btn outline dense color="amber-4" icon="refresh" label="Coba Lagi" no-caps class="q-mt-md" @click="startCamera" />
             </div>
           </div>
 
@@ -51,12 +51,33 @@
         </div>
 
         <div class="text-caption text-grey-7 text-center q-mt-sm row items-center justify-center">
-          <q-icon :name="lastResi ? 'check_circle' : 'info'" size="16px"
-                  :color="lastResi ? 'positive' : 'grey-6'" class="q-mr-xs" />
-          <span v-if="lastResi">
-            Terbaca: <span class="text-weight-bold font-mono">{{ lastResi }}</span> — arahkan barcode berikutnya
+          <q-icon name="info" size="16px" color="grey-6" class="q-mr-xs" />
+          <span>Arahkan barcode ke kamera — deteksi otomatis dengan jeda 1,2 detik</span>
+        </div>
+
+        <!-- Hasil scan TERAKHIR sesungguhnya (tervalidasi backend) -->
+        <div v-if="latest" class="scan-result q-mt-sm" :class="`scan-result--${latest.level}`" role="status">
+          <q-icon :name="levelIcon" size="22px" />
+          <div class="col">
+            <div class="row items-center q-gutter-x-xs">
+              <span class="font-mono text-weight-bold">{{ latest.resi }}</span>
+              <span class="text-weight-bold">{{ latest.label }}</span>
+            </div>
+            <div class="text-caption">{{ latest.message }}</div>
+            <div v-if="latest.detail" class="text-caption" style="opacity: 0.85;">{{ latest.detail }}</div>
+          </div>
+        </div>
+
+        <!-- Riwayat scan sesi ini (maks. 3 terakhir) -->
+        <div v-if="history.length > 1" class="row justify-center q-gutter-x-xs q-mt-xs">
+          <span
+            v-for="h in history"
+            :key="h.seq"
+            class="history-chip font-mono"
+            :class="`history-chip--${h.level}`"
+          >
+            {{ h.resi }}
           </span>
-          <span v-else>Arahkan barcode ke kamera — deteksi otomatis dengan jeda 1,2 detik</span>
         </div>
       </q-card-section>
     </q-card>
@@ -71,6 +92,12 @@ const props = defineProps({
   modelValue: {
     type: Boolean,
     default: false
+  },
+  // Hasil validasi scan terakhir dari parent:
+  // { seq, resi, level: 'success'|'warning'|'danger', label, message, detail? }
+  feedback: {
+    type: Object,
+    default: null
   }
 })
 
@@ -91,13 +118,34 @@ let audioCtx = null
 const status = ref('idle') // idle | starting | scanning | error
 const errorMessage = ref('')
 const technicalError = ref('')
-const lastResi = ref('')
+const latest = ref(null)
+const history = ref([])
+
+// Ikon sesuai tingkat hasil terakhir
+const levelIcon = computed(() => {
+  switch (latest.value?.level) {
+    case 'success': return 'check_circle'
+    case 'warning': return 'warning'
+    default: return 'cancel'
+  }
+})
+
+// Parent mengirim hasil validasi baru → tampilkan + catat riwayat sesi
+watch(
+  () => props.feedback,
+  (fb) => {
+    if (!fb) return
+    latest.value = fb
+    history.value = [fb, ...history.value].slice(0, 3)
+  }
+)
 
 // ---------------------------------------------------------------------
 // Siklus hidup kamera
 // ---------------------------------------------------------------------
 const onOpen = () => {
-  lastResi.value = ''
+  latest.value = null
+  history.value = []
   startCamera()
 }
 
@@ -206,10 +254,10 @@ const onScanSuccess = (decodedText) => {
   const resi = String(decodedText || '').trim()
   if (!resi) return
 
-  lastResi.value = resi
   playBeep()
   navigator.vibrate?.(80)
 
+  // Hasil validasi sesungguhnya dikirim parent lewat prop `feedback`
   emit('detected', resi)
 }
 
@@ -248,6 +296,46 @@ onBeforeUnmount(stopCamera)
   border-radius: 12px;
   object-fit: cover;
 }
+
+/* Panel hasil scan — tonal sesuai tingkat keberhasilan */
+.scan-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+}
+
+.scan-result--success {
+  background-color: #dcfce7;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.scan-result--warning {
+  background-color: #fef3c7;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.scan-result--danger {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.history-chip {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.history-chip--success { background-color: #dcfce7; color: #15803d; }
+.history-chip--warning { background-color: #fef3c7; color: #b45309; }
+.history-chip--danger  { background-color: #fee2e2; color: #b91c1c; }
+
 .scan-guide {
   width: 78%;
   height: 3px;

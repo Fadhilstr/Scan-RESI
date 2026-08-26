@@ -3,9 +3,10 @@
     <q-card class="scan-card">
       <q-card-section class="q-pb-sm">
         <div class="row items-center justify-between q-mb-md">
-          <div class="text-subtitle1 text-weight-bold text-slate-800 row items-center">
-            <q-icon name="list_alt" size="24px" color="primary" class="q-mr-sm" />
-            DAFTAR SCAN EVENT ({{ filteredRows.length }})
+          <div class="section-title">
+            <q-icon name="list_alt" size="20px" color="primary" class="q-mr-sm" />
+            Daftar Scan Event
+            <span class="text-caption text-grey-6 q-ml-xs">({{ filteredRows.length }})</span>
           </div>
 
           <div class="row items-center q-gutter-xs">
@@ -13,11 +14,12 @@
               v-if="hasActiveFilter"
               flat
               dense
-              color="negative"
-              icon="clear"
+              no-caps
+              color="grey-8"
+              icon="restart_alt"
               label="Reset Filter"
               @click="resetFilters"
-              class="text-caption text-weight-bold"
+              class="text-caption"
             />
           </div>
         </div>
@@ -82,8 +84,7 @@
               v-model="filterLocation"
               dense
               outlined
-              placeholder="Filter Lokasi..."
-              bg-color="white"
+              placeholder="Filter lokasi..."
             />
           </div>
         </div>
@@ -161,6 +162,17 @@
               >
                 <q-tooltip>Lihat / cetak barcode resi</q-tooltip>
               </q-btn>
+              <q-btn
+                v-if="showPaketAction"
+                flat
+                dense
+                round
+                icon="inventory_2"
+                color="grey-8"
+                @click="$emit('paket', props.row)"
+              >
+                <q-tooltip>Lihat data paket</q-tooltip>
+              </q-btn>
             </q-td>
           </template>
         </q-table>
@@ -203,15 +215,27 @@
               </div>
             </div>
 
-            <div v-if="showLabelAction" class="row justify-end q-mt-xs">
+            <div v-if="showLabelAction" class="row justify-end q-gutter-x-xs q-mt-xs">
               <q-btn
                 flat
                 dense
+                no-caps
                 icon="qr_code_2"
-                label="LABEL"
+                label="Label"
                 color="primary"
-                class="text-caption text-weight-bold"
+                class="text-caption"
                 @click="$emit('label', item)"
+              />
+              <q-btn
+                v-if="showPaketAction"
+                flat
+                dense
+                no-caps
+                icon="inventory_2"
+                label="Paket"
+                color="grey-8"
+                class="text-caption"
+                @click="$emit('paket', item)"
               />
             </div>
           </q-card>
@@ -238,10 +262,14 @@ const props = defineProps({
   showLabelAction: {
     type: Boolean,
     default: false
+  },
+  showPaketAction: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['label'])
+const emit = defineEmits(['label', 'paket'])
 
 const searchQuery = ref('')
 const selectedPetugas = ref('ALL')

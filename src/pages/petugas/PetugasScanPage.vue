@@ -4,24 +4,24 @@
     <div class="row items-center justify-between q-mb-md">
       <div>
         <div class="row items-center">
-          <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none q-mr-sm">SCAN PAKET</h4>
+          <h4 class="page-title q-mr-sm">Scan Paket</h4>
           <StatusBadge :status="activeTask?.status || 'SELESAI'" size="md" />
         </div>
-        <div class="text-subtitle2 text-grey-7 font-mono">
-          Petugas: <span class="text-weight-bold text-slate-900">{{ authStore.currentUser?.name }}</span> •
-          Task: <span class="text-weight-bold text-primary">{{ activeTask?.task_id || '-' }}</span> •
-          Shift: {{ activeTask?.shift || '-' }}
+        <div class="page-subtitle">
+          Petugas <span class="text-weight-medium text-slate-800">{{ authStore.currentUser?.name }}</span> &middot;
+          Task <span class="font-mono text-weight-medium text-slate-800">{{ activeTask?.task_id || '-' }}</span> &middot;
+          Shift {{ activeTask?.shift || '-' }}
         </div>
       </div>
 
       <div v-if="isTaskFinished">
         <q-btn
-          color="positive"
+          color="primary"
           icon="analytics"
-          label="HASIL SCAN SAYA"
+          label="Hasil Scan Saya"
+          no-caps
           unelevated
           to="/petugas/hasil"
-          class="text-weight-bold"
         />
       </div>
     </div>
@@ -29,7 +29,7 @@
     <q-separator class="q-mb-lg" />
 
     <!-- Barcode Input Component (Requirement T & U) -->
-    <BarcodeInput :disabled="isTaskFinished" @scan="handleBarcodeScan" />
+    <BarcodeInput :disabled="isTaskFinished" :feedback="scanFeedback" @scan="handleBarcodeScan" />
 
     <!-- Active Task Progress Summary -->
     <div class="row q-col-gutter-md q-mb-lg">
@@ -37,25 +37,25 @@
         <q-card class="scan-card full-height q-pa-sm">
           <q-card-section>
             <div class="row items-center justify-between q-mb-xs">
-              <span class="text-subtitle2 text-weight-bold text-grey-8">TOTAL SCAN HARI INI</span>
-              <q-chip color="amber-5" text-color="slate-900" class="font-mono text-weight-bolder">
-                {{ userScans.length }} Paket
-              </q-chip>
+              <span class="overline-label">Total Scan Hari Ini</span>
+              <span class="font-mono text-weight-bold text-primary bg-blue-1 q-px-sm" style="border-radius: 6px;">
+                {{ userScans.length }} paket
+              </span>
             </div>
 
             <q-separator class="q-my-sm" />
 
             <div class="row items-center justify-between q-pt-xs">
               <div>
-                <div class="text-caption text-grey-7 text-weight-medium">CAPAIAN TARGET TASK</div>
-                <div class="text-h3 text-weight-bolder text-primary font-mono q-my-none">
+                <div class="overline-label">Capaian Target Task</div>
+                <div class="kpi-value text-slate-900 font-mono q-my-xs">
                   {{ activeTask?.progress || 0 }} / {{ activeTask?.target || 0 }}
                 </div>
-                <div class="text-caption text-grey-6 font-mono">Lokasi: {{ activeTask?.lokasi || 'CIPUTAT' }}</div>
+                <div class="text-caption text-grey-6">Lokasi: {{ activeTask?.lokasi || 'CIPUTAT' }}</div>
               </div>
 
-              <div class="q-pa-md bg-amber-1 rounded-borders text-center" style="border-radius: 12px;">
-                <q-icon name="inventory_2" size="42px" color="amber-9" />
+              <div class="q-pa-md bg-grey-1 text-center" style="border-radius: 12px; border: 1px solid var(--dj-border);">
+                <q-icon name="inventory_2" size="40px" color="grey-7" />
               </div>
             </div>
           </q-card-section>
@@ -66,15 +66,15 @@
       <div class="col-12 col-md-7">
         <q-card class="scan-card full-height q-pa-sm">
           <q-card-section>
-            <div class="text-subtitle2 text-weight-bold text-grey-8 q-mb-xs row items-center">
-              <q-icon name="history" color="primary" class="q-mr-xs" /> RESI TERAKHIR DISCAN
+            <div class="section-title q-mb-xs">
+              <q-icon name="history" size="20px" color="primary" class="q-mr-sm" /> Resi Terakhir Discan
             </div>
 
             <q-separator class="q-my-sm" />
 
             <div v-if="lastScannedEvent" class="row items-center justify-between q-pt-xs">
               <div>
-                <div class="text-h5 text-weight-bolder text-slate-900 font-mono">
+                <div class="text-h5 text-weight-bold text-slate-900 font-mono">
                   {{ lastScannedEvent.nomor_resi }}
                 </div>
                 <div class="row items-center q-mt-xs">
@@ -83,10 +83,9 @@
               </div>
 
               <div class="text-right">
-                <q-badge color="slate-100" text-color="slate-900" class="q-pa-xs font-mono text-subtitle2">
-                  <q-icon name="schedule" size="14px" class="q-mr-xs" />
+                <span class="text-caption font-mono text-grey-6 bg-grey-1 q-px-sm q-py-xs" style="border-radius: 6px;">
                   {{ lastScannedEvent.waktu_scan.split(' ')[1] }}
-                </q-badge>
+                </span>
               </div>
             </div>
 
@@ -99,9 +98,37 @@
       </div>
     </div>
 
+    <!-- Data Paket Terakhir (hasil lookup by nomor resi) -->
+    <q-card v-if="lastPaket" class="scan-card q-pa-sm q-mb-lg">
+      <q-card-section>
+        <div class="section-title q-mb-xs">
+          <q-icon name="inventory_2" size="20px" color="primary" class="q-mr-sm" /> Data Paket
+          <span class="font-mono text-caption text-grey-6 q-ml-sm">{{ lastPaket.nomor_resi }}</span>
+        </div>
+        <q-separator class="q-my-sm" />
+
+        <div class="row q-col-gutter-md">
+          <div class="col-12 col-md-4">
+            <div class="text-caption text-grey-7">Nama Barang</div>
+            <div class="text-weight-bolder text-slate-900">{{ lastPaket.nama_barang || '-' }}</div>
+            <div class="text-caption text-grey-6 q-mt-xs">Layanan: {{ lastPaket.jenis_layanan }} • {{ lastPaket.berat_kg }} kg</div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="text-caption text-grey-7">Pengirim</div>
+            <div class="text-weight-bold text-slate-800">{{ lastPaket.pengirim || '-' }}</div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="text-caption text-grey-7">Penerima / Tujuan</div>
+            <div class="text-weight-bold text-slate-800">{{ lastPaket.penerima || '-' }}</div>
+            <div class="text-caption text-grey-6">{{ lastPaket.alamat_tujuan || '' }}</div>
+          </div>
+        </div>
+      </q-card-section>
+    </q-card>
+
     <!-- Scanned Items Table View -->
     <div class="q-mb-xl">
-      <ScanEventTable :scans="userScans" :show-petugas-filter="false" />
+      <ScanEventTable :scans="userScans" :show-petugas-filter="false" show-label-action @label="openLabel" />
     </div>
 
     <!-- Finish Task Action Button (Requirement Z) -->
@@ -111,12 +138,13 @@
         color="primary"
         size="lg"
         icon="check_circle"
-        label="SELESAIKAN TASK"
-        class="text-weight-bolder q-px-xl shadow-4"
+        label="Selesaikan Task"
+        no-caps
+        class="q-px-xl"
         unelevated
         @click="confirmFinishTask"
       >
-        <q-tooltip>Selesaikan task dan kunci proses pengindaian</q-tooltip>
+        <q-tooltip>Selesaikan task dan kunci proses pemindaian</q-tooltip>
       </q-btn>
     </div>
 
@@ -124,31 +152,27 @@
     <q-dialog v-model="showFinishModal" persistent>
       <q-card style="min-width: 360px; border-radius: 16px;">
         <q-card-section class="row items-center q-pb-none">
-          <q-avatar icon="help_outline" color="blue-1" text-color="primary" />
-          <span class="q-ml-sm text-h6 text-weight-bold">Konfirmasi Selesaikan Task</span>
+          <q-avatar icon="task_alt" color="blue-1" text-color="primary" />
+          <span class="q-ml-sm text-h6 text-weight-bold">Selesaikan task?</span>
         </q-card-section>
 
         <q-card-section class="q-pt-md">
-          <div class="text-body1 text-slate-800">
-            Apakah Anda yakin ingin menyelesaikan task?
+          <div class="text-body2 text-grey-7">
+            Pastikan seluruh paket telah discan. Setelah dikonfirmasi, input barcode akan terkunci dan status task menjadi Selesai.
           </div>
 
-          <div class="q-mt-md bg-blue-1 q-pa-md rounded-borders text-center">
-            <div class="text-caption text-grey-7">CAPAIAN SCAN TASK</div>
-            <div class="text-h3 text-weight-bolder text-primary font-mono">
+          <div class="q-mt-md bg-grey-1 q-pa-md text-center" style="border-radius: 12px; border: 1px solid var(--dj-border);">
+            <div class="overline-label">Capaian Scan Task</div>
+            <div class="kpi-value text-primary font-mono">
               {{ activeTask?.progress }} / {{ activeTask?.target }}
             </div>
-            <div class="text-caption text-grey-7">Task ID: {{ activeTask?.task_id }}</div>
-          </div>
-
-          <div class="text-caption text-negative q-mt-sm text-center">
-            * Setelah dikonfirmasi, input barcode akan dikunci dan task berstatus SELESAI.
+            <div class="text-caption text-grey-6 font-mono">Task ID: {{ activeTask?.task_id }}</div>
           </div>
         </q-card-section>
 
         <q-card-actions align="right" class="q-pa-md">
-          <q-btn flat label="BATAL" color="grey-7" v-close-popup class="text-weight-bold" />
-          <q-btn label="SELESAI" color="primary" @click="executeFinishTask" class="text-weight-bold" unelevated />
+          <q-btn flat label="Batal" no-caps color="grey-7" v-close-popup />
+          <q-btn label="Selesaikan" no-caps color="primary" unelevated @click="executeFinishTask" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -162,17 +186,37 @@ import { useQuasar } from 'quasar'
 import { useAuthStore } from '../../stores/authStore'
 import { useTaskStore } from '../../stores/taskStore'
 import { useScanStore } from '../../stores/scanStore'
+import { usePaketStore } from '../../stores/paketStore'
 import StatusBadge from '../../components/StatusBadge.vue'
 import BarcodeInput from '../../components/BarcodeInput.vue'
 import ScanEventTable from '../../components/ScanEventTable.vue'
+import BarcodeLabel from '../../components/BarcodeLabel.vue'
 
 const $q = useQuasar()
 const router = useRouter()
 const authStore = useAuthStore()
 const taskStore = useTaskStore()
 const scanStore = useScanStore()
+const paketStore = usePaketStore()
 
 const showFinishModal = ref(false)
+const lastPaket = ref(null)
+const showLabel = ref(false)
+const labelResi = ref('')
+
+// Umpan balik hasil validasi scan terakhir → ditampilkan di dialog kamera
+// dan komponen input. { seq, resi, level, label, message, detail }
+let feedbackSeq = 0
+const scanFeedback = ref(null)
+
+const setFeedback = (resi, level, label, message, detail = '') => {
+  scanFeedback.value = { seq: ++feedbackSeq, resi, level, label, message, detail }
+}
+
+const openLabel = (row) => {
+  labelResi.value = row?.nomor_resi || ''
+  showLabel.value = true
+}
 
 const activeTask = computed(() => {
   if (!authStore.currentUser) return null
@@ -194,12 +238,17 @@ const lastScannedEvent = computed(() => {
 
 const handleBarcodeScan = async (resiInput) => {
   if (isTaskFinished.value) {
+    const msg = activeTask.value
+      ? `Task ${activeTask.value.task_id} sudah selesai — tidak dapat melakukan scan.`
+      : 'Tidak ada task aktif — minta admin/supervisor membuat task terlebih dahulu.'
+
+    setFeedback(resiInput, 'danger', 'DITOLAK', msg)
     $q.notify({
       type: 'negative',
       icon: 'error',
-      message: 'Task sudah selesai dan tidak dapat melakukan scan.',
+      message: msg,
       position: 'top',
-      timeout: 2500
+      timeout: 3000
     })
     return
   }
@@ -213,7 +262,13 @@ const handleBarcodeScan = async (resiInput) => {
     jenis_scan: 'INBOUND'
   })
 
+  // Lookup paket selalu dijalankan — untuk kartu data paket dan
+  // memperkaya pesan penolakan (tahap "Cari Data Paket").
+  const lookup = await paketStore.lookupByResi(resiInput)
+  lastPaket.value = lookup.success ? lookup.paket : null
+
   if (result.success) {
+    setFeedback(resiInput, 'success', 'MASUK', result.message)
     $q.notify({
       type: 'positive',
       icon: 'check_circle',
@@ -221,25 +276,62 @@ const handleBarcodeScan = async (resiInput) => {
       position: 'top',
       timeout: 1800
     })
-  } else {
-    if (result.reason === 'DUPLICATE') {
-      $q.notify({
-        type: 'warning',
-        icon: 'warning',
-        message: result.message,
-        position: 'top',
-        timeout: 3000
-      })
-    } else {
-      $q.notify({
-        type: 'negative',
-        icon: 'error',
-        message: result.message,
-        position: 'top',
-        timeout: 2500
-      })
-    }
+    return
   }
+
+  if (result.reason === 'DUPLICATE') {
+    setFeedback(resiInput, 'warning', 'DUPLIKAT', result.message)
+    $q.notify({
+      type: 'warning',
+      icon: 'warning',
+      message: result.message,
+      position: 'top',
+      timeout: 3000
+    })
+    return
+  }
+
+  if (result.reason === 'DRAFT') {
+    const draft = lookup.success ? lookup.paket : null
+    const detail = draft
+      ? `${draft.nama_barang || '(nama barang kosong)'} • ${draft.pengirim || '-'} → ${draft.penerima || '-'}`
+      : ''
+    const msg = draft
+      ? `Resi masih DRAFT — customer belum menyelesaikan data barang.`
+      : result.message
+
+    setFeedback(resiInput, 'danger', 'MASIH DRAFT', msg, detail)
+    $q.notify({
+      type: 'warning',
+      icon: 'gpp_bad',
+      message: detail ? `${msg} (${detail})` : msg,
+      position: 'top',
+      timeout: 4500
+    })
+    return
+  }
+
+  if (result.reason === 'UNKNOWN_RESI') {
+    setFeedback(resiInput, 'danger', 'TAK DIKENAL', result.message)
+    $q.notify({
+      type: 'warning',
+      icon: 'gpp_bad',
+      message: result.message,
+      position: 'top',
+      timeout: 3500
+    })
+    return
+  }
+
+  // FINISHED / EMPTY / ERROR / lainnya
+  setFeedback(resiInput, 'danger', 'GAGAL', result.message)
+  $q.notify({
+    type: 'negative',
+    icon: 'error',
+    message: result.message,
+    position: 'top',
+    timeout: 2500
+  })
 }
 
 const confirmFinishTask = () => {

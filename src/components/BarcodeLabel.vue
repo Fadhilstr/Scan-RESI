@@ -39,12 +39,12 @@
 
       <!-- Aksi -->
       <q-card-actions align="right" class="q-pa-md">
-        <q-btn flat label="TUTUP" color="grey-7" v-close-popup class="text-weight-bold" />
+        <q-btn flat label="Tutup" no-caps color="grey-7" v-close-popup />
         <q-btn
           unelevated
           color="primary"
           icon="print"
-          label="CETAK"
+          label="Cetak" no-caps
           :disable="!!renderError"
           class="text-weight-bold"
           @click="printLabel"

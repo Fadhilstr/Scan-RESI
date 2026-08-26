@@ -2,7 +2,7 @@
   <q-page class="q-pa-md q-pa-lg-xl">
     <div class="row items-center justify-between q-mb-md">
       <div>
-        <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">Petugas Tim Saya</h4>
+        <h4 class="page-title">Petugas Tim Saya</h4>
         <div class="text-subtitle2 text-grey-7">Inspeksi anggota petugas operasional dalam scope supervisor</div>
       </div>
     </div>

@@ -2,14 +2,14 @@
   <q-page class="q-pa-md q-pa-lg-xl">
     <div class="row items-center justify-between q-mb-md">
       <div>
-        <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">Tugas Saya</h4>
+        <h4 class="page-title">Tugas Saya</h4>
         <div class="text-subtitle2 text-grey-7">Daftar alokasi task/batch pengindaian paket milik Anda</div>
       </div>
 
       <q-btn
         color="primary"
         icon="qr_code_scanner"
-        label="SCAN PAKET"
+        label="Scan Paket" no-caps
         to="/petugas/scan"
         unelevated
         class="text-weight-bold"

@@ -2,27 +2,26 @@
   <q-page class="q-pa-md q-pa-lg-xl">
     <div class="row items-center justify-between q-mb-lg">
       <div>
-        <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">Dashboard Admin</h4>
-        <div class="text-subtitle1 text-grey-7">Monitoring operasional seluruh sistem scan Dijak Express</div>
+        <h4 class="page-title">Dashboard Admin</h4>
+        <div class="page-subtitle">Monitoring operasional seluruh sistem scan Dijak Express</div>
       </div>
 
       <div class="row q-gutter-sm">
         <q-btn
           color="primary"
           icon="display_settings"
-          label="MONITORING SCAN"
+          label="Monitoring Scan"
+          no-caps
           to="/admin/monitoring"
           unelevated
-          class="text-weight-bold"
         />
         <q-btn
-          color="amber-6"
-          text-color="slate-900"
+          outline
+          color="primary"
           icon="manage_accounts"
-          label="USER MANAGEMENT"
+          label="User Management"
+          no-caps
           to="/admin/users"
-          unelevated
-          class="text-weight-bold"
         />
       </div>
     </div>
@@ -31,52 +30,54 @@
     <div class="row q-col-gutter-md q-mb-xl">
       <div class="col-12 col-sm-6 col-md-3">
         <q-card class="stat-card q-pa-md">
-          <q-card-section class="q-pa-xs">
+          <q-card-section class="q-pa-none">
             <div class="row items-center justify-between q-mb-sm">
-              <span class="text-caption text-weight-bold text-grey-7 text-uppercase">Total Petugas</span>
-              <q-avatar icon="badge" color="blue-1" text-color="primary" size="40px" />
+              <span class="overline-label">Total Petugas</span>
+              <q-avatar icon="badge" color="blue-1" text-color="primary" size="36px" style="border-radius: 10px;" />
             </div>
-            <div class="text-h3 text-weight-bolder text-wahana-navy font-mono">25</div>
-            <div class="text-caption text-positive text-weight-bold q-mt-xs">4 Petugas Online</div>
+            <div class="kpi-value text-slate-900 font-mono">25</div>
+            <div class="text-caption text-positive text-weight-medium q-mt-xs row items-center">
+              <q-icon name="circle" size="7px" class="q-mr-xs" /> 4 petugas online
+            </div>
           </q-card-section>
         </q-card>
       </div>
 
       <div class="col-12 col-sm-6 col-md-3">
         <q-card class="stat-card q-pa-md">
-          <q-card-section class="q-pa-xs">
+          <q-card-section class="q-pa-none">
             <div class="row items-center justify-between q-mb-sm">
-              <span class="text-caption text-weight-bold text-grey-7 text-uppercase">Total Supervisor</span>
-              <q-avatar icon="supervisor_account" color="indigo-1" text-color="indigo" size="40px" />
+              <span class="overline-label">Total Supervisor</span>
+              <q-avatar icon="supervisor_account" color="indigo-1" text-color="indigo-8" size="36px" style="border-radius: 10px;" />
             </div>
-            <div class="text-h3 text-weight-bolder text-slate-900 font-mono">3</div>
-            <div class="text-caption text-grey-6 q-mt-xs">3 Rayon Operasional</div>
+            <div class="kpi-value text-slate-900 font-mono">3</div>
+            <div class="text-caption text-grey-6 q-mt-xs">3 rayon operasional</div>
           </q-card-section>
         </q-card>
       </div>
 
       <div class="col-12 col-sm-6 col-md-3">
         <q-card class="stat-card q-pa-md">
-          <q-card-section class="q-pa-xs">
+          <q-card-section class="q-pa-none">
             <div class="row items-center justify-between q-mb-sm">
-              <span class="text-caption text-weight-bold text-grey-7 text-uppercase">Total Task</span>
-              <q-avatar icon="assignment" color="amber-1" text-color="amber-9" size="40px" />
+              <span class="overline-label">Total Task</span>
+              <q-avatar icon="assignment" color="amber-2" text-color="amber-9" size="36px" style="border-radius: 10px;" />
             </div>
-            <div class="text-h3 text-weight-bolder text-amber-9 font-mono">10</div>
-            <div class="text-caption text-grey-6 q-mt-xs">8 Aktif • 2 Selesai</div>
+            <div class="kpi-value text-slate-900 font-mono">10</div>
+            <div class="text-caption text-grey-6 q-mt-xs">8 aktif &middot; 2 selesai</div>
           </q-card-section>
         </q-card>
       </div>
 
       <div class="col-12 col-sm-6 col-md-3">
         <q-card class="stat-card q-pa-md">
-          <q-card-section class="q-pa-xs">
+          <q-card-section class="q-pa-none">
             <div class="row items-center justify-between q-mb-sm">
-              <span class="text-caption text-weight-bold text-grey-7 text-uppercase">Total Scan</span>
-              <q-avatar icon="qr_code_scanner" color="green-1" text-color="positive" size="40px" />
+              <span class="overline-label">Total Scan</span>
+              <q-avatar icon="qr_code_scanner" color="green-1" text-color="positive" size="36px" style="border-radius: 10px;" />
             </div>
-            <div class="text-h3 text-weight-bolder text-positive font-mono">1,250</div>
-            <div class="text-caption text-positive text-weight-bold q-mt-xs">350 Scan Hari Ini</div>
+            <div class="kpi-value text-slate-900 font-mono">1.250</div>
+            <div class="text-caption text-grey-6 q-mt-xs">350 scan hari ini</div>
           </q-card-section>
         </q-card>
       </div>
@@ -87,11 +88,11 @@
       <div class="col-12 col-md-6">
         <q-card class="scan-card full-height">
           <q-card-section class="row items-center justify-between">
-            <div class="text-subtitle1 text-weight-bold text-slate-900 row items-center">
-              <q-icon name="task" color="primary" class="q-mr-sm" size="24px" />
-              TASK AKTIF SAAT INI
+            <div class="section-title">
+              <q-icon name="task" size="20px" color="primary" class="q-mr-sm" />
+              Task Aktif Saat Ini
             </div>
-            <q-btn flat dense label="Lihat Semua" color="primary" to="/admin/tasks" class="text-weight-bold" />
+            <q-btn flat dense no-caps label="Lihat semua" color="primary" to="/admin/tasks" />
           </q-card-section>
 
           <q-separator />
@@ -105,11 +106,11 @@
       <div class="col-12 col-md-6">
         <q-card class="scan-card full-height">
           <q-card-section class="row items-center justify-between">
-            <div class="text-subtitle1 text-weight-bold text-slate-900 row items-center">
-              <q-icon name="history" color="primary" class="q-mr-sm" size="24px" />
-              AKTIVITAS SCAN TERAKHIR (ALL USER)
+            <div class="section-title">
+              <q-icon name="history" size="20px" color="primary" class="q-mr-sm" />
+              Aktivitas Scan Terakhir
             </div>
-            <q-btn flat dense label="Monitoring" color="primary" to="/admin/monitoring" class="text-weight-bold" />
+            <q-btn flat dense no-caps label="Monitoring" color="primary" to="/admin/monitoring" />
           </q-card-section>
 
           <q-separator />

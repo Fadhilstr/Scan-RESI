@@ -2,7 +2,7 @@
   <q-page class="q-pa-md q-pa-lg-xl">
     <div class="row items-center justify-between q-mb-md">
       <div>
-        <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">Report Performa Tim</h4>
+        <h4 class="page-title">Report Performa Tim</h4>
         <div class="text-subtitle2 text-grey-7">Ringkasan statistik dan pencapaian target tim operasional</div>
       </div>
 
@@ -19,7 +19,7 @@
         <q-card class="scan-card q-pa-md">
           <q-card-section>
             <div class="text-subtitle1 text-weight-bold text-slate-900 q-mb-xs">Tingkat Pencapaian Target</div>
-            <div class="text-h3 text-weight-bolder font-mono" :class="targetAchievement >= 80 ? 'text-positive' : 'text-orange-9'">
+            <div class="kpi-value font-mono" :class="targetAchievement >= 80 ? 'text-positive' : 'text-orange-8'">
               {{ targetAchievement }}%
             </div>
             <div class="text-caption text-grey-7">Rata-rata progres task aktif tim ({{ supervisedIds.length }} petugas)</div>
@@ -32,7 +32,7 @@
         <q-card class="scan-card q-pa-md">
           <q-card-section>
             <div class="text-subtitle1 text-weight-bold text-slate-900 q-mb-xs">Rasio Duplikasi Scan Tim</div>
-            <div class="text-h3 text-weight-bolder font-mono" :class="duplicateRate > 5 ? 'text-negative' : 'text-amber-9'">
+            <div class="kpi-value font-mono" :class="duplicateRate > 5 ? 'text-negative' : 'text-amber-8'">
               {{ duplicateRate }}%
             </div>
             <div class="text-caption text-grey-7">{{ teamStats.duplicate }} duplikat dari {{ teamStats.total }} scan event tim</div>
@@ -67,7 +67,7 @@
 
           <template v-slot:body-cell-status="props">
             <q-td :props="props">
-              <q-badge :color="props.row.status === 'ONLINE' ? 'green-2' : 'grey-3'" text-color="slate-900" class="font-mono text-weight-bold">
+              <q-badge :color="props.row.status === 'ONLINE' ? 'green-2' : 'grey-3'" class="font-mono text-weight-bold text-slate-900">
                 {{ props.row.status }}
               </q-badge>
             </q-td>

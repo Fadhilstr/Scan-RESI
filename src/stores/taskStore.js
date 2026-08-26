@@ -32,11 +32,12 @@ export const useTaskStore = defineStore('task', {
   getters: {
     allTasks: (state) => state.tasks,
 
-    // Ambil task aktif untuk petugas tertentu
+    // Ambil task aktif untuk petugas tertentu.
+    // Hanya task berstatus PROSES_SCAN yang dianggap aktif —
+    // task SELESAI tidak boleh diam-diam dipakai sebagai task aktif.
     getActiveTaskForUser: (state) => (userId) => {
       return (
         state.tasks.find((t) => t.user_id === userId && t.status === 'PROSES_SCAN') ||
-        state.tasks.find((t) => t.user_id === userId) ||
         null
       )
     },

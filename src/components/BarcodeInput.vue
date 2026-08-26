@@ -2,12 +2,12 @@
   <q-card class="scan-card q-pa-md q-mb-lg">
     <q-card-section class="q-pa-sm">
       <div class="row items-center justify-between q-mb-sm">
-        <div class="text-subtitle1 text-weight-bold text-slate-800 row items-center">
-          <q-icon name="qr_code_scanner" size="24px" color="primary" class="q-mr-sm" />
+        <div class="text-subtitle1 text-weight-bold text-slate-900 row items-center">
+          <q-icon name="qr_code_scanner" size="22px" color="primary" class="q-mr-sm" />
           Nomor Resi / Hasil Barcode
         </div>
-        <div class="text-caption text-grey-7 flex items-center" v-if="!disabled">
-          <span class="scanner-dot q-mr-xs"></span> Simulator Input Barcode Active
+        <div class="text-caption text-grey-6 flex items-center" v-if="!disabled">
+          <span class="scanner-dot q-mr-xs"></span> Scanner siap
         </div>
       </div>
 
@@ -55,10 +55,11 @@
         <div class="col-12 col-sm-3 col-md-2">
           <q-btn
             color="primary"
-            class="full-width text-weight-bold"
+            class="full-width"
             size="lg"
             icon="search"
-            label="SCAN"
+            label="Scan"
+            no-caps
             :disabled="disabled || !barcodeValue.trim()"
             @click="handleScan"
             unelevated
@@ -69,23 +70,26 @@
   </q-card>
 
   <!-- Dialog Scan Kamera -->
-  <CameraScannerDialog v-model="showCamera" @detected="handleCameraDetected" />
+  <CameraScannerDialog v-model="showCamera" :feedback="feedback" @detected="handleCameraDetected" />
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
-import { useQuasar } from 'quasar'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import CameraScannerDialog from './CameraScannerDialog.vue'
 
 const props = defineProps({
   disabled: {
     type: Boolean,
     default: false
+  },
+  // Hasil validasi scan terakhir (dari halaman) → diteruskan ke dialog kamera
+  feedback: {
+    type: Object,
+    default: null
   }
 })
 
 const emit = defineEmits(['scan'])
-const $q = useQuasar()
 const barcodeValue = ref('')
 const inputRef = ref(null)
 const showCamera = ref(false)
@@ -103,23 +107,73 @@ const clearInput = () => {
   focusInput()
 }
 
-const handleScan = () => {
-  if (props.disabled || !barcodeValue.value.trim()) return
+// Satu jalur submit untuk semua sumber input (manual / scanner USB / kamera)
+const submitValue = (rawValue) => {
+  const val = (rawValue || '').trim()
+  if (props.disabled || !val) return false
 
-  const val = barcodeValue.value.trim()
   emit('scan', val)
   barcodeValue.value = ''
   focusInput()
+  return true
+}
+
+const handleScan = () => {
+  submitValue(barcodeValue.value)
 }
 
 // Hasil deteksi kamera → alur scan yang sama dengan input manual (FR-3)
 const handleCameraDetected = (val) => {
-  const resi = (val || '').trim()
-  if (props.disabled || !resi) return
-  emit('scan', resi)
+  submitValue(val)
+}
+
+// ---------------------------------------------------------------------
+// Auto-capture scanner USB (keyboard wedge)
+//
+// Scanner handheld "mengetik" karakter cepat lalu menutup dengan Enter.
+// Listener global ini menangkap burst tersebut walau fokus sedang tidak
+// di kolom input — misal setelah petugas klik tombol lain.
+// Ketikan manusia di elemen input lain TIDAK ikut terjacking.
+// ---------------------------------------------------------------------
+const WEDGE_GAP_MS = 120 // jeda maks antar karakter agar dianggap burst scanner
+let wedgeBuffer = ''
+let wedgeLastAt = 0
+
+const isTypingTarget = (el) =>
+  el instanceof HTMLElement &&
+  (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
+
+const onGlobalKeydown = (e) => {
+  if (props.disabled || showCamera.value) return
+  if (e.ctrlKey || e.altKey || e.metaKey) return
+
+  // Sedang mengetik di elemen form mana pun → serahkan ke perilaku normal
+  if (isTypingTarget(e.target)) return
+
+  const now = Date.now()
+
+  if (e.key === 'Enter') {
+    const value = wedgeBuffer
+    wedgeBuffer = ''
+    if (value.length >= 4 && now - wedgeLastAt <= WEDGE_GAP_MS * 3) {
+      e.preventDefault()
+      submitValue(value)
+    }
+    return
+  }
+
+  if (e.key.length === 1) {
+    wedgeBuffer = now - wedgeLastAt <= WEDGE_GAP_MS ? wedgeBuffer + e.key : e.key
+    wedgeLastAt = now
+  }
 }
 
 onMounted(() => {
+  window.addEventListener('keydown', onGlobalKeydown)
   focusInput()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKeydown)
 })
 </script>

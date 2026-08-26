@@ -2,7 +2,7 @@
   <q-page class="q-pa-md q-pa-lg-xl">
     <div class="row items-center justify-between q-mb-md">
       <div>
-        <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">Monitoring Scan System</h4>
+        <h4 class="page-title">Monitoring Scan System</h4>
         <div class="text-subtitle2 text-grey-7">Lihat dan filter seluruh aktivitas scan event di seluruh gerai/rayon</div>
       </div>
 

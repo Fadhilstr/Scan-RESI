@@ -1,5 +1,5 @@
 <template>
-  <div class="fullscreen bg-blue text-white text-center q-pa-md flex flex-center">
+  <div class="not-found-shell bg-blue text-white text-center q-pa-md flex flex-center">
     <div>
       <div style="font-size: 30vh">
         404
@@ -21,3 +21,10 @@
     </div>
   </div>
 </template>
+
+<style scoped>
+.not-found-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+</style>

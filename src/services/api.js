@@ -13,6 +13,7 @@
  */
 
 import axios from 'axios'
+import { Notify } from 'quasar'
 
 // =====================================================================
 // MODE FLAG — dikontrol dari .env
@@ -57,10 +58,25 @@ api.interceptors.response.use(
     const status = error.response?.status
     const message = error.response?.data?.message || error.message || 'Terjadi kesalahan pada server.'
 
-    // Token expired / unauthorized
-    if (status === 401) {
-      // Optional: redirect ke /login
-      console.warn('[API] Unauthorized - session mungkin sudah habis.')
+    // Token expired / unauthorized — akhiri sesi secara eksplisit agar
+    // user tidak menemui kegagalan senyap beruntun (cth: scan ditolak terus).
+    if (status === 401 && !error.config?.url?.includes('/api/auth/')) {
+      const hadSession = !!localStorage.getItem('wahana_token')
+      localStorage.removeItem('wahana_token')
+
+      if (hadSession && !location.hash.startsWith('#/login')) {
+        Notify.create({
+          type: 'negative',
+          icon: 'lock_clock',
+          message: 'Sesi Anda berakhir. Silakan login ulang.',
+          position: 'top',
+          timeout: 2500
+        })
+        setTimeout(() => {
+          location.href = '/#/login'
+          location.reload()
+        }, 700)
+      }
     }
 
     return Promise.reject({ status, message })
