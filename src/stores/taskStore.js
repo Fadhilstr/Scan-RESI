@@ -1,93 +1,124 @@
+/**
+ * taskStore.js — Pinia Store Task / Batch
+ *
+ * Store ini hanya mengelola STATE (data reaktif).
+ * Semua logika I/O (local data / HTTP API) didelegasikan ke task.service.js.
+ *
+ * Untuk switch ke backend Perl:
+ *   → Ubah VITE_USE_LOCAL_DATA=false di file .env
+ *   → Tidak ada perubahan di file ini maupun di komponen UI.
+ */
+
 import { defineStore } from 'pinia'
+import {
+  getTasks as svcGetTasks,
+  createTask as svcCreateTask,
+  incrementTaskProgress as svcIncrementProgress,
+  completeTask as svcCompleteTask,
+  LOCAL_TASKS
+} from '../services/task.service'
+import { USE_LOCAL_DATA } from '../services/api'
 
 export const useTaskStore = defineStore('task', {
   state: () => ({
-    // Dummy Task/Batch records (Requirement R & AB)
-    tasks: [
-      {
-        task_id: 'TASK-001',
-        user_id: 'USR-001',
-        user_name: 'Fadhil',
-        shift: 'Pagi',
-        tanggal: '24-08-2026',
-        target: 100,
-        progress: 3,
-        status: 'PROSES_SCAN', // DRAFT | PROSES_SCAN | SELESAI
-        lokasi: 'CIPUTAT'
-      },
-      {
-        task_id: 'TASK-002',
-        user_id: 'USR-002',
-        user_name: 'Budi',
-        shift: 'Pagi',
-        tanggal: '24-08-2026',
-        target: 80,
-        progress: 2,
-        status: 'PROSES_SCAN',
-        lokasi: 'CIPUTAT'
-      },
-      {
-        task_id: 'TASK-003',
-        user_id: 'USR-003',
-        user_name: 'Andi',
-        shift: 'Pagi',
-        tanggal: '24-08-2026',
-        target: 120,
-        progress: 2,
-        status: 'PROSES_SCAN',
-        lokasi: 'CIPUTAT'
-      }
-    ]
+    // Task list (diisi via fetchTasks)
+    tasks: [],
+
+    // Loading & error state
+    isLoading: false,
+    error: null
   }),
 
   getters: {
     allTasks: (state) => state.tasks,
-    
-    // Get active task for a specific petugas user_id
+
+    // Ambil task aktif untuk petugas tertentu
     getActiveTaskForUser: (state) => (userId) => {
-      return state.tasks.find(
-        (t) => t.user_id === userId && t.status === 'PROSES_SCAN'
-      ) || state.tasks.find((t) => t.user_id === userId) || null
+      return (
+        state.tasks.find((t) => t.user_id === userId && t.status === 'PROSES_SCAN') ||
+        state.tasks.find((t) => t.user_id === userId) ||
+        null
+      )
     },
 
-    // Get tasks assigned to supervised team members
+    // Ambil semua task milik tim bawahan supervisor
     getTasksForSupervisor: (state) => (supervisedUserIds) => {
       return state.tasks.filter((t) => supervisedUserIds.includes(t.user_id))
     }
   },
 
   actions: {
-    incrementTaskProgress(taskId) {
-      const task = this.tasks.find((t) => t.task_id === taskId)
-      if (task) {
-        task.progress += 1
+    /**
+     * Ambil semua task dari service (local/API).
+     */
+    async fetchTasks(filters = {}) {
+      this.isLoading = true
+      try {
+        this.tasks = await svcGetTasks(filters)
+      } catch (err) {
+        this.error = err.message
+      } finally {
+        this.isLoading = false
       }
     },
 
-    completeTask(taskId) {
-      const task = this.tasks.find((t) => t.task_id === taskId)
-      if (task) {
-        task.status = 'SELESAI'
-        return { success: true, message: `Task ${taskId} berhasil diselesaikan.` }
+    /**
+     * Increment progress task aktif (+1 saat scan berhasil).
+     * Dipanggil oleh scan.service.js (local mode) atau otomatis oleh backend (API mode).
+     * Di store ini, kita sync ulang state lokal agar UI reaktif.
+     */
+    async incrementTaskProgress(taskId) {
+      if (USE_LOCAL_DATA) {
+        // Update langsung di state (sudah diupdate di LOCAL_TASKS oleh service)
+        const task = this.tasks.find((t) => t.task_id === taskId)
+        if (task) task.progress += 1
+      } else {
+        // Setelah API call, refresh tasks dari server
+        await this.fetchTasks()
       }
-      return { success: false, message: 'Task tidak ditemukan.' }
     },
 
-    createNewTask(newTaskData) {
-      const newId = `TASK-${String(this.tasks.length + 1).padStart(3, '0')}`
-      const taskObj = {
-        task_id: newId,
-        user_id: newTaskData.user_id,
-        user_name: newTaskData.user_name,
-        shift: newTaskData.shift || 'Pagi',
-        tanggal: newTaskData.tanggal || '24-08-2026',
-        target: Number(newTaskData.target) || 100,
-        progress: 0,
-        status: 'PROSES_SCAN',
-        lokasi: newTaskData.lokasi || 'CIPUTAT'
+    /**
+     * Selesaikan task.
+     */
+    async completeTask(taskId) {
+      try {
+        const result = await svcCompleteTask(taskId)
+        if (result.success) {
+          if (USE_LOCAL_DATA) {
+            // Sync dari LOCAL_TASKS (sudah diupdate oleh service)
+            const taskInState = this.tasks.find((t) => t.task_id === taskId)
+            if (taskInState) taskInState.status = 'SELESAI'
+          } else {
+            await this.fetchTasks()
+          }
+        }
+        return result
+      } catch (err) {
+        return { success: false, message: err.message }
       }
-      this.tasks.unshift(taskObj)
-      return { success: true, task: taskObj }
+    },
+
+    /**
+     * Buat task baru.
+     */
+    async createNewTask(newTaskData) {
+      this.isLoading = true
+      try {
+        const result = await svcCreateTask(newTaskData)
+        if (result.success) {
+          if (USE_LOCAL_DATA) {
+            this.tasks.unshift(result.task)
+          } else {
+            await this.fetchTasks()
+          }
+        }
+        return result
+      } catch (err) {
+        return { success: false, message: err.message }
+      } finally {
+        this.isLoading = false
+      }
     }
   }
 })

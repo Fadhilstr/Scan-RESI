@@ -30,6 +30,17 @@
             </template>
             <template v-slot:append>
               <q-btn
+                flat
+                round
+                dense
+                icon="photo_camera"
+                color="primary"
+                :disable="disabled"
+                @click="showCamera = true"
+              >
+                <q-tooltip>Scan via kamera</q-tooltip>
+              </q-btn>
+              <q-btn
                 v-if="barcodeValue"
                 flat
                 round
@@ -56,11 +67,15 @@
       </div>
     </q-card-section>
   </q-card>
+
+  <!-- Dialog Scan Kamera -->
+  <CameraScannerDialog v-model="showCamera" @detected="handleCameraDetected" />
 </template>
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { useQuasar } from 'quasar'
+import CameraScannerDialog from './CameraScannerDialog.vue'
 
 const props = defineProps({
   disabled: {
@@ -73,6 +88,7 @@ const emit = defineEmits(['scan'])
 const $q = useQuasar()
 const barcodeValue = ref('')
 const inputRef = ref(null)
+const showCamera = ref(false)
 
 const focusInput = () => {
   nextTick(() => {
@@ -94,6 +110,13 @@ const handleScan = () => {
   emit('scan', val)
   barcodeValue.value = ''
   focusInput()
+}
+
+// Hasil deteksi kamera → alur scan yang sama dengan input manual (FR-3)
+const handleCameraDetected = (val) => {
+  const resi = (val || '').trim()
+  if (props.disabled || !resi) return
+  emit('scan', resi)
 }
 
 onMounted(() => {

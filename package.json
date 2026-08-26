@@ -1,25 +1,30 @@
 {
-  "name": "",
-  "version": "0.0.1",
-  "description": "A Quasar Project",
-  "productName": "Quasar App",
+  "name": "wahana-express-scan",
+  "version": "1.0.0",
+  "description": "Aplikasi Scan Paket Logistik Berbasis Barcode — Wahana Express",
+  "productName": "Wahana Express | Logistics Scanner",
   "author": "Fadhil <2111500233@student.budiluhur.ac.id>",
   "type": "module",
   "private": true,
   "scripts": {
     "dev": "quasar dev",
+    "dev:lan": "WAHANA_DEV_HTTPS=1 quasar dev",
     "build": "quasar build",
     "postinstall": "quasar prepare --silent"
   },
   "dependencies": {
-    "pinia": "^3.0.0",
     "@quasar/extras": "^1.16.0",
+    "axios": "^1.19.0",
+    "html5-qrcode": "^2.3.8",
+    "jsbarcode": "^3.12.3",
+    "pinia": "^3.0.0",
     "quasar": "^2.17.0",
     "vue": "^3.5.0",
     "vue-router": "^4.4.0"
   },
   "devDependencies": {
-    "@quasar/app-vite": "2.4.1",
+    "@quasar/app-vite": "^2.4.1",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "autoprefixer": "^10.4.27",
     "postcss": "^8.5.8"
   },

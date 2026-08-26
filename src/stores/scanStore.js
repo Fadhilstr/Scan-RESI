@@ -1,104 +1,43 @@
+/**
+ * scanStore.js — Pinia Store Scan Event
+ *
+ * Store ini hanya mengelola STATE (data reaktif).
+ * Semua logika I/O (local data / HTTP API) didelegasikan ke scan.service.js.
+ *
+ * Untuk switch ke backend Perl:
+ *   → Ubah VITE_USE_LOCAL_DATA=false di file .env
+ *   → Tidak ada perubahan di file ini maupun di komponen UI.
+ */
+
 import { defineStore } from 'pinia'
+import {
+  getScans as svcGetScans,
+  addScan as svcAddScan,
+  getUserScanStats as svcGetUserStats,
+  LOCAL_SCANS
+} from '../services/scan.service'
 import { useTaskStore } from './taskStore'
+import { USE_LOCAL_DATA } from '../services/api'
 
 export const useScanStore = defineStore('scan', {
   state: () => ({
-    // Scan Events List (Requirement C, V, AC)
-    scanEvents: [
-      // Fadhil (USR-001, TASK-001)
-      {
-        scan_id: 'SCN-00001',
-        nomor_resi: 'GJXL8FLB',
-        user_id: 'USR-001',
-        user_name: 'Fadhil',
-        task_id: 'TASK-001',
-        waktu_scan: '24-08-2026 10:21:32',
-        lokasi: 'CIPUTAT',
-        status_scan: 'SUCCESS',
-        device_id: 'SCAN-DEVICE-01',
-        jenis_scan: 'INBOUND'
-      },
-      {
-        scan_id: 'SCN-00002',
-        nomor_resi: 'AB123456',
-        user_id: 'USR-001',
-        user_name: 'Fadhil',
-        task_id: 'TASK-001',
-        waktu_scan: '24-08-2026 10:22:10',
-        lokasi: 'CIPUTAT',
-        status_scan: 'SUCCESS',
-        device_id: 'SCAN-DEVICE-01',
-        jenis_scan: 'INBOUND'
-      },
-      {
-        scan_id: 'SCN-00003',
-        nomor_resi: 'WHN555555',
-        user_id: 'USR-001',
-        user_name: 'Fadhil',
-        task_id: 'TASK-001',
-        waktu_scan: '24-08-2026 10:23:45',
-        lokasi: 'CIPUTAT',
-        status_scan: 'SUCCESS',
-        device_id: 'SCAN-DEVICE-01',
-        jenis_scan: 'INBOUND'
-      },
+    // Scan events list (diisi via fetchScans)
+    scanEvents: [],
 
-      // Budi (USR-002, TASK-002)
-      {
-        scan_id: 'SCN-00004',
-        nomor_resi: 'XYZ123456',
-        user_id: 'USR-002',
-        user_name: 'Budi',
-        task_id: 'TASK-002',
-        waktu_scan: '24-08-2026 10:22:10',
-        lokasi: 'CIPUTAT',
-        status_scan: 'SUCCESS',
-        device_id: 'SCAN-DEVICE-02',
-        jenis_scan: 'INBOUND'
-      },
-      {
-        scan_id: 'SCN-00005',
-        nomor_resi: 'WHN777777',
-        user_id: 'USR-002',
-        user_name: 'Budi',
-        task_id: 'TASK-002',
-        waktu_scan: '24-08-2026 10:24:12',
-        lokasi: 'CIPUTAT',
-        status_scan: 'SUCCESS',
-        device_id: 'SCAN-DEVICE-02',
-        jenis_scan: 'INBOUND'
-      },
-
-      // Andi (USR-003, TASK-003)
-      {
-        scan_id: 'SCN-00006',
-        nomor_resi: 'ABC111111',
-        user_id: 'USR-003',
-        user_name: 'Andi',
-        task_id: 'TASK-003',
-        waktu_scan: '24-08-2026 10:15:00',
-        lokasi: 'CIPUTAT',
-        status_scan: 'SUCCESS',
-        device_id: 'SCAN-DEVICE-03',
-        jenis_scan: 'INBOUND'
-      },
-      {
-        scan_id: 'SCN-00007',
-        nomor_resi: 'ABC222222',
-        user_id: 'USR-003',
-        user_name: 'Andi',
-        task_id: 'TASK-003',
-        waktu_scan: '24-08-2026 10:18:30',
-        lokasi: 'CIPUTAT',
-        status_scan: 'SUCCESS',
-        device_id: 'SCAN-DEVICE-03',
-        jenis_scan: 'INBOUND'
-      }
-    ]
+    // Loading & error state
+    isLoading: false,
+    error: null
   }),
 
   getters: {
-    // Role & User Permission Filtering Logic (Requirement H & AH)
+    /**
+     * Filter scan events berdasarkan role & scope user.
+     * Logic ini selalu berjalan di frontend (tidak berubah meski data dari API).
+     *
+     * - ADMIN       : Semua data
+     * - SUPERVISOR  : Hanya data tim bawahan (supervisedUserIds)
+     * - PETUGAS_SCAN: Hanya data milik sendiri
+     */
     getFilteredScans: (state) => (currentUser, supervisedUserIds = []) => {
       if (!currentUser) return []
 
@@ -117,14 +56,15 @@ export const useScanStore = defineStore('scan', {
       return []
     },
 
-    // Stats for specific user
+    /**
+     * Statistik scan untuk user tertentu (dihitung dari state lokal).
+     * Jika MODE API, gunakan action fetchUserScanStats() untuk data real dari server.
+     */
     getUserScanStats: (state) => (userId) => {
       const userScans = state.scanEvents.filter((s) => s.user_id === userId)
       const successScans = userScans.filter((s) => s.status_scan === 'SUCCESS')
       const duplicateScans = userScans.filter((s) => s.status_scan === 'DUPLICATE')
-      
       const lastScan = userScans.length > 0 ? userScans[0].waktu_scan : '-'
-
       return {
         total: successScans.length,
         success: successScans.length,
@@ -135,79 +75,46 @@ export const useScanStore = defineStore('scan', {
   },
 
   actions: {
-    addScanEvent({ resi, currentUser, activeTask, lokasi = 'CIPUTAT', device_id = 'SCAN-DEVICE-01', jenis_scan = 'INBOUND' }) {
-      const sanitizedResi = (resi || '').trim()
-
-      // Error 1: Barcode kosong
-      if (!sanitizedResi) {
-        return { success: false, reason: 'EMPTY', message: 'Nomor resi tidak boleh kosong.' }
+    /**
+     * Ambil semua scan events dari service (local/API).
+     */
+    async fetchScans(filters = {}) {
+      this.isLoading = true
+      try {
+        this.scanEvents = await svcGetScans(filters)
+      } catch (err) {
+        this.error = err.message
+      } finally {
+        this.isLoading = false
       }
+    },
 
-      // Error 2: Task status bukan PROSES_SCAN
-      if (!activeTask || activeTask.status === 'SELESAI') {
-        return { success: false, reason: 'FINISHED', message: 'Task sudah selesai dan tidak dapat melakukan scan.' }
-      }
+    /**
+     * Proses scan barcode resi.
+     * Memanggil scan.service.js → validasi duplikat → increment task progress.
+     */
+    async addScanEvent({ resi, currentUser, activeTask, lokasi, device_id, jenis_scan }) {
+      const result = await svcAddScan({ resi, currentUser, activeTask, lokasi, device_id, jenis_scan })
 
-      const now = new Date()
-      const dateStr = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`
-      const timeStr = `${dateStr} ${now.toTimeString().split(' ')[0]}`
+      if (USE_LOCAL_DATA) {
+        // Sync state dari LOCAL_SCANS (sudah diupdate oleh service)
+        this.scanEvents = [...LOCAL_SCANS]
 
-      // Error 3: Duplicate Validation (Requirement W & TEST 6)
-      const isDuplicate = this.scanEvents.some(
-        (evt) =>
-          evt.task_id === activeTask.task_id &&
-          evt.nomor_resi.toUpperCase() === sanitizedResi.toUpperCase() &&
-          evt.status_scan === 'SUCCESS'
-      )
-
-      if (isDuplicate) {
-        // Record DUPLICATE scan event
-        const duplicateEvent = {
-          scan_id: `SCN-${String(this.scanEvents.length + 1).padStart(5, '0')}`,
-          nomor_resi: sanitizedResi,
-          user_id: currentUser.id,
-          user_name: currentUser.name,
-          task_id: activeTask.task_id,
-          waktu_scan: timeStr,
-          lokasi,
-          status_scan: 'DUPLICATE',
-          device_id,
-          jenis_scan
+        // Sync task progress di taskStore
+        if (result.success) {
+          const taskStore = useTaskStore()
+          taskStore.incrementTaskProgress(activeTask.task_id)
         }
-        this.scanEvents.unshift(duplicateEvent)
-
-        return {
-          success: false,
-          reason: 'DUPLICATE',
-          message: `Nomor resi ${sanitizedResi} sudah pernah discan.`
+      } else {
+        // MODE API: increment progress dilakukan server-side secara transaksional.
+        // Sinkronkan ulang scan list + task agar UI (capaian target) reaktif.
+        if (result.success || result.reason === 'DUPLICATE') {
+          const taskStore = useTaskStore()
+          await Promise.all([this.fetchScans(), taskStore.fetchTasks()])
         }
       }
 
-      // Record SUCCESS scan event
-      const successEvent = {
-        scan_id: `SCN-${String(this.scanEvents.length + 1).padStart(5, '0')}`,
-        nomor_resi: sanitizedResi,
-        user_id: currentUser.id,
-        user_name: currentUser.name,
-        task_id: activeTask.task_id,
-        waktu_scan: timeStr,
-        lokasi,
-        status_scan: 'SUCCESS',
-        device_id,
-        jenis_scan
-      }
-
-      this.scanEvents.unshift(successEvent)
-
-      // Increment task progress
-      const taskStore = useTaskStore()
-      taskStore.incrementTaskProgress(activeTask.task_id)
-
-      return {
-        success: true,
-        resi: sanitizedResi,
-        message: `Nomor resi ${sanitizedResi} berhasil discan.`
-      }
+      return result
     }
   }
 })

@@ -148,6 +148,21 @@
               {{ props.row.lokasi }}
             </q-td>
           </template>
+
+          <template v-if="showLabelAction" v-slot:body-cell-aksi="props">
+            <q-td :props="props" class="text-center">
+              <q-btn
+                flat
+                dense
+                round
+                icon="qr_code_2"
+                color="primary"
+                @click="$emit('label', props.row)"
+              >
+                <q-tooltip>Lihat / cetak barcode resi</q-tooltip>
+              </q-btn>
+            </q-td>
+          </template>
         </q-table>
       </q-card-section>
 
@@ -187,6 +202,18 @@
                 <div class="text-weight-bold text-slate-800">{{ item.lokasi }}</div>
               </div>
             </div>
+
+            <div v-if="showLabelAction" class="row justify-end q-mt-xs">
+              <q-btn
+                flat
+                dense
+                icon="qr_code_2"
+                label="LABEL"
+                color="primary"
+                class="text-caption text-weight-bold"
+                @click="$emit('label', item)"
+              />
+            </div>
           </q-card>
         </div>
       </q-card-section>
@@ -207,8 +234,14 @@ const props = defineProps({
   showPetugasFilter: {
     type: Boolean,
     default: true
+  },
+  showLabelAction: {
+    type: Boolean,
+    default: false
   }
 })
+
+const emit = defineEmits(['label'])
 
 const searchQuery = ref('')
 const selectedPetugas = ref('ALL')
@@ -220,17 +253,25 @@ const pagination = ref({
   rowsPerPage: 10
 })
 
-const columns = [
-  { name: 'scan_id', label: 'ID Scan', field: 'scan_id', align: 'left', sortable: true },
-  { name: 'nomor_resi', label: 'Nomor Resi', field: 'nomor_resi', align: 'left', sortable: true },
-  { name: 'user_name', label: 'Petugas', field: 'user_name', align: 'left', sortable: true },
-  { name: 'task_id', label: 'Task ID', field: 'task_id', align: 'center', sortable: true },
-  { name: 'waktu_scan', label: 'Waktu Scan', field: 'waktu_scan', align: 'center', sortable: true },
-  { name: 'lokasi', label: 'Lokasi', field: 'lokasi', align: 'center' },
-  { name: 'status_scan', label: 'Status', field: 'status_scan', align: 'center', sortable: true },
-  { name: 'device_id', label: 'Device', field: 'device_id', align: 'center' },
-  { name: 'jenis_scan', label: 'Jenis Scan', field: 'jenis_scan', align: 'center' }
-]
+const columns = computed(() => {
+  const base = [
+    { name: 'scan_id', label: 'ID Scan', field: 'scan_id', align: 'left', sortable: true },
+    { name: 'nomor_resi', label: 'Nomor Resi', field: 'nomor_resi', align: 'left', sortable: true },
+    { name: 'user_name', label: 'Petugas', field: 'user_name', align: 'left', sortable: true },
+    { name: 'task_id', label: 'Task ID', field: 'task_id', align: 'center', sortable: true },
+    { name: 'waktu_scan', label: 'Waktu Scan', field: 'waktu_scan', align: 'center', sortable: true },
+    { name: 'lokasi', label: 'Lokasi', field: 'lokasi', align: 'center' },
+    { name: 'status_scan', label: 'Status', field: 'status_scan', align: 'center', sortable: true },
+    { name: 'device_id', label: 'Device', field: 'device_id', align: 'center' },
+    { name: 'jenis_scan', label: 'Jenis Scan', field: 'jenis_scan', align: 'center' }
+  ]
+
+  if (props.showLabelAction) {
+    base.push({ name: 'aksi', label: 'Barcode', field: () => '', align: 'center' })
+  }
+
+  return base
+})
 
 const petugasOptions = computed(() => {
   const names = Array.from(new Set(props.scans.map((s) => s.user_name)))

@@ -1,0 +1,94 @@
+package Wahana::Router;
+use strict;
+use warnings;
+use Exporter 'import';
+use Wahana::Config qw(config);
+use Wahana::Auth ();
+use Wahana::Response qw(json_response);
+use Wahana::Controller::AuthController   ();
+use Wahana::Controller::UsersController  qw(get_user_role);
+use Wahana::Controller::TasksController  ();
+use Wahana::Controller::ScansController  ();
+use Wahana::Controller::AuditController  ();
+
+our @EXPORT_OK = qw(handle_request);
+
+# =====================================================================
+# TABEL ROUTE — kontrak REST yang dikonsumsi frontend (src/services/)
+# meta: { auth => butuh token Bearer, admin => khusus role ADMIN }
+# =====================================================================
+my @ROUTES = (
+    [ 'POST',   qr{^/api/auth/login$},                 \&Wahana::Controller::AuthController::login,          {} ],
+    [ 'POST',   qr{^/api/auth/quick-login$},           \&Wahana::Controller::AuthController::quick_login,    {} ],
+    [ 'POST',   qr{^/api/auth/logout$},                \&Wahana::Controller::AuthController::logout,         {} ],
+    [ 'GET',    qr{^/api/users$},                      \&Wahana::Controller::UsersController::list,          { auth => 1 } ],
+    [ 'POST',   qr{^/api/users$},                      \&Wahana::Controller::UsersController::create,        { auth => 1, admin => 1 } ],
+    [ 'PATCH',  qr{^/api/users/([^/]+)/status$},       \&Wahana::Controller::UsersController::toggle_status, { auth => 1, admin => 1 } ],
+    [ 'GET',    qr{^/api/tasks$},                      \&Wahana::Controller::TasksController::list,          { auth => 1 } ],
+    [ 'POST',   qr{^/api/tasks$},                      \&Wahana::Controller::TasksController::create,        { auth => 1, admin => 1 } ],
+    [ 'PATCH',  qr{^/api/tasks/([^/]+)/progress$},     \&Wahana::Controller::TasksController::progress,      { auth => 1 } ],
+    [ 'PATCH',  qr{^/api/tasks/([^/]+)/complete$},     \&Wahana::Controller::TasksController::complete,      { auth => 1 } ],
+    [ 'GET',    qr{^/api/scans$},                      \&Wahana::Controller::ScansController::list,          { auth => 1 } ],
+    [ 'POST',   qr{^/api/scans$},                      \&Wahana::Controller::ScansController::create,        { auth => 1 } ],
+    [ 'GET',    qr{^/api/scans/stats/([^/]+)$},        \&Wahana::Controller::ScansController::stats,         { auth => 1 } ],
+    [ 'GET',    qr{^/api/audit-logs$},                 \&Wahana::Controller::AuditController::list,          { auth => 1, admin => 1 } ],
+);
+
+# Titik masuk utama semua adapter (dev server HTTP & CGI produksi).
+# %req: method, path, params, body(hashref|undef), headers(lowercase keys), ip
+sub handle_request {
+    my (%req) = @_;
+
+    my $method = uc($req{method} // 'GET');
+    my $path   = $req{path} // '/';
+    $path =~ s{/+$}{/};
+
+    # Preflight CORS
+    if ($method eq 'OPTIONS') {
+        return json_response(status => 204, body => '');
+    }
+
+    for my $route (@ROUTES) {
+        my ($r_method, $r_regex, $handler, $meta) = @$route;
+        next unless $method eq $r_method;
+        my @captures = $path =~ $r_regex or next;
+
+        # --- Middleware Auth ---
+        if ($meta->{auth} || $meta->{admin}) {
+            my $payload = Wahana::Auth->authenticate_request(\%req);
+            return json_response(
+                status => 401,
+                data   => { success => \0, message => 'Sesi tidak valid atau sudah kedaluwarsa.' }
+            ) unless $payload;
+
+            if ($meta->{admin}) {
+                my $role = get_user_role($payload->{uid});
+                return json_response(
+                    status => 403,
+                    data   => { success => \0, message => 'Akses ditolak. Hanya ADMIN.' }
+                ) unless defined $role && $role eq 'ADMIN';
+            }
+
+            $req{auth_user} = $payload;
+        }
+
+        # --- Eksekusi handler ---
+        my $data = eval { $handler->(\%req, \@captures) };
+        if ($@) {
+            warn "[ROUTER] Handler error pada $method $path: $@";
+            return json_response(
+                status => 500,
+                data   => { success => \0, message => 'Terjadi kesalahan internal pada server.' }
+            );
+        }
+
+        return json_response(data => $data // {});
+    }
+
+    return json_response(
+        status => 404,
+        data   => { success => \0, message => "Endpoint tidak ditemukan: $method $path" }
+    );
+}
+
+1;

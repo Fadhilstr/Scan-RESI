@@ -5,6 +5,23 @@
         <h4 class="text-h4 text-weight-bolder text-wahana-navy q-my-none">System Audit Log</h4>
         <div class="text-subtitle2 text-grey-7">Log Jejak Aktivitas Keamanan & Perubahan Data Sistem</div>
       </div>
+
+      <div class="row items-center q-gutter-sm">
+        <q-select
+          v-model="filterAction"
+          :options="actionOptions"
+          label="Filter Aksi"
+          outlined
+          dense
+          clearable
+          emit-value
+          map-options
+          style="min-width: 200px"
+        />
+        <q-btn flat round dense icon="refresh" color="primary" @click="loadLogs">
+          <q-tooltip>Muat ulang log</q-tooltip>
+        </q-btn>
+      </div>
     </div>
 
     <q-separator class="q-mb-lg" />
@@ -12,30 +29,37 @@
     <q-card class="scan-card">
       <q-card-section>
         <q-table
-          :rows="auditLogs"
+          :rows="filteredLogs"
           :columns="columns"
-          row-key="id"
+          row-key="log_id"
           flat
           bordered
+          :loading="auditStore.isLoading"
           no-data-label="Belum ada audit log"
         >
-          <template v-slot:body-cell-timestamp="props">
+          <template v-slot:body-cell-created_at="props">
             <q-td :props="props" class="font-mono text-grey-8">
-              {{ props.row.timestamp }}
+              {{ props.row.created_at }}
             </q-td>
           </template>
 
-          <template v-slot:body-cell-user="props">
+          <template v-slot:body-cell-user_name="props">
             <q-td :props="props" class="text-weight-bold text-slate-900">
-              {{ props.row.user }}
+              {{ props.row.user_name }} <span class="text-caption text-grey-6 font-mono">({{ props.row.user_id }})</span>
             </q-td>
           </template>
 
           <template v-slot:body-cell-action="props">
             <q-td :props="props">
-              <q-badge color="blue-1" text-color="primary" class="font-mono text-weight-bold">
+              <q-badge :color="actionColor(props.row.action)" text-color="primary" class="font-mono text-weight-bold">
                 {{ props.row.action }}
               </q-badge>
+            </q-td>
+          </template>
+
+          <template v-slot:body-cell-ip_address="props">
+            <q-td :props="props" class="font-mono text-grey-7">
+              {{ props.row.ip_address }}
             </q-td>
           </template>
         </q-table>
@@ -45,19 +69,45 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useAuditStore } from '../../stores/auditStore'
 
-const auditLogs = ref([
-  { id: 1, timestamp: '24-08-2026 10:20:00', user: 'Fadhil (USR-001)', action: 'LOGIN_SUCCESS', details: 'IP: 192.168.3.189' },
-  { id: 2, timestamp: '24-08-2026 10:21:32', user: 'Fadhil (USR-001)', action: 'SCAN_EVENT_CREATED', details: 'Resi: GJXL8FLB, Status: SUCCESS' },
-  { id: 3, timestamp: '24-08-2026 09:45:00', user: 'Budi (USR-002)', action: 'LOGIN_SUCCESS', details: 'IP: 192.168.3.102' },
-  { id: 4, timestamp: '24-08-2026 08:15:00', user: 'Supervisor A (USR-SPV-001)', action: 'SUPERVISOR_LOGIN', details: 'Monitoring rayon active' }
-])
+const auditStore = useAuditStore()
+const filterAction = ref(null)
+
+const actionOptions = [
+  { label: 'Login Sukses', value: 'LOGIN_SUCCESS' },
+  { label: 'Logout', value: 'LOGOUT' },
+  { label: 'Scan Dibuat', value: 'SCAN_EVENT_CREATED' },
+  { label: 'Scan Duplikat', value: 'SCAN_DUPLICATE' },
+  { label: 'Task Selesai', value: 'TASK_COMPLETED' }
+]
 
 const columns = [
-  { name: 'timestamp', label: 'Waktu', field: 'timestamp', align: 'left', sortable: true },
-  { name: 'user', label: 'Pengguna', field: 'user', align: 'left', sortable: true },
+  { name: 'created_at', label: 'Waktu', field: 'created_at', align: 'left', sortable: true },
+  { name: 'user_name', label: 'Pengguna', field: 'user_name', align: 'left', sortable: true },
   { name: 'action', label: 'Aksi System', field: 'action', align: 'center', sortable: true },
-  { name: 'details', label: 'Detail Aktivitas', field: 'details', align: 'left' }
+  { name: 'details', label: 'Detail Aktivitas', field: 'details', align: 'left' },
+  { name: 'ip_address', label: 'IP Address', field: 'ip_address', align: 'left' }
 ]
+
+const filteredLogs = computed(() => {
+  if (!filterAction.value) return auditStore.logs
+  return auditStore.logs.filter((l) => l.action === filterAction.value)
+})
+
+const actionColor = (action) => {
+  switch (action) {
+    case 'SCAN_DUPLICATE': return 'amber-2'
+    case 'TASK_COMPLETED': return 'green-2'
+    case 'LOGOUT': return 'grey-3'
+    default: return 'blue-1'
+  }
+}
+
+const loadLogs = () => {
+  auditStore.fetchLogs()
+}
+
+onMounted(loadLogs)
 </script>

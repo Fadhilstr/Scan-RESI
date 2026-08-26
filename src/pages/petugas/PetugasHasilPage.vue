@@ -68,18 +68,35 @@
     </div>
 
     <!-- Scanned Items Table filtered for Logged-In User (Requirement Y) -->
-    <ScanEventTable :scans="myScans" :show-petugas-filter="false" />
+    <ScanEventTable
+      :scans="myScans"
+      :show-petugas-filter="false"
+      show-label-action
+      @label="openLabel"
+    />
+
+    <!-- Dialog Generate Barcode Label -->
+    <BarcodeLabel v-model="showLabel" :resi="labelResi" />
   </q-page>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useAuthStore } from '../../stores/authStore'
 import { useScanStore } from '../../stores/scanStore'
 import ScanEventTable from '../../components/ScanEventTable.vue'
+import BarcodeLabel from '../../components/BarcodeLabel.vue'
 
 const authStore = useAuthStore()
 const scanStore = useScanStore()
+
+const showLabel = ref(false)
+const labelResi = ref('')
+
+const openLabel = (row) => {
+  labelResi.value = row?.nomor_resi || ''
+  showLabel.value = true
+}
 
 const myScans = computed(() => {
   if (!authStore.currentUser) return []

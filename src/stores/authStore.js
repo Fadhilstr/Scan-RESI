@@ -1,72 +1,37 @@
+/**
+ * authStore.js — Pinia Store Autentikasi
+ *
+ * Store ini hanya mengelola STATE (data reaktif).
+ * Semua logika I/O (local data / HTTP API) didelegasikan ke auth.service.js.
+ *
+ * Untuk switch ke backend Perl:
+ *   → Ubah VITE_USE_LOCAL_DATA=false di file .env
+ *   → Tidak ada perubahan di file ini maupun di komponen UI.
+ */
+
 import { defineStore } from 'pinia'
+import {
+  login as svcLogin,
+  quickLogin as svcQuickLogin,
+  logout as svcLogout,
+  getUsers as svcGetUsers,
+  addUser as svcAddUser,
+  toggleUserStatus as svcToggleUserStatus
+} from '../services/auth.service'
+import { useTaskStore } from './taskStore'
+import { useScanStore } from './scanStore'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    // Initial login state defaults to Fadhil for quick testing, but can be changed anytime
-    currentUser: {
-      id: 'USR-001',
-      name: 'Fadhil',
-      username: 'fadhil',
-      role: 'PETUGAS_SCAN',
-      supervisor_id: 'USR-SPV-001',
-      status: 'ONLINE',
-      lastLogin: '24-08-2026 10:20:00'
-    },
-    isLoggedIn: true,
+    currentUser: null,
+    isLoggedIn: false,
 
-    // Dummy user list (Requirement AA & I)
-    users: [
-      {
-        id: 'USR-ADMIN-001',
-        name: 'Admin System',
-        username: 'admin',
-        password: 'admin123',
-        role: 'ADMIN',
-        supervisor_id: null,
-        status: 'ONLINE',
-        lastLogin: '24-08-2026 08:00:00'
-      },
-      {
-        id: 'USR-SPV-001',
-        name: 'Supervisor A',
-        username: 'supervisor',
-        password: 'supervisor123',
-        role: 'SUPERVISOR',
-        supervisor_id: null,
-        status: 'ONLINE',
-        lastLogin: '24-08-2026 08:15:00'
-      },
-      {
-        id: 'USR-001',
-        name: 'Fadhil',
-        username: 'fadhil',
-        password: 'fadhil123',
-        role: 'PETUGAS_SCAN',
-        supervisor_id: 'USR-SPV-001',
-        status: 'ONLINE',
-        lastLogin: '24-08-2026 10:20:00'
-      },
-      {
-        id: 'USR-002',
-        name: 'Budi',
-        username: 'budi',
-        password: 'budi123',
-        role: 'PETUGAS_SCAN',
-        supervisor_id: 'USR-SPV-001',
-        status: 'ONLINE',
-        lastLogin: '24-08-2026 09:45:00'
-      },
-      {
-        id: 'USR-003',
-        name: 'Andi',
-        username: 'andi',
-        password: 'andi123',
-        role: 'PETUGAS_SCAN',
-        supervisor_id: 'USR-SPV-001',
-        status: 'OFFLINE',
-        lastLogin: '23-08-2026 17:30:00'
-      }
-    ]
+    // Daftar user (diisi via fetchUsers)
+    users: [],
+
+    // Loading & error state — digunakan UI untuk menampilkan spinner / pesan
+    isLoading: false,
+    error: null
   }),
 
   getters: {
@@ -75,97 +40,130 @@ export const useAuthStore = defineStore('auth', {
     isSupervisor: (state) => state.currentUser?.role === 'SUPERVISOR',
     isPetugas: (state) => state.currentUser?.role === 'PETUGAS_SCAN',
 
-    // Get list of petugas supervised by a supervisor ID (Requirement F)
+    // Petugas yang diawasi oleh supervisor tertentu
     supervisedPetugas: (state) => (supervisorId) => {
-      return state.users.filter(u => u.supervisor_id === supervisorId && u.role === 'PETUGAS_SCAN')
+      return state.users.filter(
+        (u) => u.supervisor_id === supervisorId && u.role === 'PETUGAS_SCAN'
+      )
     },
 
-    allPetugas: (state) => state.users.filter(u => u.role === 'PETUGAS_SCAN'),
-    allSupervisors: (state) => state.users.filter(u => u.role === 'SUPERVISOR')
+    allPetugas: (state) => state.users.filter((u) => u.role === 'PETUGAS_SCAN'),
+    allSupervisors: (state) => state.users.filter((u) => u.role === 'SUPERVISOR')
   },
 
   actions: {
-    login(usernameInput, passwordInput) {
-      const user = this.users.find(
-        (u) => u.username.toLowerCase() === (usernameInput || '').trim().toLowerCase() && u.password === passwordInput
-      )
+    /**
+     * Prefetch semua data operasional SETELAH sesi aktif.
+     * Wajib di MODE API karena boot tidak melakukan fetch saat belum login.
+     */
+    async prefetchOperationalData() {
+      const taskStore = useTaskStore()
+      const scanStore = useScanStore()
+      await Promise.all([
+        this.fetchUsers(),
+        taskStore.fetchTasks(),
+        scanStore.fetchScans()
+      ])
+    },
 
-      if (user) {
-        if (user.status === 'DISABLED') {
-          return { success: false, message: 'Akun Anda telah dinonaktifkan.' }
+    /**
+     * Login dengan username & password.
+     * Memanggil auth.service.js → local dummy atau POST /api/auth/login
+     */
+    async login(username, password) {
+      this.isLoading = true
+      this.error = null
+      try {
+        const result = await svcLogin(username, password)
+        if (result.success) {
+          this.currentUser = result.user
+          this.isLoggedIn = true
+          await this.prefetchOperationalData()
         }
-
-        const now = new Date()
-        user.status = 'ONLINE'
-        user.lastLogin = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()} ${now.toTimeString().split(' ')[0]}`
-
-        this.currentUser = { ...user }
-        this.isLoggedIn = true
-
-        return {
-          success: true,
-          role: user.role,
-          message: `Selamat datang, ${user.name}!`
-        }
-      }
-
-      return {
-        success: false,
-        message: 'Username atau password salah.'
+        return result
+      } catch (err) {
+        this.error = err.message
+        return { success: false, message: err.message }
+      } finally {
+        this.isLoading = false
       }
     },
 
-    quickLogin(userId) {
-      const user = this.users.find((u) => u.id === userId)
-      if (user) {
-        const now = new Date()
-        user.status = 'ONLINE'
-        user.lastLogin = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()} ${now.toTimeString().split(' ')[0]}`
-
-        this.currentUser = { ...user }
-        this.isLoggedIn = true
-
-        return {
-          success: true,
-          role: user.role,
-          message: `Login instan sebagai ${user.name} (${user.role})`
+    /**
+     * Quick login bypass password (hanya untuk prototype/demo).
+     */
+    async quickLogin(userId) {
+      this.isLoading = true
+      this.error = null
+      try {
+        const result = await svcQuickLogin(userId)
+        if (result.success) {
+          this.currentUser = result.user
+          this.isLoggedIn = true
+          await this.prefetchOperationalData()
         }
+        return result
+      } catch (err) {
+        this.error = err.message
+        return { success: false, message: err.message }
+      } finally {
+        this.isLoading = false
       }
-      return { success: false, message: 'User tidak ditemukan.' }
     },
 
-    logout() {
+    /**
+     * Logout user aktif.
+     */
+    async logout() {
       if (this.currentUser) {
-        const target = this.users.find((u) => u.id === this.currentUser.id)
-        if (target) target.status = 'OFFLINE'
+        await svcLogout(this.currentUser.id)
       }
       this.currentUser = null
       this.isLoggedIn = false
     },
 
-    toggleUserStatus(userId) {
-      const target = this.users.find((u) => u.id === userId)
-      if (target) {
-        target.status = target.status === 'DISABLED' ? 'OFFLINE' : 'DISABLED'
-        return { success: true, newStatus: target.status }
+    /**
+     * Ambil daftar semua user dari service (local/API).
+     */
+    async fetchUsers() {
+      try {
+        this.users = await svcGetUsers()
+      } catch (err) {
+        this.error = err.message
       }
-      return { success: false }
     },
 
-    addUser(newUser) {
-      const newId = `USR-${String(this.users.length + 1).padStart(3, '0')}`
-      const created = {
-        id: newId,
-        name: newUser.name,
-        username: newUser.username,
-        password: newUser.password || '123456',
-        role: newUser.role || 'PETUGAS_SCAN',
-        supervisor_id: newUser.supervisor_id || 'USR-SPV-001',
-        status: 'OFFLINE',
-        lastLogin: '-'
+    /**
+     * Tambah user baru.
+     */
+    async addUser(newUserData) {
+      this.isLoading = true
+      try {
+        const result = await svcAddUser(newUserData)
+        if (result.success) {
+          await this.fetchUsers()
+        }
+        return result
+      } catch (err) {
+        return { success: false, message: err.message }
+      } finally {
+        this.isLoading = false
       }
-      this.users.push(created)
-      return { success: true, user: created }
+    },
+
+    /**
+     * Toggle status user (ACTIVE <-> DISABLED).
+     */
+    async toggleUserStatus(userId) {
+      try {
+        const result = await svcToggleUserStatus(userId)
+        if (result.success) {
+          await this.fetchUsers()
+        }
+        return result
+      } catch (err) {
+        return { success: false, message: err.message }
+      }
     }
   }
 })

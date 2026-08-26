@@ -192,7 +192,7 @@ const lastScannedEvent = computed(() => {
   return userScans.value.length > 0 ? userScans.value[0] : null
 })
 
-const handleBarcodeScan = (resiInput) => {
+const handleBarcodeScan = async (resiInput) => {
   if (isTaskFinished.value) {
     $q.notify({
       type: 'negative',
@@ -204,7 +204,7 @@ const handleBarcodeScan = (resiInput) => {
     return
   }
 
-  const result = scanStore.addScanEvent({
+  const result = await scanStore.addScanEvent({
     resi: resiInput,
     currentUser: authStore.currentUser,
     activeTask: activeTask.value,
@@ -246,15 +246,27 @@ const confirmFinishTask = () => {
   showFinishModal.value = true
 }
 
-const executeFinishTask = () => {
+const executeFinishTask = async () => {
   if (!activeTask.value) return
-  taskStore.completeTask(activeTask.value.task_id)
+  const taskId = activeTask.value.task_id
+  const result = await taskStore.completeTask(taskId)
   showFinishModal.value = false
+
+  if (result?.success === false) {
+    $q.notify({
+      type: 'negative',
+      icon: 'error',
+      message: result.message || `Gagal menyelesaikan task ${taskId}.`,
+      position: 'top',
+      timeout: 2500
+    })
+    return
+  }
 
   $q.notify({
     type: 'positive',
     icon: 'task_alt',
-    message: `Task ${activeTask.value.task_id} telah diselesaikan!`,
+    message: `Task ${taskId} telah diselesaikan!`,
     position: 'top',
     timeout: 2000
   })

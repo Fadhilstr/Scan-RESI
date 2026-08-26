@@ -94,9 +94,9 @@ const openAddTaskModal = () => {
   showAddModal.value = true
 }
 
-const saveNewTask = () => {
+const saveNewTask = async () => {
   const petugas = authStore.users.find((u) => u.id === newTask.value.user_id)
-  const res = taskStore.createNewTask({
+  const res = await taskStore.createNewTask({
     ...newTask.value,
     user_name: petugas ? petugas.name : 'Petugas'
   })
@@ -110,6 +110,14 @@ const saveNewTask = () => {
       timeout: 2000
     })
     showAddModal.value = false
+  } else {
+    $q.notify({
+      type: 'negative',
+      icon: 'error',
+      message: res.message || 'Gagal membuat task.',
+      position: 'top',
+      timeout: 2500
+    })
   }
 }
 </script>

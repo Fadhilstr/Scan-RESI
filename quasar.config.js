@@ -1,7 +1,13 @@
 // Configuration for your app
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
-import { defineConfig } from '@quasar/app-vite/wrappers'
+import { defineConfig } from '#q-app'
+import basicSsl from '@vitejs/plugin-basic-ssl'
+
+// Mode HTTPS untuk akses dari device lain (HP via WiFi):
+//   WAHANA_DEV_HTTPS=1 npx quasar dev
+// Kamera browser hanya aktif di localhost ATAU halaman HTTPS.
+const DEV_HTTPS = process.env.WAHANA_DEV_HTTPS === '1'
 
 export default defineConfig((/* ctx */) => {
   return {
@@ -12,7 +18,9 @@ export default defineConfig((/* ctx */) => {
     // --> boot files are part of "main.js"
     // https://v2.quasar.dev/quasar-cli-vite/boot-files
     boot: [
+      'init-stores'
     ],
+
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
     css: [
@@ -63,12 +71,27 @@ export default defineConfig((/* ctx */) => {
       // vitePlugins: [
       //   [ 'package-name', { ..pluginOptions.. }, { server: true, client: true } ]
       // ]
+
+      // Sertifikat self-signed otomatis — hanya saat mode HTTPS dev
+      vitePlugins: DEV_HTTPS ? [[basicSsl, {}, { server: true }]] : []
     },
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#devserver
     devServer: {
-      // vueDevtools: true,
-      // https: true,
+      port: 9000,
+
+      // Mode LAN/HP: bind semua interface agar bisa dibuka dari device lain
+      host: DEV_HTTPS ? '0.0.0.0' : undefined,
+
+      // Proxy API same-origin → backend Perl (port 8080).
+      // Wajib saat HTTPS agar halaman tidak kena blokir mixed-content.
+      proxy: {
+        '/api': {
+          target: 'http://127.0.0.1:8080',
+          changeOrigin: true
+        }
+      },
+
       open: true // opens browser window automatically
     },
 

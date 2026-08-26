@@ -214,12 +214,10 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from '../stores/authStore'
-import { useScanStore } from '../stores/scanStore'
 
 const $q = useQuasar()
 const router = useRouter()
 const authStore = useAuthStore()
-const scanStore = useScanStore()
 const leftDrawerOpen = ref(false)
 
 const toggleLeftDrawer = () => {
@@ -233,8 +231,8 @@ const roleLabel = computed(() => {
   return 'GUEST'
 })
 
-const handleLogout = () => {
-  authStore.logout()
+const handleLogout = async () => {
+  await authStore.logout()
   $q.notify({
     type: 'info',
     icon: 'logout',

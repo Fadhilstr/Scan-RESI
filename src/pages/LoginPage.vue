@@ -144,8 +144,8 @@ const authStore = useAuthStore()
 const username = ref('fadhil')
 const password = ref('fadhil123')
 
-const handleLogin = () => {
-  const res = authStore.login(username.value, password.value)
+const handleLogin = async () => {
+  const res = await authStore.login(username.value, password.value)
   if (res.success) {
     $q.notify({
       type: 'positive',
@@ -160,15 +160,15 @@ const handleLogin = () => {
     $q.notify({
       type: 'negative',
       icon: 'error',
-      message: res.message,
+      message: res.message || 'Login gagal. Periksa koneksi ke server.',
       position: 'top',
       timeout: 2500
     })
   }
 }
 
-const quickLogin = (userId) => {
-  const res = authStore.quickLogin(userId)
+const quickLogin = async (userId) => {
+  const res = await authStore.quickLogin(userId)
   if (res.success) {
     $q.notify({
       type: 'info',
@@ -179,6 +179,14 @@ const quickLogin = (userId) => {
     })
 
     redirectByRole(res.role)
+  } else {
+    $q.notify({
+      type: 'negative',
+      icon: 'error',
+      message: res.message || 'Quick login gagal.',
+      position: 'top',
+      timeout: 2500
+    })
   }
 }
 

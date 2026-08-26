@@ -157,8 +157,8 @@ const openAddDialog = () => {
   showAddDialog.value = true
 }
 
-const saveNewUser = () => {
-  const res = authStore.addUser(form.value)
+const saveNewUser = async () => {
+  const res = await authStore.addUser(form.value)
   if (res.success) {
     $q.notify({
       type: 'positive',
@@ -168,11 +168,19 @@ const saveNewUser = () => {
       timeout: 2000
     })
     showAddDialog.value = false
+  } else {
+    $q.notify({
+      type: 'negative',
+      icon: 'error',
+      message: res.message || 'Gagal menambahkan user.',
+      position: 'top',
+      timeout: 2500
+    })
   }
 }
 
-const toggleDisable = (user) => {
-  const res = authStore.toggleUserStatus(user.id)
+const toggleDisable = async (user) => {
+  const res = await authStore.toggleUserStatus(user.id)
   if (res.success) {
     $q.notify({
       type: 'info',
@@ -180,6 +188,14 @@ const toggleDisable = (user) => {
       message: `Status user ${user.name} diubah menjadi ${res.newStatus}.`,
       position: 'top',
       timeout: 1800
+    })
+  } else {
+    $q.notify({
+      type: 'negative',
+      icon: 'error',
+      message: res.message || 'Gagal mengubah status user.',
+      position: 'top',
+      timeout: 2500
     })
   }
 }
