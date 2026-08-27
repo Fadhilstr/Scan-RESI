@@ -1,7 +1,7 @@
 // Configuration for your app
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
-import { defineConfig } from '#q-app'
+import { defineConfig } from '@quasar/app-vite/wrappers'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 
 // Mode HTTPS untuk akses dari device lain (HP via WiFi):

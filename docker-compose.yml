@@ -1,0 +1,98 @@
+# ============================================================
+# Docker Compose — Wahana Express Scan App Full Stack
+# (4 Container: Database + Backend Perl uWSGI + Frontend Quasar + Nginx)
+# ============================================================
+
+services:
+  # ------------------------------------------------------------
+  # Service 1: Database MariaDB (MySQL Compatible)
+  # ------------------------------------------------------------
+  db:
+    image: mariadb:10.11
+    container_name: wahana_scan_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wahana_scan
+    volumes:
+      - db_data:/var/lib/mysql
+      # Otomatis inisialisasi schema saat container pertama kali dibuat
+      - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "3307:3306"
+    networks:
+      - wahana_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ------------------------------------------------------------
+  # Service 2: Backend Perl uWSGI PSGI REST API Server
+  # ------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: wahana_scan_backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: wahana_scan
+      DB_USER: root
+      DB_PASS: root
+      WAHANA_API_PORT: 5000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    networks:
+      - wahana_net
+
+  # ------------------------------------------------------------
+  # Service 3: Frontend Quasar (Node.js Dev Server)
+  # ------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wahana_scan_frontend
+    restart: unless-stopped
+    volumes:
+      - .:/app
+      - /app/node_modules
+    ports:
+      - "9000:9000"
+    networks:
+      - wahana_net
+
+  # ------------------------------------------------------------
+  # Service 4: Nginx Reverse Proxy (Gateway)
+  # ------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: wahana_scan_nginx
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    volumes:
+      - ./nginx/docker-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8080:80"
+    networks:
+      - wahana_net
+
+# ------------------------------------------------------------
+# Networks & Volumes
+# ------------------------------------------------------------
+networks:
+  wahana_net:
+    driver: bridge
+
+volumes:
+  db_data:
+    driver: local
