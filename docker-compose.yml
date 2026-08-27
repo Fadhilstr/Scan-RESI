@@ -19,7 +19,7 @@ services:
       # Otomatis inisialisasi schema saat container pertama kali dibuat
       - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     ports:
-      - "3307:3306"
+      - "3308:3306"
     networks:
       - wahana_net
     healthcheck:
