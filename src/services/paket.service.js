@@ -30,52 +30,144 @@ const RESI_LEN = 8
 // =====================================================================
 export const LOCAL_PAKETS = [
   {
-    nomor_resi: 'GJXL8FLB', nama_barang: 'Dokumen Kontrak', pengirim: 'PT Sinar Jaya',
-    penerima: 'Rina Wulandari', alamat_tujuan: 'Jl. Margonda Raya No. 12, Depok',
-    berat_kg: 1.2, jenis_layanan: 'EXPRESS', status: 'TERDAFTAR',
-    created_by: 'USR-CUST-001', creator_name: 'Customer Demo',
-    created_at: '24-08-2026 09:10:00'
+    nomor_resi: 'GJXL8FLB',
+    nama_barang: 'Dokumen Kontrak',
+    pengirim: 'Fadhil Satria Widodo',
+    pengirim_detail: {
+      nama: 'Fadhil Satria Widodo',
+      telepon: '081234567890',
+      alamat: 'Jl. Merpati',
+      no_rumah: '25',
+      kelurahan: 'Rempoa',
+      kecamatan: 'Ciputat Timur',
+      kota: 'Tangerang Selatan',
+      provinsi: 'Banten',
+      kode_pos: '15412'
+    },
+    penerima: 'Budi Santoso',
+    penerima_detail: {
+      nama: 'Budi Santoso',
+      telepon: '085712345678',
+      alamat: 'Jl. Mawar',
+      no_rumah: '10',
+      kelurahan: 'Sukasari',
+      kecamatan: 'Coblong',
+      kota: 'Bandung',
+      provinsi: 'Jawa Barat',
+      kode_pos: '40154'
+    },
+    alamat_tujuan: 'Jl. Mawar No. 10, Sukasari, Coblong, Bandung, Jawa Barat 40154',
+    berat_kg: 1.5,
+    jenis_layanan: 'REG',
+    hub_asal: 'Jakarta',
+    hub_tujuan: 'Bandung',
+    cod_amount: 150000,
+    status: 'TERDAFTAR',
+    created_by: 'USR-CUST-001',
+    creator_name: 'Customer Demo',
+    created_at: '27-08-2026 09:10:00'
   },
   {
-    nomor_resi: 'AB123456', nama_barang: 'Sepatu Olahraga', pengirim: 'Toko Amanah',
-    penerima: 'Dedi Kurniawan', alamat_tujuan: 'Jl. Raya Ciputat No. 45, Tangerang',
-    berat_kg: 2.5, jenis_layanan: 'REGULER', status: 'TERDAFTAR',
-    created_by: 'USR-CUST-001', creator_name: 'Customer Demo',
+    nomor_resi: 'AB123456',
+    nama_barang: 'Sepatu Olahraga',
+    pengirim: 'Toko Amanah',
+    pengirim_detail: {
+      nama: 'Toko Amanah',
+      telepon: '081122334455',
+      alamat: 'Jl. Raya Ciputat',
+      no_rumah: '45',
+      kelurahan: 'Ciputat',
+      kecamatan: 'Ciputat',
+      kota: 'Tangerang Selatan',
+      provinsi: 'Banten',
+      kode_pos: '15411'
+    },
+    penerima: 'Dedi Kurniawan',
+    penerima_detail: {
+      nama: 'Dedi Kurniawan',
+      telepon: '081399887766',
+      alamat: 'Jl. Pemuda',
+      no_rumah: '12',
+      kelurahan: 'Depok',
+      kecamatan: 'Pancoran Mas',
+      kota: 'Depok',
+      provinsi: 'Jawa Barat',
+      kode_pos: '16431'
+    },
+    alamat_tujuan: 'Jl. Pemuda No. 12, Depok, Pancoran Mas, Depok, Jawa Barat 16431',
+    berat_kg: 2.5,
+    jenis_layanan: 'REG',
+    hub_asal: 'Tangerang',
+    hub_tujuan: 'Depok',
+    cod_amount: 0,
+    status: 'TERDAFTAR',
+    created_by: 'USR-CUST-001',
+    creator_name: 'Customer Demo',
     created_at: '24-08-2026 09:12:00'
   },
   {
-    nomor_resi: 'WHN555555', nama_barang: 'Laptop Kerja', pengirim: 'CV Techindo',
-    penerima: 'Sari Melati', alamat_tujuan: 'Jl. Sudirman Kav. 21, Jakarta',
-    berat_kg: 3.8, jenis_layanan: 'SAME_DAY', status: 'TERDAFTAR',
-    created_by: 'USR-CUST-001', creator_name: 'Customer Demo',
+    nomor_resi: 'WHN555555',
+    nama_barang: 'Laptop Kerja',
+    pengirim: 'CV Techindo',
+    penerima: 'Sari Melati',
+    alamat_tujuan: 'Jl. Sudirman Kav. 21, Jakarta',
+    berat_kg: 3.8,
+    jenis_layanan: 'SAME_DAY',
+    status: 'TERDAFTAR',
+    created_by: 'USR-CUST-001',
+    creator_name: 'Customer Demo',
     created_at: '24-08-2026 09:15:00'
   },
   {
-    nomor_resi: 'XYZ123456', nama_barang: 'Buku Tulis (12 pcs)', pengirim: 'Toko Buku Ilmu',
-    penerima: 'Ahmad Fauzi', alamat_tujuan: 'Jl. Kampus Barat No. 8, Ciputat',
-    berat_kg: 4, jenis_layanan: 'REGULER', status: 'TERDAFTAR',
-    created_by: 'USR-CUST-001', creator_name: 'Customer Demo',
+    nomor_resi: 'XYZ123456',
+    nama_barang: 'Buku Tulis (12 pcs)',
+    pengirim: 'Toko Buku Ilmu',
+    penerima: 'Ahmad Fauzi',
+    alamat_tujuan: 'Jl. Kampus Barat No. 8, Ciputat',
+    berat_kg: 4.0,
+    jenis_layanan: 'REG',
+    status: 'TERDAFTAR',
+    created_by: 'USR-CUST-001',
+    creator_name: 'Customer Demo',
     created_at: '24-08-2026 09:18:00'
   },
   {
-    nomor_resi: 'WHN777777', nama_barang: 'Kamera Mirrorless', pengirim: 'PhotoMart',
-    penerima: 'Bagas Pratama', alamat_tujuan: 'Jl. Cempaka Putih No. 3, Jakarta',
-    berat_kg: 2.1, jenis_layanan: 'EXPRESS', status: 'TERDAFTAR',
-    created_by: 'USR-CUST-001', creator_name: 'Customer Demo',
+    nomor_resi: 'WHN777777',
+    nama_barang: 'Kamera Mirrorless',
+    pengirim: 'PhotoMart',
+    penerima: 'Bagas Pratama',
+    alamat_tujuan: 'Jl. Cempaka Putih No. 3, Jakarta',
+    berat_kg: 2.1,
+    jenis_layanan: 'EXPRESS',
+    status: 'TERDAFTAR',
+    created_by: 'USR-CUST-001',
+    creator_name: 'Customer Demo',
     created_at: '24-08-2026 09:20:00'
   },
   {
-    nomor_resi: 'ABC111111', nama_barang: 'Serum Skincare', pengirim: 'GlowStore',
-    penerima: 'Nadia Putri', alamat_tujuan: 'Jl. Kartini No. 19, South Tangerang',
-    berat_kg: 0.6, jenis_layanan: 'SAME_DAY', status: 'TERDAFTAR',
-    created_by: 'USR-CUST-001', creator_name: 'Customer Demo',
+    nomor_resi: 'ABC111111',
+    nama_barang: 'Serum Skincare',
+    pengirim: 'GlowStore',
+    penerima: 'Nadia Putri',
+    alamat_tujuan: 'Jl. Kartini No. 19, South Tangerang',
+    berat_kg: 0.6,
+    jenis_layanan: 'SAME_DAY',
+    status: 'TERDAFTAR',
+    created_by: 'USR-CUST-001',
+    creator_name: 'Customer Demo',
     created_at: '24-08-2026 09:22:00'
   },
   {
-    nomor_resi: 'ABC222222', nama_barang: 'Helm Motor', pengirim: 'RideSafe Shop',
-    penerima: 'Yoga Saputra', alamat_tujuan: 'Jl. Ir. Juanda No. 77, Depok',
-    berat_kg: 1.9, jenis_layanan: 'REGULER', status: 'TERDAFTAR',
-    created_by: 'USR-CUST-001', creator_name: 'Customer Demo',
+    nomor_resi: 'ABC222222',
+    nama_barang: 'Helm Motor',
+    pengirim: 'RideSafe Shop',
+    penerima: 'Yoga Saputra',
+    alamat_tujuan: 'Jl. Ir. Juanda No. 77, Depok',
+    berat_kg: 1.9,
+    jenis_layanan: 'REG',
+    status: 'TERDAFTAR',
+    created_by: 'USR-CUST-001',
+    creator_name: 'Customer Demo',
     created_at: '24-08-2026 09:25:00'
   }
 ]
@@ -128,7 +220,7 @@ export async function generateResi(currentUser) {
       penerima: null,
       alamat_tujuan: null,
       berat_kg: 0,
-      jenis_layanan: 'REGULER',
+      jenis_layanan: 'REG',
       status: 'DRAFT',
       created_by: currentUser.id,
       creator_name: currentUser.name,
@@ -158,7 +250,7 @@ export async function generateResi(currentUser) {
 /**
  * Simpan data barang pada paket DRAFT → status TERDAFTAR.
  * @param {string} nomorResi
- * @param {Object} data - { nama_barang, pengirim, penerima, alamat_tujuan?, berat_kg?, jenis_layanan? }
+ * @param {Object} data - { nama_barang, pengirim, penerima, alamat_tujuan?, berat_kg?, jenis_layanan?, pengirim_detail?, penerima_detail?, hub_asal?, hub_tujuan?, cod_amount? }
  * @param {Object} currentUser
  */
 export async function savePaketData(nomorResi, data, currentUser) {
@@ -187,7 +279,12 @@ export async function savePaketData(nomorResi, data, currentUser) {
       penerima: data.penerima.trim(),
       alamat_tujuan: (data.alamat_tujuan || '').trim(),
       berat_kg: Number(data.berat_kg) || 0,
-      jenis_layanan: data.jenis_layanan || 'REGULER',
+      jenis_layanan: data.jenis_layanan || 'REG',
+      pengirim_detail: data.pengirim_detail || null,
+      penerima_detail: data.penerima_detail || null,
+      hub_asal: data.hub_asal || 'Jakarta',
+      hub_tujuan: data.hub_tujuan || 'Bandung',
+      cod_amount: Number(data.cod_amount) || 0,
       status: 'TERDAFTAR'
     })
 
