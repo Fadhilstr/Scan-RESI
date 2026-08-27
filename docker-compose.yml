@@ -61,6 +61,9 @@ services:
       dockerfile: Dockerfile
     container_name: wahana_scan_frontend
     restart: unless-stopped
+    environment:
+      VITE_USE_LOCAL_DATA: "false"
+      VITE_API_BASE_URL: ""
     volumes:
       - .:/app
       - /app/node_modules

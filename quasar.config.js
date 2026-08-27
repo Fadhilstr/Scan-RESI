@@ -61,8 +61,11 @@ export default defineConfig((/* ctx */) => {
       // minify: false,
       // distDir
 
-      // extendViteConf (viteConf) {},
-      // viteVuePluginOptions: {},
+      extendViteConf (viteConf) {
+        viteConf.server = viteConf.server || {}
+        viteConf.server.allowedHosts = true
+      },
+      // vitePluginOptions: {},
 
       // to write components with JSX/TSX:
       // https://v2.quasar.dev/quasar-cli-vite/handling-vite#jsx-tsx
@@ -83,11 +86,10 @@ export default defineConfig((/* ctx */) => {
       // Mode LAN/HP: bind semua interface agar bisa dibuka dari device lain
       host: DEV_HTTPS ? '0.0.0.0' : undefined,
 
-      // Proxy API same-origin → backend Perl (port 8080).
-      // Wajib saat HTTPS agar halaman tidak kena blokir mixed-content.
+      // Proxy API same-origin → backend Perl
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8080',
+          target: process.env.API_PROXY_TARGET || 'http://backend:5000',
           changeOrigin: true
         }
       },
