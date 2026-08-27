@@ -11,6 +11,7 @@ use Wahana::Controller::TasksController  ();
 use Wahana::Controller::ScansController  ();
 use Wahana::Controller::PaketController  ();
 use Wahana::Controller::AuditController  ();
+use Wahana::Controller::DocsController   ();
 
 our @EXPORT_OK = qw(handle_request);
 
@@ -19,6 +20,10 @@ our @EXPORT_OK = qw(handle_request);
 # meta: { auth => butuh token Bearer, admin => khusus role ADMIN }
 # =====================================================================
 my @ROUTES = (
+    # Dokumentasi API & OpenAPI Specification
+    [ 'GET',    qr{^/api/openapi\.ya?ml$},             \&Wahana::Controller::DocsController::get_openapi_yaml,{} ],
+    [ 'GET',    qr{^/api/docs/?$},                     \&Wahana::Controller::DocsController::get_swagger_ui,  {} ],
+
     [ 'POST',   qr{^/api/auth/login$},                 \&Wahana::Controller::AuthController::login,          {} ],
     [ 'POST',   qr{^/api/auth/quick-login$},           \&Wahana::Controller::AuthController::quick_login,    {} ],
     [ 'POST',   qr{^/api/auth/logout$},                \&Wahana::Controller::AuthController::logout,         {} ],
@@ -86,6 +91,15 @@ sub handle_request {
                 status => 500,
                 data   => { success => \0, message => 'Terjadi kesalahan internal pada server.' }
             );
+        }
+
+        # Raw responses (misal YAML / Swagger UI HTML)
+        if (ref $data eq 'HASH' && $data->{_is_raw}) {
+            return {
+                status  => $data->{status} // 200,
+                headers => $data->{headers} // {},
+                body    => $data->{body} // '',
+            };
         }
 
         return json_response(data => $data // {});
