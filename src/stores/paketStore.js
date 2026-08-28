@@ -14,6 +14,7 @@ import {
   generateResi as svcGenerateResi,
   savePaketData as svcSavePaketData,
   getPaketByResi as svcGetPaketByResi,
+  parseDateToTime,
   LOCAL_PAKETS
 } from '../services/paket.service'
 import { USE_LOCAL_DATA } from '../services/api'
@@ -35,10 +36,11 @@ export const usePaketStore = defineStore('paket', {
      */
     getScopedPakets: (state) => (currentUser) => {
       if (!currentUser) return []
+      let list = state.pakets
       if (currentUser.role === 'CUSTOMER' && USE_LOCAL_DATA) {
-        return state.pakets.filter((p) => p.created_by === currentUser.id)
+        list = state.pakets.filter((p) => p.created_by === currentUser.id)
       }
-      return state.pakets
+      return [...list].sort((a, b) => parseDateToTime(b.created_at) - parseDateToTime(a.created_at))
     },
 
     /**

@@ -24,6 +24,8 @@ sub connect {
         }
     ) or die "Koneksi database gagal: " . DBI->errstr;
 
+    $DBH->do("SET time_zone = '+07:00'");
+
     return $DBH;
 }
 

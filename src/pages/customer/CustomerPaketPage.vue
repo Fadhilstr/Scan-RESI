@@ -78,8 +78,8 @@
           </template>
 
           <template v-slot:body-cell-created_at="props">
-            <q-td :props="props" class="font-mono text-caption text-grey-7">
-              {{ props.row.created_at }}
+            <q-td :props="props" class="font-mono text-caption text-grey-7 text-center">
+              {{ getFormattedCreatedAt(props.row.created_at) }}
             </q-td>
           </template>
 
@@ -130,7 +130,7 @@
             <div><span class="text-grey-7">Penerima:</span> {{ detailRow.penerima || '-' }}</div>
             <div><span class="text-grey-7">Alamat:</span> {{ detailRow.alamat_tujuan || '-' }}</div>
             <div><span class="text-grey-7">Berat:</span> {{ detailRow.berat_kg }} kg • Layanan: {{ detailRow.jenis_layanan }}</div>
-            <div><span class="text-grey-7">Dibuat:</span> {{ detailRow.created_at }}</div>
+            <div><span class="text-grey-7">Dibuat:</span> {{ getFormattedCreatedAt(detailRow.created_at) }}</div>
           </div>
         </q-card-section>
         <q-separator />
@@ -146,7 +146,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from '../../stores/authStore'
@@ -169,6 +169,10 @@ const labelResi = ref('')
 const showDetail = ref(false)
 const detailRow = ref(null)
 
+// Real-time ticker state untuk WIB
+const nowTick = ref(Date.now())
+let timerId = null
+
 const statusOptions = [
   { label: 'Semua Status', value: 'ALL' },
   { label: 'TERDAFTAR', value: 'TERDAFTAR' },
@@ -176,17 +180,36 @@ const statusOptions = [
 ]
 
 const columns = [
-  { name: 'nomor_resi', label: 'Nomor Resi', field: 'nomor_resi', align: 'left', sortable: true },
-  { name: 'nama_barang', label: 'Nama Barang', field: 'nama_barang', align: 'left', sortable: true },
-  { name: 'penerima', label: 'Penerima', field: 'penerima', align: 'left', sortable: true },
+  { name: 'nomor_resi', label: 'Nomor Resi', field: 'nomor_resi', align: 'left' },
+  { name: 'nama_barang', label: 'Nama Barang', field: 'nama_barang', align: 'left' },
+  { name: 'penerima', label: 'Penerima', field: 'penerima', align: 'left' },
   { name: 'jenis_layanan', label: 'Layanan', field: 'jenis_layanan', align: 'center' },
-  { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true },
-  { name: 'created_at', label: 'Dibuat', field: 'created_at', align: 'center', sortable: true },
+  { name: 'status', label: 'Status', field: 'status', align: 'center' },
+  { name: 'created_at', label: 'Dibuat', field: 'created_at', align: 'center' },
   { name: 'aksi', label: 'Aksi', field: () => '', align: 'center' }
 ]
 
+const parseDateToTime = (dateStr) => {
+  if (!dateStr) return 0
+  const str = String(dateStr).trim()
+  if (/^\d{2}-\d{2}-\d{4}/.test(str)) {
+    const [dPart, tPart = '00:00:00'] = str.split(' ')
+    const [d, m, y] = dPart.split('-')
+    const t = tPart.replace(/\./g, ':')
+    const timeNum = new Date(`${y}-${m}-${d}T${t}`).getTime()
+    return isNaN(timeNum) ? 0 : timeNum
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const formattedStr = str.replace(' ', 'T').replace(/\./g, ':')
+    const timeNum = new Date(formattedStr).getTime()
+    return isNaN(timeNum) ? 0 : timeNum
+  }
+  const parsed = Date.parse(str)
+  return isNaN(parsed) ? 0 : parsed
+}
+
 const filteredRows = computed(() => {
-  return paketStore.getScopedPakets(authStore.currentUser).filter((p) => {
+  const rows = paketStore.getScopedPakets(authStore.currentUser).filter((p) => {
     if (selectedStatus.value !== 'ALL' && p.status !== selectedStatus.value) return false
     if (searchQuery.value) {
       const q = searchQuery.value.toLowerCase()
@@ -196,7 +219,23 @@ const filteredRows = computed(() => {
     }
     return true
   })
+  return rows.sort((a, b) => parseDateToTime(b.created_at) - parseDateToTime(a.created_at))
 })
+
+const getFormattedCreatedAt = (createdAtStr) => {
+  // eslint-disable-next-line no-unused-expressions
+  nowTick.value
+  if (!createdAtStr) return '-'
+
+  let str = String(createdAtStr).trim()
+  // Format YYYY-MM-DD HH:mm:ss -> DD-MM-YYYY HH:mm:ss
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(str)) {
+    const parts = str.split(/[ T]/)
+    const d = parts[0].split('-')
+    return `${d[2]}-${d[1]}-${d[0]} ${parts[1]}`
+  }
+  return str
+}
 
 const openLabel = (row) => {
   selectedPaket.value = row
@@ -232,5 +271,12 @@ const continueDraft = (row) => {
 
 onMounted(() => {
   paketStore.fetchPakets()
+  timerId = setInterval(() => {
+    nowTick.value = Date.now()
+  }, 1000)
+})
+
+onUnmounted(() => {
+  if (timerId) clearInterval(timerId)
 })
 </script>

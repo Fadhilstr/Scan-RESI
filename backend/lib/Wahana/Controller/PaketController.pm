@@ -83,7 +83,7 @@ sub create_draft {
     }
 
     $dbh->do(
-        'INSERT INTO paket (nomor_resi, status, created_by) VALUES (?, ?, ?)',
+        'INSERT INTO paket (nomor_resi, status, created_by, created_at) VALUES (?, ?, ?, NOW())',
         undef, $resi, 'DRAFT', $user_id
     );
 
@@ -156,7 +156,8 @@ sub update {
     $dbh->do(
         'UPDATE paket
             SET nama_barang = ?, pengirim = ?, alamat_pengirim = ?, penerima = ?,
-                alamat_tujuan = ?, berat_kg = ?, jenis_layanan = ?, status = ?
+                alamat_tujuan = ?, berat_kg = ?, jenis_layanan = ?, status = ?,
+                created_at = NOW()
           WHERE nomor_resi = ?',
         undef, $nama, $pengirim, $alamat_pengirim, $penerima, $alamat, $berat, $layanan,
         'TERDAFTAR', $resi

@@ -23,7 +23,7 @@ let LOCAL_AUDIT_LOGS = [
     action: 'LOGIN_SUCCESS',
     details: 'Login berhasil.',
     ip_address: '192.168.3.102 (demo)',
-    created_at: '24-08-2026 09:45:00'
+    created_at: '28-08-2026 09:45:00'
   },
   {
     log_id: 2,
@@ -32,7 +32,7 @@ let LOCAL_AUDIT_LOGS = [
     action: 'SCAN_EVENT_CREATED',
     details: 'Resi: GJXL8FLB, Status: SUCCESS',
     ip_address: '192.168.3.189 (demo)',
-    created_at: '24-08-2026 10:21:32'
+    created_at: '28-08-2026 10:21:32'
   },
   {
     log_id: 1,
@@ -41,7 +41,7 @@ let LOCAL_AUDIT_LOGS = [
     action: 'LOGIN_SUCCESS',
     details: 'Login berhasil.',
     ip_address: '192.168.3.189 (demo)',
-    created_at: '24-08-2026 10:20:00'
+    created_at: '28-08-2026 10:20:00'
   }
 ]
 

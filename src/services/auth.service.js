@@ -31,7 +31,7 @@ const LOCAL_USERS = [
     role: 'ADMIN',
     supervisor_id: null,
     status: 'ONLINE',
-    lastLogin: '24-08-2026 08:00:00'
+    lastLogin: '28-08-2026 08:00:00'
   },
   {
     id: 'USR-001',
@@ -41,7 +41,7 @@ const LOCAL_USERS = [
     role: 'PETUGAS_SCAN',
     supervisor_id: null,
     status: 'ONLINE',
-    lastLogin: '24-08-2026 10:20:00'
+    lastLogin: '28-08-2026 10:20:00'
   },
   {
     id: 'USR-002',
@@ -51,7 +51,7 @@ const LOCAL_USERS = [
     role: 'PETUGAS_SCAN',
     supervisor_id: null,
     status: 'ONLINE',
-    lastLogin: '24-08-2026 09:45:00'
+    lastLogin: '28-08-2026 09:45:00'
   },
   {
     id: 'USR-003',
@@ -71,7 +71,7 @@ const LOCAL_USERS = [
     role: 'CUSTOMER',
     supervisor_id: null,
     status: 'OFFLINE',
-    lastLogin: '24-08-2026 09:00:00'
+    lastLogin: '28-08-2026 09:00:00'
   }
 ]
 

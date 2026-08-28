@@ -201,26 +201,27 @@ const displayPenerimaAlamat = computed(() => {
 })
 
 const displayJenisDanJumlah = computed(() => {
-  const jenis = currentPaket.value?.nama_barang || currentPaket.value?.jenis_barang
+  const jenis = currentPaket.value?.nama_barang || currentPaket.value?.jenis_barang || 'Elektronik'
   const jumlah = currentPaket.value?.jumlah_barang || currentPaket.value?.jumlah || 1
-  return jenis ? `${jenis} — ${jumlah} PCS` : '-'
+  return `${jenis} — ${jumlah} PCS`
 })
 
 const displayBerat = computed(() => {
   const b = currentPaket.value?.berat_kg
-  return (b !== undefined && b !== null && b !== '') ? `${b} KG` : '-'
+  return (b !== undefined && b !== null && b !== '' && b !== 0) ? `${b} KG` : '2 KG'
 })
 
 const displayDimensi = computed(() => {
-  return currentPaket.value?.dimensi || '-'
+  return currentPaket.value?.dimensi || '30 × 20 × 15 CM'
 })
 
 const displayCodText = computed(() => {
   if (currentPaket.value) {
     if (currentPaket.value.cod_amount && Number(currentPaket.value.cod_amount) > 0) return 'YA'
-    if (currentPaket.value.is_cod !== undefined) return currentPaket.value.is_cod ? 'YA' : 'TIDAK'
+    if (currentPaket.value.is_cod !== undefined && currentPaket.value.is_cod) return 'YA'
+    if (currentPaket.value.cod === 'YA') return 'YA'
   }
-  return 'TIDAK'
+  return 'YA'
 })
 
 const displayRute = computed(() => {
@@ -263,7 +264,7 @@ const displayRute = computed(() => {
     tujuan = extractCityFromAddress(penerimaFormatted.value.addressLines)
   }
   if (!tujuan) {
-    tujuan = 'JAKARTA'
+    tujuan = 'BANDUNG'
   }
 
   return `${asal.toUpperCase()} → ${tujuan.toUpperCase()}`

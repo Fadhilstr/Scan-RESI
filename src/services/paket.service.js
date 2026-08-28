@@ -25,6 +25,33 @@ import { addAuditLog } from './audit.service'
 const RESI_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const RESI_LEN = 8
 
+// Helper: format datetime string Waktu Indonesia Barat (WIB - Asia/Jakarta)
+export const getWIBTimeString = (dateObj = new Date()) => {
+  const options = {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }
+  const formatter = new Intl.DateTimeFormat('en-GB', options)
+  const parts = formatter.formatToParts(dateObj)
+  const map = {}
+  parts.forEach((p) => {
+    if (p.type !== 'literal') map[p.type] = p.value
+  })
+  return `${map.day}-${map.month}-${map.year} ${map.hour}:${map.minute}:${map.second}`
+}
+
+export const getRelativeWIBTime = (minutesAgo = 0) => {
+  return getWIBTimeString(new Date(Date.now() - minutesAgo * 60 * 1000))
+}
+
+const nowString = () => getWIBTimeString()
+
 // =====================================================================
 // LOCAL DUMMY DATA — paritas dengan seed backend/db/schema.sql
 // =====================================================================
@@ -65,7 +92,7 @@ export const LOCAL_PAKETS = [
     status: 'TERDAFTAR',
     created_by: 'USR-CUST-001',
     creator_name: 'Customer Demo',
-    created_at: '24-08-2026 09:10:00'
+    get created_at() { return getRelativeWIBTime(45) }
   },
   {
     nomor_resi: 'AB123456',
@@ -103,7 +130,7 @@ export const LOCAL_PAKETS = [
     status: 'TERDAFTAR',
     created_by: 'USR-CUST-001',
     creator_name: 'Customer Demo',
-    created_at: '24-08-2026 09:12:00'
+    get created_at() { return getRelativeWIBTime(30) }
   },
   {
     nomor_resi: 'WHN555555',
@@ -118,7 +145,7 @@ export const LOCAL_PAKETS = [
     status: 'TERDAFTAR',
     created_by: 'USR-CUST-001',
     creator_name: 'Customer Demo',
-    created_at: '24-08-2026 09:15:00'
+    get created_at() { return getRelativeWIBTime(20) }
   },
   {
     nomor_resi: 'XYZ123456',
@@ -133,7 +160,7 @@ export const LOCAL_PAKETS = [
     status: 'TERDAFTAR',
     created_by: 'USR-CUST-001',
     creator_name: 'Customer Demo',
-    created_at: '24-08-2026 09:18:00'
+    get created_at() { return getRelativeWIBTime(15) }
   },
   {
     nomor_resi: 'WHN777777',
@@ -148,7 +175,7 @@ export const LOCAL_PAKETS = [
     status: 'TERDAFTAR',
     created_by: 'USR-CUST-001',
     creator_name: 'Customer Demo',
-    created_at: '24-08-2026 09:20:00'
+    get created_at() { return getRelativeWIBTime(10) }
   },
   {
     nomor_resi: 'ABC111111',
@@ -163,7 +190,7 @@ export const LOCAL_PAKETS = [
     status: 'TERDAFTAR',
     created_by: 'USR-CUST-001',
     creator_name: 'Customer Demo',
-    created_at: '24-08-2026 09:22:00'
+    get created_at() { return getRelativeWIBTime(5) }
   },
   {
     nomor_resi: 'ABC222222',
@@ -178,18 +205,9 @@ export const LOCAL_PAKETS = [
     status: 'TERDAFTAR',
     created_by: 'USR-CUST-001',
     creator_name: 'Customer Demo',
-    created_at: '24-08-2026 09:25:00'
+    get created_at() { return getRelativeWIBTime(1) }
   }
 ]
-
-// Helper: format datetime string lokal
-const nowString = () => {
-  const now = new Date()
-  const d = String(now.getDate()).padStart(2, '0')
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const y = now.getFullYear()
-  return `${d}-${m}-${y} ${now.toTimeString().split(' ')[0]}`
-}
 
 // Generator lokal — HANYA untuk mode demo; produksi selalu via backend.
 const makeLocalResi = () => {
@@ -331,14 +349,34 @@ export async function savePaketData(nomorResi, data, currentUser) {
   }
 }
 
+export function parseDateToTime(dateStr) {
+  if (!dateStr) return 0
+  const str = String(dateStr).trim()
+  if (/^\d{2}-\d{2}-\d{4}/.test(str)) {
+    const [dPart, tPart = '00:00:00'] = str.split(' ')
+    const [d, m, y] = dPart.split('-')
+    const t = tPart.replace(/\./g, ':')
+    const timeNum = new Date(`${y}-${m}-${d}T${t}`).getTime()
+    return isNaN(timeNum) ? 0 : timeNum
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const formattedStr = str.replace(' ', 'T').replace(/\./g, ':')
+    const timeNum = new Date(formattedStr).getTime()
+    return isNaN(timeNum) ? 0 : timeNum
+  }
+  const parsed = Date.parse(str)
+  return isNaN(parsed) ? 0 : parsed
+}
+
 /**
  * Ambil daftar paket (CUSTOMER otomatis hanya miliknya via backend).
  * @param {Object} filters - optional: { q, status, created_by }
  */
 export async function getPakets(filters = {}) {
+  let result = []
   if (USE_LOCAL_DATA) {
     // --- LOCAL MODE: scope customer dilakukan pemanggil (store) ---
-    let result = [...LOCAL_PAKETS]
+    result = [...LOCAL_PAKETS]
     if (filters.created_by) result = result.filter((p) => p.created_by === filters.created_by)
     if (filters.status) result = result.filter((p) => p.status === filters.status)
     if (filters.q) {
@@ -349,12 +387,14 @@ export async function getPakets(filters = {}) {
           (p.nama_barang || '').toLowerCase().includes(q)
       )
     }
-    return result
+  } else {
+    // --- API MODE ---
+    const data = await api.get('/api/paket', { params: filters })
+    result = data.pakets || []
   }
 
-  // --- API MODE ---
-  const data = await api.get('/api/paket', { params: filters })
-  return data.pakets || []
+  // Urutkan paket secara descending berdasarkan timestamp pembuatan (created_at)
+  return result.sort((a, b) => parseDateToTime(b.created_at) - parseDateToTime(a.created_at))
 }
 
 /**

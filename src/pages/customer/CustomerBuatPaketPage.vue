@@ -415,10 +415,15 @@ const handleSave = async () => {
     $q.notify({
       type: 'positive',
       icon: 'task_alt',
-      message: result.message,
+      message: result.message || 'Paket berhasil disimpan!',
       position: 'top',
-      timeout: 2200
+      timeout: 1500
     })
+    // Re-fetch data terbaru dari backend & redirect ke halaman Paket Saya
+    await paketStore.fetchPakets()
+    setTimeout(() => {
+      router.push('/customer/paket')
+    }, 800)
   } else {
     $q.notify({
       type: 'negative',
