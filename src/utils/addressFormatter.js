@@ -184,3 +184,70 @@ export function extractCityFromAddress(addressSource, fallback = '') {
   return fallback
 }
 
+/**
+ * Ekstrak Kode Pos dari alamat (objek terstruktur, string, atau array baris alamat)
+ * @param {Object|string|Array} addressSource
+ * @param {string} fallback
+ * @returns {string}
+ */
+export function extractPostalCodeFromAddress(addressSource, fallback = '') {
+  if (!addressSource) return fallback
+
+  // 1. Jika objek terstruktur
+  if (typeof addressSource === 'object' && !Array.isArray(addressSource)) {
+    const directZip =
+      addressSource.kode_pos ||
+      addressSource.kodepos ||
+      addressSource.postal_code ||
+      addressSource.zip_code ||
+      addressSource.zip
+    if (directZip && String(directZip).trim()) {
+      return String(directZip).trim()
+    }
+    if (addressSource.penerima_detail) {
+      const nested = extractPostalCodeFromAddress(addressSource.penerima_detail)
+      if (nested) return nested
+    }
+    if (addressSource.pengirim_detail) {
+      const nested = extractPostalCodeFromAddress(addressSource.pengirim_detail)
+      if (nested) return nested
+    }
+    if (addressSource.alamat_tujuan) {
+      return extractPostalCodeFromAddress(addressSource.alamat_tujuan, fallback)
+    }
+    if (addressSource.alamat_pengirim || addressSource.pengirim_alamat) {
+      return extractPostalCodeFromAddress(addressSource.alamat_pengirim || addressSource.pengirim_alamat, fallback)
+    }
+  }
+
+  // 2. Jika string atau array baris alamat
+  let rawStr = ''
+  if (Array.isArray(addressSource)) {
+    rawStr = addressSource.join(', ')
+  } else if (typeof addressSource === 'string') {
+    rawStr = addressSource
+  }
+
+  const match = rawStr.match(/\b\d{5}\b/)
+  if (match) {
+    return match[0]
+  }
+
+  return fallback
+}
+
+/**
+ * Ekstrak Kota + Kode Pos sekaligus (misal: "JAKARTA SELATAN 12310")
+ * @param {Object|string|Array} addressSource
+ * @param {string} fallbackCity
+ * @returns {string}
+ */
+export function extractCityAndZip(addressSource, fallbackCity = '') {
+  const city = extractCityFromAddress(addressSource, fallbackCity)
+  const zip = extractPostalCodeFromAddress(addressSource, '')
+  if (city && zip) {
+    return `${city} ${zip}`.trim()
+  }
+  return city || fallbackCity
+}
+
