@@ -50,7 +50,7 @@
           <template v-slot:body-cell-role="props">
             <q-td :props="props">
               <q-badge
-                :color="props.row.role === 'ADMIN' ? 'red-8' : props.row.role === 'SUPERVISOR' ? 'indigo-8' : props.row.role === 'CUSTOMER' ? 'green-8' : 'blue-grey-6'"
+                :color="props.row.role === 'ADMIN' ? 'red-8' : props.row.role === 'CUSTOMER' ? 'green-8' : 'blue-grey-6'"
                 text-color="white"
                 class="font-mono text-weight-bold"
               >
@@ -109,7 +109,7 @@
             <q-input v-model="form.password" outlined dense type="password" label="Password" required />
             <q-select
               v-model="form.role"
-              :options="['ADMIN', 'SUPERVISOR', 'PETUGAS_SCAN', 'CUSTOMER']"
+              :options="['ADMIN', 'PETUGAS_SCAN', 'CUSTOMER']"
               outlined
               dense
               label="Role"

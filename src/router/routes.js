@@ -21,20 +21,6 @@ const routes = [
     ]
   },
 
-  // SUPERVISOR PORTAL
-  {
-    path: '/supervisor',
-    component: () => import('../layouts/MainLayout.vue'),
-    meta: { requiresAuth: true, role: 'SUPERVISOR' },
-    children: [
-      { path: '', name: 'supervisor-dashboard', component: () => import('../pages/supervisor/SupervisorDashboard.vue') },
-      { path: 'petugas', name: 'supervisor-petugas', component: () => import('../pages/supervisor/SupervisorPetugasPage.vue') },
-      { path: 'tasks', name: 'supervisor-tasks', component: () => import('../pages/supervisor/SupervisorTasksPage.vue') },
-      { path: 'monitoring', name: 'supervisor-monitoring', component: () => import('../pages/supervisor/SupervisorMonitoringPage.vue') },
-      { path: 'reports', name: 'supervisor-reports', component: () => import('../pages/supervisor/SupervisorReportsPage.vue') }
-    ]
-  },
-
   // CUSTOMER PORTAL — pembuat paket & pemilik nomor resi
   {
     path: '/customer',

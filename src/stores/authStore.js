@@ -37,19 +37,10 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     role: (state) => state.currentUser?.role || null,
     isAdmin: (state) => state.currentUser?.role === 'ADMIN',
-    isSupervisor: (state) => state.currentUser?.role === 'SUPERVISOR',
     isPetugas: (state) => state.currentUser?.role === 'PETUGAS_SCAN',
     isCustomer: (state) => state.currentUser?.role === 'CUSTOMER',
 
-    // Petugas yang diawasi oleh supervisor tertentu
-    supervisedPetugas: (state) => (supervisorId) => {
-      return state.users.filter(
-        (u) => u.supervisor_id === supervisorId && u.role === 'PETUGAS_SCAN'
-      )
-    },
-
-    allPetugas: (state) => state.users.filter((u) => u.role === 'PETUGAS_SCAN'),
-    allSupervisors: (state) => state.users.filter((u) => u.role === 'SUPERVISOR')
+    allPetugas: (state) => state.users.filter((u) => u.role === 'PETUGAS_SCAN')
   },
 
   actions: {

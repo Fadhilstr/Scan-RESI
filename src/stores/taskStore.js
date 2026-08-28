@@ -40,11 +40,6 @@ export const useTaskStore = defineStore('task', {
         state.tasks.find((t) => t.user_id === userId && t.status === 'PROSES_SCAN') ||
         null
       )
-    },
-
-    // Ambil semua task milik tim bawahan supervisor
-    getTasksForSupervisor: (state) => (supervisedUserIds) => {
-      return state.tasks.filter((t) => supervisedUserIds.includes(t.user_id))
     }
   },
 

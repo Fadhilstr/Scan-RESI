@@ -17,15 +17,6 @@ import api, { USE_LOCAL_DATA } from './api'
 // =====================================================================
 let LOCAL_AUDIT_LOGS = [
   {
-    log_id: 4,
-    user_id: 'USR-SPV-001',
-    user_name: 'Supervisor A',
-    action: 'LOGIN_SUCCESS',
-    details: 'Monitoring rayon active',
-    ip_address: '192.168.3.10 (demo)',
-    created_at: '24-08-2026 08:15:00'
-  },
-  {
     log_id: 3,
     user_id: 'USR-002',
     user_name: 'Budi',

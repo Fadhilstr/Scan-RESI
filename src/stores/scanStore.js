@@ -35,18 +35,13 @@ export const useScanStore = defineStore('scan', {
      * Logic ini selalu berjalan di frontend (tidak berubah meski data dari API).
      *
      * - ADMIN       : Semua data
-     * - SUPERVISOR  : Hanya data tim bawahan (supervisedUserIds)
      * - PETUGAS_SCAN: Hanya data milik sendiri
      */
-    getFilteredScans: (state) => (currentUser, supervisedUserIds = []) => {
+    getFilteredScans: (state) => (currentUser) => {
       if (!currentUser) return []
 
       if (currentUser.role === 'ADMIN') {
         return state.scanEvents
-      }
-
-      if (currentUser.role === 'SUPERVISOR') {
-        return state.scanEvents.filter((scan) => supervisedUserIds.includes(scan.user_id))
       }
 
       if (currentUser.role === 'PETUGAS_SCAN') {

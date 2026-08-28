@@ -19,7 +19,7 @@
 
         <q-toolbar-title shrink>
           <span class="text-weight-bold text-subtitle1">Dijak Express</span>
-          <span class="text-caption text-blue-grey-4 q-ml-sm gt-sm">Logistics Scanner</span>
+          <span class="text-caption text-blue-grey-4 q-ml-sm gt-sm">Platform Barcode Logistik</span>
         </q-toolbar-title>
 
         <q-space />
@@ -70,7 +70,7 @@
           </q-avatar>
           <div>
             <div class="text-subtitle2 text-weight-bold">Dijak Express</div>
-            <div class="text-caption text-grey-6">Logistics Scanner Platform</div>
+            <div class="text-caption text-grey-6">Platform Barcode Logistik</div>
           </div>
         </div>
 
@@ -111,30 +111,6 @@
               <q-item clickable v-ripple to="/admin/audit-logs" class="nav-item" active-class="is-active">
                 <q-item-section avatar><q-icon name="receipt_long" size="20px" color="grey-7" /></q-item-section>
                 <q-item-section><q-item-label>Audit Log</q-item-label></q-item-section>
-              </q-item>
-            </template>
-
-            <!-- SUPERVISOR MENU -->
-            <template v-else-if="authStore.isSupervisor">
-              <q-item clickable v-ripple to="/supervisor" exact class="nav-item" active-class="is-active">
-                <q-item-section avatar><q-icon name="dashboard" size="20px" color="grey-7" /></q-item-section>
-                <q-item-section><q-item-label>Dashboard</q-item-label></q-item-section>
-              </q-item>
-              <q-item clickable v-ripple to="/supervisor/petugas" class="nav-item" active-class="is-active">
-                <q-item-section avatar><q-icon name="groups" size="20px" color="grey-7" /></q-item-section>
-                <q-item-section><q-item-label>Petugas Saya</q-item-label></q-item-section>
-              </q-item>
-              <q-item clickable v-ripple to="/supervisor/tasks" class="nav-item" active-class="is-active">
-                <q-item-section avatar><q-icon name="task" size="20px" color="grey-7" /></q-item-section>
-                <q-item-section><q-item-label>Task Tim</q-item-label></q-item-section>
-              </q-item>
-              <q-item clickable v-ripple to="/supervisor/monitoring" class="nav-item" active-class="is-active">
-                <q-item-section avatar><q-icon name="monitoring" size="20px" color="grey-7" /></q-item-section>
-                <q-item-section><q-item-label>Monitoring Scan</q-item-label></q-item-section>
-              </q-item>
-              <q-item clickable v-ripple to="/supervisor/reports" class="nav-item" active-class="is-active">
-                <q-item-section avatar><q-icon name="assessment" size="20px" color="grey-7" /></q-item-section>
-                <q-item-section><q-item-label>Report</q-item-label></q-item-section>
               </q-item>
             </template>
 
@@ -224,7 +200,6 @@ const toggleLeftDrawer = () => {
 
 const roleLabel = computed(() => {
   if (authStore.isAdmin) return 'Admin'
-  if (authStore.isSupervisor) return 'Supervisor'
   if (authStore.isPetugas) return 'Petugas Scan'
   if (authStore.isCustomer) return 'Customer'
   return 'Guest'

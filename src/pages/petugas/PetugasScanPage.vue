@@ -305,7 +305,7 @@ const handleBarcodeScan = async (resiInput) => {
   if (isTaskFinished.value) {
     const msg = activeTask.value
       ? `Task ${activeTask.value.task_id} sudah selesai — tidak dapat melakukan scan.`
-      : 'Tidak ada task aktif — minta admin/supervisor membuat task terlebih dahulu.'
+      : 'Tidak ada task aktif — minta admin membuat task terlebih dahulu.'
 
     setFeedback(resiInput, 'danger', 'DITOLAK', msg)
     $q.notify({

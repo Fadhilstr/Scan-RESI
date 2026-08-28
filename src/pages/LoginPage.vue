@@ -13,10 +13,10 @@
 
           <div>
             <div class="text-h4 text-weight-bold" style="letter-spacing: -0.02em; line-height: 1.25;">
-              Platform pemindaian<br>barcode logistik
+              Platform Barcode<br>Logistik
             </div>
             <p class="text-body2 text-blue-grey-3 q-mt-md" style="max-width: 320px;">
-              Lacak pergerakan paket secara real-time, kelola task operasional, dan jaga akurasi data pengiriman dari satu aplikasi.
+              Generate dan scan barcode resi
             </p>
           </div>
 
@@ -34,7 +34,7 @@
               <q-icon name="local_shipping" size="28px" />
             </q-avatar>
             <div class="text-h6 text-weight-bold">Dijak Express</div>
-            <div class="text-caption text-grey-6">Logistics Barcode Scan Platform</div>
+            <div class="text-caption text-grey-6">Platform Barcode Logistik</div>
           </div>
 
           <div class="text-h6 text-weight-bold">Masuk ke akun Anda</div>
@@ -47,7 +47,7 @@
               v-model="username"
               outlined
               label="Username"
-              placeholder="cth: fadhil, admin, supervisor"
+              placeholder="cth: fadhil, admin"
               autocomplete="username"
               autofocus
               :rules="[v => !!v || 'Username wajib diisi']"
@@ -122,11 +122,8 @@ const password = ref('fadhil123')
 
 const quickAccounts = [
   { userId: 'USR-ADMIN-001', label: 'Admin', icon: 'admin_panel_settings' },
-  { userId: 'USR-SPV-001', label: 'Supervisor', icon: 'supervisor_account' },
   { userId: 'USR-CUST-001', label: 'Customer', icon: 'person' },
-  { userId: 'USR-001', label: 'Fadhil', icon: 'badge' },
-  { userId: 'USR-002', label: 'Budi', icon: 'badge' },
-  { userId: 'USR-003', label: 'Andi', icon: 'badge' }
+  { userId: 'USR-001', label: 'Petugas', icon: 'badge' }
 ]
 
 const handleLogin = async () => {
@@ -177,7 +174,6 @@ const quickLogin = async (userId) => {
 
 const redirectByRole = (role) => {
   if (role === 'ADMIN') router.push('/admin')
-  else if (role === 'SUPERVISOR') router.push('/supervisor')
   else if (role === 'CUSTOMER') router.push('/customer')
   else router.push('/petugas')
 }

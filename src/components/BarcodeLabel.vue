@@ -1,11 +1,11 @@
 <template>
   <q-dialog v-model="show" persistent>
-    <q-card style="width: 480px; max-width: 95vw; border-radius: 16px">
+    <q-card style="width: 440px; max-width: 95vw; border-radius: 16px">
       <!-- Header Dialog -->
       <q-card-section class="row items-center justify-between q-pb-xs no-print">
         <div class="text-subtitle1 text-weight-bold text-slate-900 row items-center">
           <q-icon name="local_shipping" color="primary" size="22px" class="q-mr-xs" />
-          Preview Label Ekspedisi (10 × 15 cm)
+          Preview Label Dijak Express
         </div>
         <q-btn flat round dense icon="close" color="grey-7" v-close-popup />
       </q-card-section>
@@ -18,24 +18,19 @@
           {{ renderError }}
         </div>
 
-        <!-- Wadah Label Ekspedisi 10x15 cm -->
+        <!-- Wadah Label Ekspedisi Compact Dijak Express -->
         <div v-else class="express-label-box bg-white text-black shadow-3">
-          <!-- 1. HEADER (DIJAK EXPRESS & LAYANAN) -->
-          <div class="label-header text-center">
+          <!-- 1. HEADER -->
+          <div class="label-header text-left">
             <div class="brand-title">DIJAK EXPRESS</div>
-            <div class="service-badge">{{ displayLayanan }}</div>
           </div>
 
           <div class="label-divider"></div>
 
-          <!-- 2. NOMOR RESI -->
+          <!-- 2. NOMOR RESI & BARCODE (ALIGNMENT CENTER) -->
           <div class="label-resi-section text-center">
             <div class="resi-label-heading">NO. RESI</div>
             <div class="resi-number-main">{{ displayResi }}</div>
-          </div>
-
-          <!-- 3. BARCODE -->
-          <div class="label-barcode-section text-center">
             <div class="barcode-svg-container">
               <svg ref="svgRef"></svg>
             </div>
@@ -44,73 +39,41 @@
 
           <div class="label-divider"></div>
 
-          <!-- 4. PENGIRIM -->
+          <!-- 3. DATA PENGIRIM (ALIGNMENT KIRI) -->
           <div class="label-section text-left">
             <div class="section-title-bold">PENGIRIM</div>
-            <div class="person-name">{{ pengirimInfo.name || '-' }}</div>
-            <div v-if="pengirimInfo.phone" class="person-phone">{{ pengirimInfo.phone }}</div>
-            <div class="address-block">
-              <div v-for="(line, idx) in pengirimInfo.addressLines" :key="'pgr-' + idx">
-                {{ line }}
-              </div>
-            </div>
+            <div class="person-name">{{ displayPengirimNama }}</div>
+            <div v-if="displayPengirimTlp" class="person-phone">{{ displayPengirimTlp }}</div>
+            <div class="address-block">{{ displayPengirimAlamat }}</div>
           </div>
 
           <div class="label-divider"></div>
 
-          <!-- 5. PENERIMA -->
+          <!-- 4. DATA PENERIMA (ALIGNMENT KIRI) -->
           <div class="label-section text-left">
             <div class="section-title-bold">PENERIMA</div>
-            <div class="person-name recipient-highlight">{{ penerimaInfo.name || '-' }}</div>
-            <div v-if="penerimaInfo.phone" class="person-phone">{{ penerimaInfo.phone }}</div>
-            <div class="address-block">
-              <div v-for="(line, idx) in penerimaInfo.addressLines" :key="'pnr-' + idx">
-                {{ line }}
-              </div>
-            </div>
+            <div class="person-name recipient-highlight">{{ displayPenerimaNama }}</div>
+            <div v-if="displayPenerimaTlp" class="person-phone">{{ displayPenerimaTlp }}</div>
+            <div class="address-block">{{ displayPenerimaAlamat }}</div>
           </div>
 
           <div class="label-divider"></div>
 
-          <!-- 6. DETAIL PAKET -->
+          <!-- 5. DETAIL PAKET (ALIGNMENT KIRI) -->
           <div class="label-section text-left">
             <div class="section-title-bold">DETAIL PAKET</div>
-            <table class="detail-table">
-              <tbody>
-                <tr>
-                  <td class="lbl font-bold">Berat</td>
-                  <td class="sep">:</td>
-                  <td class="val">{{ displayBerat }}</td>
-                </tr>
-                <tr>
-                  <td class="lbl font-bold">Layanan</td>
-                  <td class="sep">:</td>
-                  <td class="val">{{ displayLayanan }}</td>
-                </tr>
-                <tr>
-                  <td class="lbl font-bold">Hub Asal</td>
-                  <td class="sep">:</td>
-                  <td class="val">{{ displayHubAsal }}</td>
-                </tr>
-                <tr>
-                  <td class="lbl font-bold">Hub Tujuan</td>
-                  <td class="sep">:</td>
-                  <td class="val">{{ displayHubTujuan }}</td>
-                </tr>
-                <tr v-if="displayCod">
-                  <td class="lbl font-bold">COD</td>
-                  <td class="sep">:</td>
-                  <td class="val font-bold">{{ displayCod }}</td>
-                </tr>
-                <tr>
-                  <td class="lbl font-bold">Tanggal</td>
-                  <td class="sep">:</td>
-                  <td class="val">{{ displayTanggal }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="detail-line font-medium">{{ displayJenisDanJumlah }}</div>
+            <div class="detail-line">Berat: {{ displayBerat }}</div>
+            <div class="detail-line">Dimensi: {{ displayDimensi }}</div>
+            <div class="detail-line">COD: {{ displayCodText }}</div>
           </div>
-          <!-- TIDAK ADA SECTION STATUS -->
+
+          <div class="label-divider"></div>
+
+          <!-- 6. INFORMASI RUTE (ALIGNMENT KIRI) -->
+          <div class="label-section text-left">
+            <div class="route-info">{{ displayRute }}</div>
+          </div>
         </div>
       </q-card-section>
 
@@ -168,49 +131,10 @@ const renderError = ref('')
 const currentPaket = ref(null)
 
 const displayResi = computed(() => {
-  return (currentPaket.value?.nomor_resi || props.resi || 'GJXL8FLB').toUpperCase()
+  return (currentPaket.value?.nomor_resi || props.resi || 'DJK987654321').toUpperCase()
 })
 
-const displayLayanan = computed(() => {
-  return currentPaket.value?.jenis_layanan || 'REG'
-})
-
-const displayBerat = computed(() => {
-  const b = currentPaket.value?.berat_kg
-  return b ? `${b} Kg` : '1.5 Kg'
-})
-
-const displayHubAsal = computed(() => {
-  return currentPaket.value?.hub_asal || 'Jakarta'
-})
-
-const displayHubTujuan = computed(() => {
-  if (currentPaket.value?.hub_tujuan) return currentPaket.value.hub_tujuan
-  if (penerimaInfo.value?.addressLines?.length > 1) {
-    const lastLine = penerimaInfo.value.addressLines[1]
-    const parts = lastLine.split(',')
-    if (parts.length > 1) return parts[1].trim()
-    return parts[0].trim()
-  }
-  return 'Bandung'
-})
-
-const displayCod = computed(() => {
-  const cod = currentPaket.value?.cod_amount
-  if (cod && Number(cod) > 0) {
-    return `Rp${Number(cod).toLocaleString('id-ID')}`
-  }
-  return null
-})
-
-const displayTanggal = computed(() => {
-  if (currentPaket.value?.created_at) {
-    return currentPaket.value.created_at.split(' ')[0]
-  }
-  return '27-08-2026'
-})
-
-const pengirimInfo = computed(() => {
+const pengirimFormatted = computed(() => {
   return formatAddressInfo(
     currentPaket.value?.pengirim_detail,
     currentPaket.value?.pengirim || 'Fadhil Satria Widodo',
@@ -218,12 +142,77 @@ const pengirimInfo = computed(() => {
   )
 })
 
-const penerimaInfo = computed(() => {
+const penerimaFormatted = computed(() => {
   return formatAddressInfo(
     currentPaket.value?.penerima_detail,
     currentPaket.value?.penerima || 'Budi Santoso',
     currentPaket.value?.alamat_tujuan || ''
   )
+})
+
+const displayPengirimNama = computed(() => {
+  return pengirimFormatted.value?.name || currentPaket.value?.pengirim || 'Fadhil Satria Widodo'
+})
+
+const displayPengirimTlp = computed(() => {
+  return pengirimFormatted.value?.phone || currentPaket.value?.pengirim_detail?.telepon || '0812-3456-7890'
+})
+
+const displayPengirimAlamat = computed(() => {
+  const lines = pengirimFormatted.value?.addressLines
+  if (lines && lines.length > 0) return lines.join(', ')
+  return 'Jl. Merpati No. 25, Rempoa, Ciputat Timur, Tangerang Selatan, Banten 15412'
+})
+
+const displayPenerimaNama = computed(() => {
+  return penerimaFormatted.value?.name || currentPaket.value?.penerima || 'Budi Santoso'
+})
+
+const displayPenerimaTlp = computed(() => {
+  return penerimaFormatted.value?.phone || currentPaket.value?.penerima_detail?.telepon || '0857-1234-5678'
+})
+
+const displayPenerimaAlamat = computed(() => {
+  const lines = penerimaFormatted.value?.addressLines
+  if (lines && lines.length > 0) return lines.join(', ')
+  if (currentPaket.value?.alamat_tujuan) return currentPaket.value.alamat_tujuan
+  return 'Jl. Mawar No. 10, Sukasari, Coblong, Bandung, Jawa Barat 40154'
+})
+
+const displayJenisDanJumlah = computed(() => {
+  const jenis = currentPaket.value?.nama_barang || currentPaket.value?.jenis_barang || 'Elektronik'
+  const jumlah = currentPaket.value?.jumlah_barang || currentPaket.value?.jumlah || 1
+  return `${jenis} — ${jumlah} PCS`
+})
+
+const displayBerat = computed(() => {
+  const b = currentPaket.value?.berat_kg
+  return b ? `${b} KG` : '2 KG'
+})
+
+const displayDimensi = computed(() => {
+  return currentPaket.value?.dimensi || '30 × 20 × 15 CM'
+})
+
+const displayCodText = computed(() => {
+  if (currentPaket.value) {
+    if (currentPaket.value.cod_amount && Number(currentPaket.value.cod_amount) > 0) return 'YA'
+    if (currentPaket.value.is_cod !== undefined) return currentPaket.value.is_cod ? 'YA' : 'TIDAK'
+  }
+  return 'YA'
+})
+
+const displayRute = computed(() => {
+  const asal = currentPaket.value?.hub_asal || currentPaket.value?.kota_asal || 'JAKARTA'
+  let tujuan = currentPaket.value?.hub_tujuan || currentPaket.value?.kota_tujuan
+  if (!tujuan && penerimaFormatted.value?.addressLines?.length > 1) {
+    const lastLine = penerimaFormatted.value.addressLines[1]
+    const parts = lastLine.split(',')
+    if (parts.length > 1) tujuan = parts[1].trim()
+    else tujuan = parts[0].trim()
+  }
+  if (!tujuan) tujuan = 'BANDUNG'
+  return `${asal.toUpperCase()} → ${tujuan.toUpperCase()}`
 })
 
 // Load paket detail setiap kali dialog dibuka
@@ -247,6 +236,8 @@ watch(
           currentPaket.value = null
         }
       }
+    } else {
+      currentPaket.value = null
     }
 
     await nextTick()
@@ -264,9 +255,9 @@ const renderBarcode = () => {
     JsBarcode(svgRef.value, targetResi, {
       format: 'CODE128',
       displayValue: false,
-      width: 2.2,
-      height: 65,
-      margin: 4,
+      width: 2.0,
+      height: 60,
+      margin: 2,
       background: '#ffffff',
       lineColor: '#000000'
     })
@@ -276,24 +267,11 @@ const renderBarcode = () => {
   }
 }
 
-// Print label terisolasi dengan CSS @page 10cm x 15cm centered
+// Print label terisolasi dengan CSS compact
 const printLabel = () => {
   const svgHtml = svgRef.value?.outerHTML || ''
-  const win = window.open('', '_blank', 'width=620,height=800')
+  const win = window.open('', '_blank', 'width=600,height=750')
   if (!win) return
-
-  const pgr = pengirimInfo.value
-  const pnr = penerimaInfo.value
-
-  const pgrAddressHtml = pgr.addressLines.map((l) => `<div>${l}</div>`).join('')
-  const pnrAddressHtml = pnr.addressLines.map((l) => `<div>${l}</div>`).join('')
-
-  const pgrPhoneHtml = pgr.phone ? `<div>${pgr.phone}</div>` : ''
-  const pnrPhoneHtml = pnr.phone ? `<div>${pnr.phone}</div>` : ''
-
-  const codRowHtml = displayCod.value
-    ? `<tr><td class="lbl">COD</td><td class="sep">:</td><td class="val font-bold">${displayCod.value}</td></tr>`
-    : ''
 
   win.document.write(`<!doctype html>
 <html>
@@ -302,7 +280,7 @@ const printLabel = () => {
     <title>Label Resi ${displayResi.value}</title>
     <style>
       @page {
-        size: 10cm 15cm;
+        size: 10cm 14cm;
         margin: 0;
       }
       * {
@@ -322,50 +300,34 @@ const printLabel = () => {
         align-items: center;
         justify-content: center;
       }
-      .print-wrapper {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
       .express-label {
         width: 10cm;
-        min-height: 15cm;
-        padding: 10px 12px;
+        padding: 12px 14px;
         border: 1px solid #000000;
         background: #ffffff;
         margin: 0 auto;
         box-sizing: border-box;
-        display: flex;
-        flex-direction: column;
       }
       .text-center { text-align: center; }
       .text-left { text-align: left; }
-      .font-bold { font-weight: bold; }
       .brand-title {
-        font-size: 20px;
+        font-size: 18px;
         font-weight: 800;
-        letter-spacing: 1px;
-        margin-bottom: 2px;
-      }
-      .service-badge {
-        font-size: 15px;
-        font-weight: bold;
+        letter-spacing: 0.5px;
       }
       .label-divider {
         border-top: 1px solid #000000;
-        margin: 6px 0;
+        margin: 7px 0;
       }
       .resi-label-heading {
         font-size: 11px;
-        font-weight: bold;
+        font-weight: 700;
         letter-spacing: 0.5px;
       }
       .resi-number-main {
-        font-size: 24px;
+        font-size: 22px;
         font-weight: 800;
-        font-family: monospace;
+        font-family: 'Courier New', Courier, monospace;
         margin: 2px 0;
       }
       .barcode-box {
@@ -373,7 +335,7 @@ const printLabel = () => {
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        margin: 4px 0;
+        margin: 3px 0;
       }
       .barcode-box svg {
         max-width: 100%;
@@ -381,134 +343,103 @@ const printLabel = () => {
         display: block;
       }
       .resi-number-sub {
-        font-size: 13px;
-        font-weight: bold;
-        font-family: monospace;
+        font-size: 12px;
+        font-weight: 700;
+        font-family: 'Courier New', Courier, monospace;
         margin-top: 2px;
       }
       .section-title-bold {
         font-size: 11px;
-        font-weight: bold;
+        font-weight: 800;
         text-transform: uppercase;
-        margin-bottom: 3px;
+        margin-bottom: 2px;
+        letter-spacing: 0.5px;
       }
       .person-name {
         font-size: 13px;
-        font-weight: normal;
+        font-weight: 600;
       }
       .recipient-highlight {
         font-size: 14px;
-        font-weight: bold;
+        font-weight: 800;
       }
       .person-phone {
         font-size: 12px;
-        margin-bottom: 2px;
+        margin-bottom: 1px;
       }
       .address-block {
         font-size: 11px;
         line-height: 1.35;
       }
-      .detail-table {
-        width: 100%;
-        font-size: 11px;
-        border-collapse: collapse;
+      .detail-line {
+        font-size: 12px;
+        line-height: 1.4;
       }
-      .detail-table td {
-        padding: 1px 0;
-        vertical-align: top;
+      .font-medium {
+        font-weight: 700;
       }
-      .detail-table td.lbl {
-        width: 85px;
-        font-weight: bold;
-      }
-      .detail-table td.sep {
-        width: 12px;
+      .route-info {
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
       }
     </style>
   </head>
   <body>
-    <div class="print-wrapper">
-      <div class="express-label">
-        <!-- 1. HEADER -->
-        <div class="text-center">
-          <div class="brand-title">DIJAK EXPRESS</div>
-          <div class="service-badge">${displayLayanan.value}</div>
-        </div>
+    <div class="express-label">
+      <!-- 1. HEADER -->
+      <div class="text-left">
+        <div class="brand-title">DIJAK EXPRESS</div>
+      </div>
 
-        <div class="label-divider"></div>
+      <div class="label-divider"></div>
 
-        <!-- 2. NOMOR RESI -->
-        <div class="text-center">
-          <div class="resi-label-heading">NO. RESI</div>
-          <div class="resi-number-main">${displayResi.value}</div>
-        </div>
-
-        <!-- 3. BARCODE -->
-        <div class="text-center barcode-box">
+      <!-- 2. NOMOR RESI & BARCODE -->
+      <div class="text-center">
+        <div class="resi-label-heading">NO. RESI</div>
+        <div class="resi-number-main">${displayResi.value}</div>
+        <div class="barcode-box">
           ${svgHtml}
           <div class="resi-number-sub">${displayResi.value}</div>
         </div>
+      </div>
 
-        <div class="label-divider"></div>
+      <div class="label-divider"></div>
 
-        <!-- 4. PENGIRIM -->
-        <div class="text-left">
-          <div class="section-title-bold">PENGIRIM</div>
-          <div class="person-name">${pgr.name || '-'}</div>
-          ${pgrPhoneHtml}
-          <div class="address-block">
-            ${pgrAddressHtml}
-          </div>
-        </div>
+      <!-- 3. PENGIRIM -->
+      <div class="text-left">
+        <div class="section-title-bold">PENGIRIM</div>
+        <div class="person-name">${displayPengirimNama.value}</div>
+        ${displayPengirimTlp.value ? `<div class="person-phone">${displayPengirimTlp.value}</div>` : ''}
+        <div class="address-block">${displayPengirimAlamat.value}</div>
+      </div>
 
-        <div class="label-divider"></div>
+      <div class="label-divider"></div>
 
-        <!-- 5. PENERIMA -->
-        <div class="text-left">
-          <div class="section-title-bold">PENERIMA</div>
-          <div class="person-name recipient-highlight">${pnr.name || '-'}</div>
-          ${pnrPhoneHtml}
-          <div class="address-block">
-            ${pnrAddressHtml}
-          </div>
-        </div>
+      <!-- 4. PENERIMA -->
+      <div class="text-left">
+        <div class="section-title-bold">PENERIMA</div>
+        <div class="person-name recipient-highlight">${displayPenerimaNama.value}</div>
+        ${displayPenerimaTlp.value ? `<div class="person-phone">${displayPenerimaTlp.value}</div>` : ''}
+        <div class="address-block">${displayPenerimaAlamat.value}</div>
+      </div>
 
-        <div class="label-divider"></div>
+      <div class="label-divider"></div>
 
-        <!-- 6. DETAIL PAKET -->
-        <div class="text-left">
-          <div class="section-title-bold">DETAIL PAKET</div>
-          <table class="detail-table">
-            <tbody>
-              <tr>
-                <td class="lbl">Berat</td>
-                <td class="sep">:</td>
-                <td class="val">${displayBerat.value}</td>
-              </tr>
-              <tr>
-                <td class="lbl">Layanan</td>
-                <td class="sep">:</td>
-                <td class="val">${displayLayanan.value}</td>
-              </tr>
-              <tr>
-                <td class="lbl">Hub Asal</td>
-                <td class="sep">:</td>
-                <td class="val">${displayHubAsal.value}</td>
-              </tr>
-              <tr>
-                <td class="lbl">Hub Tujuan</td>
-                <td class="sep">:</td>
-                <td class="val">${displayHubTujuan.value}</td>
-              </tr>
-              ${codRowHtml}
-              <tr>
-                <td class="lbl">Tanggal</td>
-                <td class="sep">:</td>
-                <td class="val">${displayTanggal.value}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <!-- 5. DETAIL PAKET -->
+      <div class="text-left">
+        <div class="section-title-bold">DETAIL PAKET</div>
+        <div class="detail-line font-medium">${displayJenisDanJumlah.value}</div>
+        <div class="detail-line">Berat: ${displayBerat.value}</div>
+        <div class="detail-line">Dimensi: ${displayDimensi.value}</div>
+        <div class="detail-line">COD: ${displayCodText.value}</div>
+      </div>
+
+      <div class="label-divider"></div>
+
+      <!-- 6. INFORMASI RUTE -->
+      <div class="text-left">
+        <div class="route-info">${displayRute.value}</div>
       </div>
     </div>
   </body>
@@ -524,30 +455,25 @@ const printLabel = () => {
 
 <style scoped>
 .express-label-box {
-  width: 10cm;
-  min-height: 15cm;
-  padding: 12px;
+  width: 9.5cm;
+  padding: 12px 14px;
   border: 1px solid #000000;
   box-sizing: border-box;
   font-family: Arial, Helvetica, sans-serif;
   color: #000000;
   background-color: #ffffff;
+  border-radius: 4px;
 }
 
 .brand-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
-  letter-spacing: 1px;
-}
-
-.service-badge {
-  font-size: 15px;
-  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
 .label-divider {
   border-top: 1px solid #000000;
-  margin: 6px 0;
+  margin: 7px 0;
 }
 
 .resi-label-heading {
@@ -557,9 +483,9 @@ const printLabel = () => {
 }
 
 .resi-number-main {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
-  font-family: monospace;
+  font-family: 'Courier New', Courier, monospace;
   margin: 2px 0;
 }
 
@@ -567,7 +493,7 @@ const printLabel = () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin: 4px 0;
+  margin: 3px 0;
 }
 
 .barcode-svg-container :deep(svg) {
@@ -576,25 +502,27 @@ const printLabel = () => {
 }
 
 .resi-number-sub {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  font-family: monospace;
+  font-family: 'Courier New', Courier, monospace;
 }
 
 .section-title-bold {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
   margin-bottom: 2px;
+  letter-spacing: 0.5px;
 }
 
 .person-name {
   font-size: 13px;
+  font-weight: 600;
 }
 
 .recipient-highlight {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .person-phone {
@@ -606,22 +534,18 @@ const printLabel = () => {
   line-height: 1.35;
 }
 
-.detail-table {
-  width: 100%;
-  font-size: 11px;
-  border-collapse: collapse;
+.detail-line {
+  font-size: 12px;
+  line-height: 1.4;
 }
 
-.detail-table td {
-  padding: 1px 0;
-  vertical-align: top;
+.font-medium {
+  font-weight: 700;
 }
 
-.detail-table td.lbl {
-  width: 85px;
-}
-
-.detail-table td.sep {
-  width: 12px;
+.route-info {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
 }
 </style>

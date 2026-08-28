@@ -47,19 +47,6 @@
         <q-card class="stat-card q-pa-md">
           <q-card-section class="q-pa-none">
             <div class="row items-center justify-between q-mb-sm">
-              <span class="overline-label">Total Supervisor</span>
-              <q-avatar icon="supervisor_account" color="indigo-1" text-color="indigo-8" size="36px" style="border-radius: 10px;" />
-            </div>
-            <div class="kpi-value text-slate-900 font-mono">3</div>
-            <div class="text-caption text-grey-6 q-mt-xs">3 rayon operasional</div>
-          </q-card-section>
-        </q-card>
-      </div>
-
-      <div class="col-12 col-sm-6 col-md-3">
-        <q-card class="stat-card q-pa-md">
-          <q-card-section class="q-pa-none">
-            <div class="row items-center justify-between q-mb-sm">
               <span class="overline-label">Total Task</span>
               <q-avatar icon="assignment" color="amber-2" text-color="amber-9" size="36px" style="border-radius: 10px;" />
             </div>

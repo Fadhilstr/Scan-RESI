@@ -34,22 +34,12 @@ const LOCAL_USERS = [
     lastLogin: '24-08-2026 08:00:00'
   },
   {
-    id: 'USR-SPV-001',
-    name: 'Supervisor A',
-    username: 'supervisor',
-    password: 'supervisor123',
-    role: 'SUPERVISOR',
-    supervisor_id: null,
-    status: 'ONLINE',
-    lastLogin: '24-08-2026 08:15:00'
-  },
-  {
     id: 'USR-001',
     name: 'Fadhil',
     username: 'fadhil',
     password: 'fadhil123',
     role: 'PETUGAS_SCAN',
-    supervisor_id: 'USR-SPV-001',
+    supervisor_id: null,
     status: 'ONLINE',
     lastLogin: '24-08-2026 10:20:00'
   },
@@ -59,7 +49,7 @@ const LOCAL_USERS = [
     username: 'budi',
     password: 'budi123',
     role: 'PETUGAS_SCAN',
-    supervisor_id: 'USR-SPV-001',
+    supervisor_id: null,
     status: 'ONLINE',
     lastLogin: '24-08-2026 09:45:00'
   },
@@ -69,7 +59,7 @@ const LOCAL_USERS = [
     username: 'andi',
     password: 'andi123',
     role: 'PETUGAS_SCAN',
-    supervisor_id: 'USR-SPV-001',
+    supervisor_id: null,
     status: 'OFFLINE',
     lastLogin: '23-08-2026 17:30:00'
   },
@@ -253,7 +243,7 @@ export async function addUser(newUserData) {
       username: newUserData.username,
       password: newUserData.password || '123456',
       role: newUserData.role || 'PETUGAS_SCAN',
-      supervisor_id: newUserData.supervisor_id || 'USR-SPV-001',
+      supervisor_id: null,
       status: 'OFFLINE',
       lastLogin: '-'
     }
