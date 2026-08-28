@@ -44,7 +44,7 @@
             <div class="section-title-bold">PENGIRIM</div>
             <div class="person-name">{{ displayPengirimNama }}</div>
             <div v-if="displayPengirimTlp" class="person-phone">{{ displayPengirimTlp }}</div>
-            <div class="address-block">{{ displayPengirimAlamat }}</div>
+            <div v-if="displayPengirimAlamat && displayPengirimAlamat !== '-'" class="address-block">{{ displayPengirimAlamat }}</div>
           </div>
 
           <div class="label-divider"></div>
@@ -54,7 +54,7 @@
             <div class="section-title-bold">PENERIMA</div>
             <div class="person-name recipient-highlight">{{ displayPenerimaNama }}</div>
             <div v-if="displayPenerimaTlp" class="person-phone">{{ displayPenerimaTlp }}</div>
-            <div class="address-block">{{ displayPenerimaAlamat }}</div>
+            <div v-if="displayPenerimaAlamat && displayPenerimaAlamat !== '-'" class="address-block">{{ displayPenerimaAlamat }}</div>
           </div>
 
           <div class="label-divider"></div>
@@ -101,7 +101,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import JsBarcode from 'jsbarcode'
 import { usePaketStore } from '../stores/paketStore'
-import { formatAddressInfo } from '../utils/addressFormatter'
+import { formatAddressInfo, extractCityFromAddress } from '../utils/addressFormatter'
 
 const props = defineProps({
   modelValue: {
@@ -137,61 +137,82 @@ const displayResi = computed(() => {
 const pengirimFormatted = computed(() => {
   return formatAddressInfo(
     currentPaket.value?.pengirim_detail,
-    currentPaket.value?.pengirim || 'Fadhil Satria Widodo',
-    ''
+    currentPaket.value?.pengirim || currentPaket.value?.creator_name || '',
+    currentPaket.value?.pengirim_alamat || currentPaket.value?.alamat_pengirim || ''
   )
 })
 
 const penerimaFormatted = computed(() => {
   return formatAddressInfo(
     currentPaket.value?.penerima_detail,
-    currentPaket.value?.penerima || 'Budi Santoso',
+    currentPaket.value?.penerima || '',
     currentPaket.value?.alamat_tujuan || ''
   )
 })
 
 const displayPengirimNama = computed(() => {
-  return pengirimFormatted.value?.name || currentPaket.value?.pengirim || 'Fadhil Satria Widodo'
+  return (
+    pengirimFormatted.value?.name ||
+    currentPaket.value?.pengirim ||
+    currentPaket.value?.creator_name ||
+    '-'
+  )
 })
 
 const displayPengirimTlp = computed(() => {
-  return pengirimFormatted.value?.phone || currentPaket.value?.pengirim_detail?.telepon || '0812-3456-7890'
+  return (
+    pengirimFormatted.value?.phone ||
+    currentPaket.value?.pengirim_detail?.telepon ||
+    currentPaket.value?.telepon_pengirim ||
+    ''
+  )
 })
 
 const displayPengirimAlamat = computed(() => {
   const lines = pengirimFormatted.value?.addressLines
   if (lines && lines.length > 0) return lines.join(', ')
-  return 'Jl. Merpati No. 25, Rempoa, Ciputat Timur, Tangerang Selatan, Banten 15412'
+  if (currentPaket.value?.pengirim_alamat || currentPaket.value?.alamat_pengirim) {
+    return currentPaket.value.pengirim_alamat || currentPaket.value.alamat_pengirim
+  }
+  if (currentPaket.value?.hub_asal || currentPaket.value?.kota_asal) {
+    return currentPaket.value.hub_asal || currentPaket.value.kota_asal
+  }
+  return '-'
 })
 
 const displayPenerimaNama = computed(() => {
-  return penerimaFormatted.value?.name || currentPaket.value?.penerima || 'Budi Santoso'
+  return penerimaFormatted.value?.name || currentPaket.value?.penerima || '-'
 })
 
 const displayPenerimaTlp = computed(() => {
-  return penerimaFormatted.value?.phone || currentPaket.value?.penerima_detail?.telepon || '0857-1234-5678'
+  return (
+    penerimaFormatted.value?.phone ||
+    currentPaket.value?.penerima_detail?.telepon ||
+    currentPaket.value?.telepon_penerima ||
+    ''
+  )
 })
 
 const displayPenerimaAlamat = computed(() => {
   const lines = penerimaFormatted.value?.addressLines
   if (lines && lines.length > 0) return lines.join(', ')
   if (currentPaket.value?.alamat_tujuan) return currentPaket.value.alamat_tujuan
-  return 'Jl. Mawar No. 10, Sukasari, Coblong, Bandung, Jawa Barat 40154'
+  return '-'
 })
 
 const displayJenisDanJumlah = computed(() => {
-  const jenis = currentPaket.value?.nama_barang || currentPaket.value?.jenis_barang || 'Elektronik'
+  const jenis = currentPaket.value?.nama_barang || currentPaket.value?.jenis_barang
   const jumlah = currentPaket.value?.jumlah_barang || currentPaket.value?.jumlah || 1
-  return `${jenis} — ${jumlah} PCS`
+  return jenis ? `${jenis} — ${jumlah} PCS` : '-'
 })
 
 const displayBerat = computed(() => {
   const b = currentPaket.value?.berat_kg
-  return b ? `${b} KG` : '2 KG'
+  return (b !== undefined && b !== null && b !== '') ? `${b} KG` : '-'
 })
 
 const displayDimensi = computed(() => {
-  return currentPaket.value?.dimensi || '30 × 20 × 15 CM'
+  return currentPaket.value?.dimensi || '-'
 })
 
 const displayCodText = computed(() => {
@@ -199,19 +220,52 @@ const displayCodText = computed(() => {
     if (currentPaket.value.cod_amount && Number(currentPaket.value.cod_amount) > 0) return 'YA'
     if (currentPaket.value.is_cod !== undefined) return currentPaket.value.is_cod ? 'YA' : 'TIDAK'
   }
-  return 'YA'
+  return 'TIDAK'
 })
 
 const displayRute = computed(() => {
-  const asal = currentPaket.value?.hub_asal || currentPaket.value?.kota_asal || 'JAKARTA'
-  let tujuan = currentPaket.value?.hub_tujuan || currentPaket.value?.kota_tujuan
-  if (!tujuan && penerimaFormatted.value?.addressLines?.length > 1) {
-    const lastLine = penerimaFormatted.value.addressLines[1]
-    const parts = lastLine.split(',')
-    if (parts.length > 1) tujuan = parts[1].trim()
-    else tujuan = parts[0].trim()
+  // 1. Kabupaten/Kota Asal
+  let asal =
+    currentPaket.value?.hub_asal ||
+    currentPaket.value?.kota_asal ||
+    currentPaket.value?.pengirim_detail?.kota ||
+    currentPaket.value?.pengirim_detail?.kabupaten ||
+    currentPaket.value?.pengirim_detail?.kota_kabupaten
+
+  if (!asal && currentPaket.value?.pengirim_detail) {
+    asal = extractCityFromAddress(currentPaket.value.pengirim_detail)
   }
-  if (!tujuan) tujuan = 'BANDUNG'
+  if (!asal && (currentPaket.value?.pengirim_alamat || currentPaket.value?.alamat_pengirim)) {
+    asal = extractCityFromAddress(currentPaket.value.pengirim_alamat || currentPaket.value.alamat_pengirim)
+  }
+  if (!asal && pengirimFormatted.value?.addressLines?.length > 0) {
+    asal = extractCityFromAddress(pengirimFormatted.value.addressLines)
+  }
+  if (!asal) {
+    asal = 'JAKARTA'
+  }
+
+  // 2. Kabupaten/Kota Tujuan (sesuai database / alamat tujuan penerima)
+  let tujuan =
+    currentPaket.value?.hub_tujuan ||
+    currentPaket.value?.kota_tujuan ||
+    currentPaket.value?.penerima_detail?.kota ||
+    currentPaket.value?.penerima_detail?.kabupaten ||
+    currentPaket.value?.penerima_detail?.kota_kabupaten
+
+  if (!tujuan && currentPaket.value?.penerima_detail) {
+    tujuan = extractCityFromAddress(currentPaket.value.penerima_detail)
+  }
+  if (!tujuan && currentPaket.value?.alamat_tujuan) {
+    tujuan = extractCityFromAddress(currentPaket.value.alamat_tujuan)
+  }
+  if (!tujuan && penerimaFormatted.value?.addressLines?.length > 0) {
+    tujuan = extractCityFromAddress(penerimaFormatted.value.addressLines)
+  }
+  if (!tujuan) {
+    tujuan = 'JAKARTA'
+  }
+
   return `${asal.toUpperCase()} → ${tujuan.toUpperCase()}`
 })
 
@@ -411,7 +465,7 @@ const printLabel = () => {
         <div class="section-title-bold">PENGIRIM</div>
         <div class="person-name">${displayPengirimNama.value}</div>
         ${displayPengirimTlp.value ? `<div class="person-phone">${displayPengirimTlp.value}</div>` : ''}
-        <div class="address-block">${displayPengirimAlamat.value}</div>
+        ${displayPengirimAlamat.value && displayPengirimAlamat.value !== '-' ? `<div class="address-block">${displayPengirimAlamat.value}</div>` : ''}
       </div>
 
       <div class="label-divider"></div>
@@ -421,7 +475,7 @@ const printLabel = () => {
         <div class="section-title-bold">PENERIMA</div>
         <div class="person-name recipient-highlight">${displayPenerimaNama.value}</div>
         ${displayPenerimaTlp.value ? `<div class="person-phone">${displayPenerimaTlp.value}</div>` : ''}
-        <div class="address-block">${displayPenerimaAlamat.value}</div>
+        ${displayPenerimaAlamat.value && displayPenerimaAlamat.value !== '-' ? `<div class="address-block">${displayPenerimaAlamat.value}</div>` : ''}
       </div>
 
       <div class="label-divider"></div>

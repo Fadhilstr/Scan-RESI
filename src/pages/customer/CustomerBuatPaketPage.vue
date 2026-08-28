@@ -396,6 +396,7 @@ const handleSave = async () => {
     jenis_layanan: form.jenis_layanan,
     berat_kg: form.berat_kg,
     pengirim: form.pengirim_nama,
+    alamat_pengirim: buildSingleLineAddress(pengirim_detail),
     penerima: form.penerima_nama,
     alamat_tujuan: buildSingleLineAddress(penerima_detail),
     pengirim_detail,
@@ -409,7 +410,7 @@ const handleSave = async () => {
   saving.value = false
 
   if (result.success) {
-    paket.value = result.paket || { ...paket.value, ...payload, status: 'TERDAFTAR' }
+    paket.value = { ...payload, ...(result.paket || {}), pengirim_detail, penerima_detail, status: 'TERDAFTAR' }
     saved.value = true
     $q.notify({
       type: 'positive',

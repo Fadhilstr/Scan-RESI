@@ -17,17 +17,18 @@ my $RESI_LEN   = 8;
 sub map_paket {
     my ($r) = @_;
     return {
-        nomor_resi    => $r->{nomor_resi},
-        nama_barang   => $r->{nama_barang},
-        pengirim      => $r->{pengirim},
-        penerima      => $r->{penerima},
-        alamat_tujuan => $r->{alamat_tujuan},
-        berat_kg      => defined $r->{berat_kg} ? 0 + $r->{berat_kg} : 0,
-        jenis_layanan => $r->{jenis_layanan},
-        status        => $r->{status},
-        created_by    => $r->{created_by},
-        creator_name  => $r->{creator_name},
-        created_at    => fmt_datetime($r->{created_at}),
+        nomor_resi      => $r->{nomor_resi},
+        nama_barang     => $r->{nama_barang},
+        pengirim        => $r->{pengirim},
+        alamat_pengirim => $r->{alamat_pengirim},
+        penerima        => $r->{penerima},
+        alamat_tujuan   => $r->{alamat_tujuan},
+        berat_kg        => defined $r->{berat_kg} ? 0 + $r->{berat_kg} : 0,
+        jenis_layanan   => $r->{jenis_layanan},
+        status          => $r->{status},
+        created_by      => $r->{created_by},
+        creator_name    => $r->{creator_name},
+        created_at      => fmt_datetime($r->{created_at}),
     };
 }
 
@@ -138,11 +139,12 @@ sub update {
     my $layanan = $valid_layanan{ trim($body->{jenis_layanan} // '') }
         ? $body->{jenis_layanan} : $paket->{jenis_layanan} || 'REGULER';
 
-    my $nama     = trim($body->{nama_barang}   // '');
-    my $pengirim = trim($body->{pengirim}      // '');
-    my $penerima = trim($body->{penerima}      // '');
-    my $alamat   = trim($body->{alamat_tujuan} // '');
-    my $berat    = $body->{berat_kg};
+    my $nama            = trim($body->{nama_barang}     // '');
+    my $pengirim        = trim($body->{pengirim}        // '');
+    my $alamat_pengirim = trim($body->{alamat_pengirim} // '');
+    my $penerima        = trim($body->{penerima}        // '');
+    my $alamat          = trim($body->{alamat_tujuan}   // '');
+    my $berat           = $body->{berat_kg};
     $berat = 0 unless defined $berat && $berat =~ /^\d+(\.\d+)?$/;
 
     for my $field (['nama_barang', $nama], ['pengirim', $pengirim], ['penerima', $penerima]) {
@@ -153,10 +155,10 @@ sub update {
 
     $dbh->do(
         'UPDATE paket
-            SET nama_barang = ?, pengirim = ?, penerima = ?,
+            SET nama_barang = ?, pengirim = ?, alamat_pengirim = ?, penerima = ?,
                 alamat_tujuan = ?, berat_kg = ?, jenis_layanan = ?, status = ?
           WHERE nomor_resi = ?',
-        undef, $nama, $pengirim, $penerima, $alamat, $berat, $layanan,
+        undef, $nama, $pengirim, $alamat_pengirim, $penerima, $alamat, $berat, $layanan,
         'TERDAFTAR', $resi
     );
 

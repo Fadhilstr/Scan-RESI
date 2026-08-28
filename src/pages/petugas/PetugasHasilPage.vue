@@ -78,7 +78,7 @@
     />
 
     <!-- Dialog Generate Barcode Label -->
-    <BarcodeLabel v-model="showLabel" :resi="labelResi" />
+    <BarcodeLabel v-model="showLabel" :resi="labelResi" :paket-data="labelPaketData" />
 
     <!-- Dialog Cari Data Paket by Nomor Resi -->
     <q-dialog v-model="showPaket">
@@ -127,11 +127,19 @@ const paketStore = usePaketStore()
 
 const showLabel = ref(false)
 const labelResi = ref('')
+const labelPaketData = ref(null)
 const showPaket = ref(false)
 const paketDetail = ref(null)
 
-const openLabel = (row) => {
-  labelResi.value = row?.nomor_resi || ''
+const openLabel = async (row) => {
+  const resi = row?.nomor_resi || ''
+  labelResi.value = resi
+  let p = paketStore.findPaketByResi(resi)
+  if (!p && resi) {
+    const res = await paketStore.lookupByResi(resi)
+    if (res.success) p = res.paket
+  }
+  labelPaketData.value = p || null
   showLabel.value = true
 }
 

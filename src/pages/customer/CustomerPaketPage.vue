@@ -141,7 +141,7 @@
       </q-card>
     </q-dialog>
 
-    <BarcodeLabel v-model="showLabel" :resi="labelResi" />
+    <BarcodeLabel v-model="showLabel" :resi="labelResi" :paket-data="selectedPaket" />
   </q-page>
 </template>
 
@@ -162,6 +162,7 @@ const paketStore = usePaketStore()
 const searchQuery = ref('')
 const selectedStatus = ref('ALL')
 const resiLookup = ref('')
+const selectedPaket = ref(null)
 
 const showLabel = ref(false)
 const labelResi = ref('')
@@ -198,6 +199,7 @@ const filteredRows = computed(() => {
 })
 
 const openLabel = (row) => {
+  selectedPaket.value = row
   labelResi.value = row?.nomor_resi || ''
   showLabel.value = true
 }

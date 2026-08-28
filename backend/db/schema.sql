@@ -75,16 +75,19 @@ CREATE TABLE IF NOT EXISTS tasks (
 -- Hanya paket TERDAFTAR yang boleh discan petugas (validasi backend).
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS paket (
-  nomor_resi    VARCHAR(16)  NOT NULL,
-  nama_barang   VARCHAR(150) NULL,
-  pengirim      VARCHAR(100) NULL,
-  penerima      VARCHAR(100) NULL,
-  alamat_tujuan VARCHAR(255) NULL,
-  berat_kg      DECIMAL(6,2) NOT NULL DEFAULT 0,
-  jenis_layanan ENUM('REGULER','EXPRESS','SAME_DAY') NOT NULL DEFAULT 'REGULER',
-  status        ENUM('DRAFT','TERDAFTAR') NOT NULL DEFAULT 'DRAFT',
-  created_by    VARCHAR(32)  NULL,
-  created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  nomor_resi      VARCHAR(16)  NOT NULL,
+  nama_barang     VARCHAR(150) NULL,
+  pengirim        VARCHAR(100) NULL,
+  alamat_pengirim VARCHAR(255) NULL,
+  pengirim_detail TEXT         NULL,
+  penerima        VARCHAR(100) NULL,
+  alamat_tujuan   VARCHAR(255) NULL,
+  penerima_detail TEXT         NULL,
+  berat_kg        DECIMAL(6,2) NOT NULL DEFAULT 0,
+  jenis_layanan   ENUM('REGULER','EXPRESS','SAME_DAY') NOT NULL DEFAULT 'REGULER',
+  status          ENUM('DRAFT','TERDAFTAR') NOT NULL DEFAULT 'DRAFT',
+  created_by      VARCHAR(32)  NULL,
+  created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (nomor_resi),
   KEY idx_paket_created_by (created_by),
   CONSTRAINT fk_paket_user
@@ -173,14 +176,14 @@ INSERT INTO tasks (task_id, user_id, shift, tanggal, target, progress, status, l
 -- =====================================================================
 -- SEED DATA — Paket (wajib ada sebelum scan_events karena FK resi)
 -- =====================================================================
-INSERT INTO paket (nomor_resi, nama_barang, pengirim, penerima, alamat_tujuan, berat_kg, jenis_layanan, status, created_by, created_at) VALUES
-('GJXL8FLB',  'Dokumen Kontrak',   'PT Sinar Jaya', 'Rina Wulandari', 'Jl. Margonda Raya No. 12, Depok',    1.20, 'EXPRESS',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:10:00'),
-('AB123456',  'Sepatu Olahraga',   'Toko Amanah',   'Dedi Kurniawan', 'Jl. Raya Ciputat No. 45, Tangerang', 2.50, 'REGULER',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:12:00'),
-('WHN555555', 'Laptop Kerja',      'CV Techindo',   'Sari Melati',    'Jl. Sudirman Kav. 21, Jakarta',      3.80, 'SAME_DAY',  'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:15:00'),
-('XYZ123456', 'Buku Tulis (12 pcs)', 'Toko Buku Ilmu', 'Ahmad Fauzi',  'Jl. Kampus Barat No. 8, Ciputat',    4.00, 'REGULER',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:18:00'),
-('WHN777777', 'Kamera Mirrorless', 'PhotoMart',     'Bagas Pratama',  'Jl. Cempaka Putih No. 3, Jakarta',   2.10, 'EXPRESS',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:20:00'),
-('ABC111111', 'Serum Skincare',    'GlowStore',     'Nadia Putri',    'Jl. Kartini No. 19, South Tangerang',0.60, 'SAME_DAY',  'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:22:00'),
-('ABC222222', 'Helm Motor',        'RideSafe Shop', 'Yoga Saputra',   'Jl. Ir. Juanda No. 77, Depok',       1.90, 'REGULER',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:25:00');
+INSERT INTO paket (nomor_resi, nama_barang, pengirim, alamat_pengirim, penerima, alamat_tujuan, berat_kg, jenis_layanan, status, created_by, created_at) VALUES
+('GJXL8FLB',  'Dokumen Kontrak',   'PT Sinar Jaya', 'Jl. Merpati No. 25, Rempoa, Ciputat Timur, Tangerang Selatan, Banten 15412',               'Rina Wulandari', 'Jl. Margonda Raya No. 12, Depok',    1.20, 'EXPRESS',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:10:00'),
+('AB123456',  'Sepatu Olahraga',   'Toko Amanah',   'Jl. Raya Ciputat No. 45, Ciputat, Ciputat, Tangerang Selatan, Banten 15411',               'Dedi Kurniawan', 'Jl. Raya Ciputat No. 45, Tangerang', 2.50, 'REGULER',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:12:00'),
+('WHN555555', 'Laptop Kerja',      'CV Techindo',   'Jl. Gatot Subroto Kav. 18, Mampang Prapatan, Jakarta Selatan, DKI Jakarta 12950',          'Sari Melati',    'Jl. Sudirman Kav. 21, Jakarta',      3.80, 'SAME_DAY',  'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:15:00'),
+('XYZ123456', 'Buku Tulis (12 pcs)', 'Toko Buku Ilmu', 'Jl. Salemba Raya No. 4, Senen, Jakarta Pusat, DKI Jakarta 10430',                             'Ahmad Fauzi',  'Jl. Kampus Barat No. 8, Ciputat',    4.00, 'REGULER',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:18:00'),
+('WHN777777', 'Kamera Mirrorless', 'PhotoMart',     'Jl. Letjen S. Parman No. 28, Grogol Petamburan, Jakarta Barat, DKI Jakarta 11470',         'Bagas Pratama',  'Jl. Cempaka Putih No. 3, Jakarta',   2.10, 'EXPRESS',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:20:00'),
+('ABC111111', 'Serum Skincare',    'GlowStore',     'Jl. Bintaro Utama 3A, Pondok Aren, Tangerang Selatan, Banten 15224',                       'Nadia Putri',    'Jl. Kartini No. 19, South Tangerang',0.60, 'SAME_DAY',  'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:22:00'),
+('ABC222222', 'Helm Motor',        'RideSafe Shop', 'Jl. Raya Pajajaran No. 10, Bogor Tengah, Kota Bogor, Jawa Barat 16128',                     'Yoga Saputra',   'Jl. Ir. Juanda No. 77, Depok',       1.90, 'REGULER',   'TERDAFTAR', 'USR-CUST-001', '2026-08-24 09:25:00');
 
 -- =====================================================================
 -- SEED DATA — Scan Events
