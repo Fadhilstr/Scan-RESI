@@ -131,7 +131,7 @@ const renderError = ref('')
 const currentPaket = ref(null)
 
 const displayResi = computed(() => {
-  return (currentPaket.value?.nomor_resi || props.resi || 'DJK987654321').toUpperCase()
+  return (currentPaket.value?.nomor_resi || props.resi || '').toUpperCase()
 })
 
 const pengirimFormatted = computed(() => {
@@ -201,18 +201,20 @@ const displayPenerimaAlamat = computed(() => {
 })
 
 const displayJenisDanJumlah = computed(() => {
-  const jenis = currentPaket.value?.nama_barang || currentPaket.value?.jenis_barang || 'Elektronik'
-  const jumlah = currentPaket.value?.jumlah_barang || currentPaket.value?.jumlah || 1
-  return `${jenis} — ${jumlah} PCS`
+  const jenis = currentPaket.value?.nama_barang || currentPaket.value?.jenis_barang
+  const jumlah = currentPaket.value?.jumlah_barang || currentPaket.value?.jumlah
+  if (jenis && jumlah) return `${jenis} — ${jumlah} PCS`
+  if (jenis) return jenis
+  return '-'
 })
 
 const displayBerat = computed(() => {
   const b = currentPaket.value?.berat_kg
-  return (b !== undefined && b !== null && b !== '' && b !== 0) ? `${b} KG` : '2 KG'
+  return (b !== undefined && b !== null && b !== '') ? `${b} KG` : '-'
 })
 
 const displayDimensi = computed(() => {
-  return currentPaket.value?.dimensi || '30 × 20 × 15 CM'
+  return currentPaket.value?.dimensi || '-'
 })
 
 const displayCodText = computed(() => {
@@ -221,53 +223,41 @@ const displayCodText = computed(() => {
     if (currentPaket.value.is_cod !== undefined && currentPaket.value.is_cod) return 'YA'
     if (currentPaket.value.cod === 'YA') return 'YA'
   }
-  return 'YA'
+  return 'TIDAK'
 })
 
 const displayRute = computed(() => {
-  // 1. Kabupaten/Kota Asal
-  let asal =
+  // 1. Ekstrak Kota Asal dari variabel riil paket (tanpa dummy fallback)
+  const asal = extractCityFromAddress(
     currentPaket.value?.hub_asal ||
     currentPaket.value?.kota_asal ||
-    currentPaket.value?.pengirim_detail?.kota ||
-    currentPaket.value?.pengirim_detail?.kabupaten ||
-    currentPaket.value?.pengirim_detail?.kota_kabupaten
+    currentPaket.value?.pengirim_detail ||
+    currentPaket.value?.alamat_pengirim ||
+    currentPaket.value?.pengirim_alamat ||
+    pengirimFormatted.value?.addressLines,
+    ''
+  )
 
-  if (!asal && currentPaket.value?.pengirim_detail) {
-    asal = extractCityFromAddress(currentPaket.value.pengirim_detail)
-  }
-  if (!asal && (currentPaket.value?.pengirim_alamat || currentPaket.value?.alamat_pengirim)) {
-    asal = extractCityFromAddress(currentPaket.value.pengirim_alamat || currentPaket.value.alamat_pengirim)
-  }
-  if (!asal && pengirimFormatted.value?.addressLines?.length > 0) {
-    asal = extractCityFromAddress(pengirimFormatted.value.addressLines)
-  }
-  if (!asal) {
-    asal = 'JAKARTA'
-  }
-
-  // 2. Kabupaten/Kota Tujuan (sesuai database / alamat tujuan penerima)
-  let tujuan =
+  // 2. Ekstrak Kota Tujuan dari variabel riil paket (tanpa dummy fallback)
+  const tujuan = extractCityFromAddress(
     currentPaket.value?.hub_tujuan ||
     currentPaket.value?.kota_tujuan ||
-    currentPaket.value?.penerima_detail?.kota ||
-    currentPaket.value?.penerima_detail?.kabupaten ||
-    currentPaket.value?.penerima_detail?.kota_kabupaten
+    currentPaket.value?.penerima_detail ||
+    currentPaket.value?.alamat_tujuan ||
+    penerimaFormatted.value?.addressLines,
+    ''
+  )
 
-  if (!tujuan && currentPaket.value?.penerima_detail) {
-    tujuan = extractCityFromAddress(currentPaket.value.penerima_detail)
+  if (asal && tujuan) {
+    return `${asal.toUpperCase()} → ${tujuan.toUpperCase()}`
   }
-  if (!tujuan && currentPaket.value?.alamat_tujuan) {
-    tujuan = extractCityFromAddress(currentPaket.value.alamat_tujuan)
+  if (tujuan) {
+    return tujuan.toUpperCase()
   }
-  if (!tujuan && penerimaFormatted.value?.addressLines?.length > 0) {
-    tujuan = extractCityFromAddress(penerimaFormatted.value.addressLines)
+  if (asal) {
+    return asal.toUpperCase()
   }
-  if (!tujuan) {
-    tujuan = 'BANDUNG'
-  }
-
-  return `${asal.toUpperCase()} → ${tujuan.toUpperCase()}`
+  return '-'
 })
 
 // Load paket detail setiap kali dialog dibuka

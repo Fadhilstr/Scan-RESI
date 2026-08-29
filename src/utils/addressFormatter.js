@@ -133,7 +133,8 @@ export function extractCityFromAddress(addressSource, fallback = '') {
     rawStr = addressSource
   }
 
-  rawStr = rawStr.trim()
+  // Hapus kode pos 5 digit terlebih dahulu agar tidak terbawa sebagai nama kota
+  rawStr = rawStr.replace(/\b\d{5}\b/g, '').trim()
   if (!rawStr) return fallback
 
   // Daftar provinsi Indonesia umum untuk deteksi segmen provinsi
@@ -165,14 +166,9 @@ export function extractCityFromAddress(addressSource, fallback = '') {
     }
   }
 
-  // Periksa apakah bagian terakhir adalah provinsi / kode pos
+  // Buang bagian akhir jika merupakan provinsi
   let lastIndex = parts.length - 1
-  const lastPart = parts[lastIndex]
-  const isLastProvinceOrZip = provincePatterns.some(rx => rx.test(lastPart)) ||
-    /^\d{5}$/.test(lastPart.trim()) ||
-    /^[a-zA-Z\s]+\s+\d{5}$/.test(lastPart.trim())
-
-  if (isLastProvinceOrZip && parts.length >= 2) {
+  while (lastIndex > 0 && provincePatterns.some(rx => rx.test(parts[lastIndex]))) {
     lastIndex--
   }
 

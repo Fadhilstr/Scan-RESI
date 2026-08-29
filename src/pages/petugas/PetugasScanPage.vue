@@ -237,6 +237,9 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Dialog Generate Barcode Label -->
+    <BarcodeLabel v-model="showLabel" :resi="labelResi" :paket-data="labelPaketData" />
   </q-page>
 </template>
 
@@ -268,6 +271,7 @@ const isProcessingScan = ref(false)
 const lastPaket = ref(null)
 const showLabel = ref(false)
 const labelResi = ref('')
+const labelPaketData = ref(null)
 
 // Umpan balik hasil validasi scan terakhir → ditampilkan di dialog kamera
 // dan komponen input. { seq, resi, level, label, message, detail }
@@ -278,8 +282,15 @@ const setFeedback = (resi, level, label, message, detail = '') => {
   scanFeedback.value = { seq: ++feedbackSeq, resi, level, label, message, detail }
 }
 
-const openLabel = (row) => {
-  labelResi.value = row?.nomor_resi || ''
+const openLabel = async (row) => {
+  const resi = row?.nomor_resi || ''
+  labelResi.value = resi
+  let p = paketStore.findPaketByResi(resi)
+  if (!p && resi) {
+    const res = await paketStore.lookupByResi(resi)
+    if (res.success) p = res.paket
+  }
+  labelPaketData.value = p || null
   showLabel.value = true
 }
 
