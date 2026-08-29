@@ -17,18 +17,20 @@ my $RESI_LEN   = 8;
 sub map_paket {
     my ($r) = @_;
     return {
-        nomor_resi      => $r->{nomor_resi},
-        nama_barang     => $r->{nama_barang},
-        pengirim        => $r->{pengirim},
-        alamat_pengirim => $r->{alamat_pengirim},
-        penerima        => $r->{penerima},
-        alamat_tujuan   => $r->{alamat_tujuan},
-        berat_kg        => defined $r->{berat_kg} ? 0 + $r->{berat_kg} : 0,
-        jenis_layanan   => $r->{jenis_layanan},
-        status          => $r->{status},
-        created_by      => $r->{created_by},
-        creator_name    => $r->{creator_name},
-        created_at      => fmt_datetime($r->{created_at}),
+        nomor_resi        => $r->{nomor_resi},
+        nama_barang       => $r->{nama_barang},
+        pengirim          => $r->{pengirim},
+        alamat_pengirim   => $r->{alamat_pengirim},
+        telepon_pengirim  => $r->{telepon_pengirim} // '',
+        penerima          => $r->{penerima},
+        alamat_tujuan     => $r->{alamat_tujuan},
+        telepon_penerima  => $r->{telepon_penerima} // '',
+        berat_kg          => defined $r->{berat_kg} ? 0 + $r->{berat_kg} : 0,
+        jenis_layanan     => $r->{jenis_layanan},
+        status            => $r->{status},
+        created_by        => $r->{created_by},
+        creator_name      => $r->{creator_name},
+        created_at        => fmt_datetime($r->{created_at}),
     };
 }
 
@@ -83,8 +85,8 @@ sub create_draft {
     }
 
     $dbh->do(
-        'INSERT INTO paket (nomor_resi, status, created_by, created_at) VALUES (?, ?, ?, NOW())',
-        undef, $resi, 'DRAFT', $user_id
+        'INSERT INTO paket (nomor_resi, status, created_by, telepon_pengirim, telepon_penerima, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+        undef, $resi, 'DRAFT', $user_id, '', ''
     );
 
     record_audit(
@@ -139,27 +141,41 @@ sub update {
     my $layanan = $valid_layanan{ trim($body->{jenis_layanan} // '') }
         ? $body->{jenis_layanan} : $paket->{jenis_layanan} || 'REGULER';
 
-    my $nama            = trim($body->{nama_barang}     // '');
-    my $pengirim        = trim($body->{pengirim}        // '');
-    my $alamat_pengirim = trim($body->{alamat_pengirim} // '');
-    my $penerima        = trim($body->{penerima}        // '');
-    my $alamat          = trim($body->{alamat_tujuan}   // '');
-    my $berat           = $body->{berat_kg};
+    my $nama             = trim($body->{nama_barang}      // '');
+    my $pengirim         = trim($body->{pengirim}         // '');
+    my $alamat_pengirim  = trim($body->{alamat_pengirim}  // '');
+    my $telepon_pengirim = trim($body->{telepon_pengirim} // '');
+    my $penerima         = trim($body->{penerima}         // '');
+    my $alamat_tujuan    = trim($body->{alamat_tujuan}    // '');
+    my $telepon_penerima = trim($body->{telepon_penerima} // '');
+    my $berat            = $body->{berat_kg};
     $berat = 0 unless defined $berat && $berat =~ /^\d+(\.\d+)?$/;
 
-    for my $field (['nama_barang', $nama], ['pengirim', $pengirim], ['penerima', $penerima]) {
+    # Validasi field wajib (termasuk telepon)
+    for my $field (['nama_barang', $nama], ['pengirim', $pengirim], ['penerima', $penerima],
+                   ['telepon_pengirim', $telepon_pengirim], ['telepon_penerima', $telepon_penerima]) {
         return { success => \0, reason => 'VALIDATION',
-                 message => ucfirst($field->[0]) . ' wajib diisi.' }
+                 message => $field->[0] . ' wajib diisi.' }
             unless length $field->[1];
+    }
+
+    # Validasi format telepon: minimal 8 digit angka, maksimal 15 digit
+    for my $field (['telepon_pengirim', $telepon_pengirim], ['telepon_penerima', $telepon_penerima]) {
+        return { success => \0, reason => 'VALIDATION',
+                 message => $field->[0] . ' harus berupa angka 8-15 digit.' }
+            unless $field->[1] =~ /^\d{8,15}$/;
     }
 
     $dbh->do(
         'UPDATE paket
-            SET nama_barang = ?, pengirim = ?, alamat_pengirim = ?, penerima = ?,
-                alamat_tujuan = ?, berat_kg = ?, jenis_layanan = ?, status = ?,
+            SET nama_barang = ?, pengirim = ?, alamat_pengirim = ?, telepon_pengirim = ?,
+                penerima = ?, alamat_tujuan = ?, telepon_penerima = ?,
+                berat_kg = ?, jenis_layanan = ?, status = ?,
                 created_at = NOW()
           WHERE nomor_resi = ?',
-        undef, $nama, $pengirim, $alamat_pengirim, $penerima, $alamat, $berat, $layanan,
+        undef, $nama, $pengirim, $alamat_pengirim, $telepon_pengirim,
+            $penerima, $alamat_tujuan, $telepon_penerima,
+            $berat, $layanan,
         'TERDAFTAR', $resi
     );
 

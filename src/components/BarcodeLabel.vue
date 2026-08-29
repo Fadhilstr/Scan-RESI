@@ -160,12 +160,11 @@ const displayPengirimNama = computed(() => {
 })
 
 const displayPengirimTlp = computed(() => {
-  return (
-    pengirimFormatted.value?.phone ||
-    currentPaket.value?.pengirim_detail?.telepon ||
-    currentPaket.value?.telepon_pengirim ||
-    ''
-  )
+  const phone = currentPaket.value?.telepon_pengirim ||
+                currentPaket.value?.pengirim_detail?.telepon ||
+                pengirimFormatted.value?.phone ||
+                ''
+  return phone ? `No. Telp: ${phone}` : ''
 })
 
 const displayPengirimAlamat = computed(() => {
@@ -185,12 +184,11 @@ const displayPenerimaNama = computed(() => {
 })
 
 const displayPenerimaTlp = computed(() => {
-  return (
-    penerimaFormatted.value?.phone ||
-    currentPaket.value?.penerima_detail?.telepon ||
-    currentPaket.value?.telepon_penerima ||
-    ''
-  )
+  const phone = currentPaket.value?.telepon_penerima ||
+                currentPaket.value?.penerima_detail?.telepon ||
+                penerimaFormatted.value?.phone ||
+                ''
+  return phone ? `No. Telp: ${phone}` : ''
 })
 
 const displayPenerimaAlamat = computed(() => {
