@@ -272,7 +272,7 @@
 
 <script setup>
 import { ref, reactive, watch, nextTick, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import JsBarcode from 'jsbarcode'
 import { useAuthStore } from '../../stores/authStore'
@@ -282,6 +282,7 @@ import BarcodeLabel from '../../components/BarcodeLabel.vue'
 
 const $q = useQuasar()
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const paketStore = usePaketStore()
 
