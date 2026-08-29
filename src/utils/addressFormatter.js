@@ -158,26 +158,36 @@ export function extractCityFromAddress(addressSource, fallback = '') {
     return cleanPart(parts[0]) || fallback
   }
 
-  // Cari bagian yang mengandung kata kunci eksplisit "Kota" / "Kabupaten" / "Kab."
+  // 1. Cari bagian yang mengandung kata kunci eksplisit "Kota" / "Kabupaten" / "Kab."
   for (let i = parts.length - 1; i >= 0; i--) {
-    const p = parts[i]
-    if (/^(kota\s+adm\.?|kota|kabupaten|kab\.?)\s+/i.test(p)) {
-      return p
+    if (/^(kota\s+adm\.?|kota|kabupaten|kab\.?)\s+/i.test(parts[i])) {
+      return parts[i]
     }
   }
 
-  // Buang bagian akhir jika merupakan provinsi
-  let lastIndex = parts.length - 1
-  while (lastIndex > 0 && provincePatterns.some(rx => rx.test(parts[lastIndex]))) {
-    lastIndex--
+  // 2. Jika bagian terakhir adalah provinsi yang terdaftar
+  if (provincePatterns.some((rx) => rx.test(parts[parts.length - 1]))) {
+    return parts[parts.length - 2] || parts[0]
   }
 
-  const candidate = parts[lastIndex]
-  if (candidate) {
-    return candidate
+  // 3. Struktur standar alamat lengkap [Jalan & No, (Kelurahan), (Kecamatan), Kota/Kabupaten, Provinsi]:
+  // Jika alamat memiliki >= 3 bagian, bagian terakhir adalah Provinsi sehingga Kota/Kabupaten berada di posisi kedua terakhir
+  if (parts.length >= 3) {
+    return parts[parts.length - 2]
   }
 
-  return fallback
+  // 4. Jika alamat hanya memiliki 2 bagian: jika bagian pertama adalah jalan, maka bagian kedua adalah Kota
+  if (parts.length === 2) {
+    if (/^(jl|jalan|gang|gg|komp|komplek|dusun|kp|kampung)\.?\s+/i.test(parts[0]) || /\bno\.?\s*\d+/i.test(parts[0])) {
+      return parts[1]
+    }
+    if (provincePatterns.some((rx) => rx.test(parts[1]))) {
+      return parts[0]
+    }
+    return parts[1]
+  }
+
+  return parts[parts.length - 1] || fallback
 }
 
 /**

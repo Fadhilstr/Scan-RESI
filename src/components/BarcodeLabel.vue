@@ -231,6 +231,8 @@ const displayRute = computed(() => {
   const asal = extractCityFromAddress(
     currentPaket.value?.hub_asal ||
     currentPaket.value?.kota_asal ||
+    currentPaket.value?.pengirim_detail?.kota ||
+    currentPaket.value?.pengirim_detail?.kabupaten ||
     currentPaket.value?.pengirim_detail ||
     currentPaket.value?.alamat_pengirim ||
     currentPaket.value?.pengirim_alamat ||
@@ -242,6 +244,8 @@ const displayRute = computed(() => {
   const tujuan = extractCityFromAddress(
     currentPaket.value?.hub_tujuan ||
     currentPaket.value?.kota_tujuan ||
+    currentPaket.value?.penerima_detail?.kota ||
+    currentPaket.value?.penerima_detail?.kabupaten ||
     currentPaket.value?.penerima_detail ||
     currentPaket.value?.alamat_tujuan ||
     penerimaFormatted.value?.addressLines,
