@@ -51,6 +51,7 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     role: (state) => state.currentUser?.role || null,
     isAdmin: (state) => state.currentUser?.role === 'ADMIN',
+    isDeveloper: (state) => state.currentUser?.role === 'DEVELOPER',
     isPetugas: (state) => state.currentUser?.role === 'PETUGAS_SCAN',
     isCustomer: (state) => state.currentUser?.role === 'CUSTOMER',
 

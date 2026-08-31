@@ -17,7 +17,19 @@ const routes = [
       { path: 'users', name: 'admin-users', component: () => import('../pages/admin/AdminUserManagementPage.vue') },
       { path: 'tasks', name: 'admin-tasks', component: () => import('../pages/admin/AdminTasksPage.vue') },
       { path: 'reports', name: 'admin-reports', component: () => import('../pages/admin/AdminReportsPage.vue') },
-      { path: 'audit-logs', name: 'admin-audit', component: () => import('../pages/admin/AdminAuditLogsPage.vue') }
+      { path: 'audit-logs', name: 'admin-audit', component: () => import('../pages/admin/AdminAuditLogsPage.vue') },
+      { path: 'queries', name: 'admin-queries', component: () => import('../pages/dev/DevQueryInspectorPage.vue') }
+    ]
+  },
+
+  // DEVELOPER PORTAL — Inspeksi Stored Procedure & Database
+  {
+    path: '/dev',
+    component: () => import('../layouts/MainLayout.vue'),
+    meta: { requiresAuth: true, role: 'DEVELOPER' },
+    children: [
+      { path: '', redirect: '/dev/queries' },
+      { path: 'queries', name: 'dev-queries', component: () => import('../pages/dev/DevQueryInspectorPage.vue') }
     ]
   },
 

@@ -38,6 +38,39 @@ sub get_openapi_yaml {
     };
 }
 
+sub get_procedures {
+    my ($req) = @_;
+    require Wahana::Procedure;
+    require Wahana::Db;
+
+    my $registry = Wahana::Procedure::list_registry();
+    my $db_routines = [];
+    my $db_online = 0;
+
+    eval {
+        my $dbh = Wahana::Db->connect();
+        $db_online = 1;
+        $db_routines = $dbh->selectall_arrayref(
+            "SELECT ROUTINE_NAME AS name, ROUTINE_TYPE AS type, CREATED AS created_at, LAST_ALTERED AS last_altered
+               FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = 'wahana_scan' ORDER BY ROUTINE_NAME ASC",
+            { Slice => {} }
+        );
+        1;
+    };
+
+    my $active_mode = scalar(@$db_routines) > 0 ? 'STORED_PROCEDURE_ACTIVE' : 'PREPARED_STATEMENT_FALLSAFE';
+
+    return {
+        success     => \1,
+        mode        => $active_mode,
+        db_online   => $db_online ? \1 : \0,
+        database    => 'wahana_scan',
+        registry    => $registry,
+        db_routines => $db_routines,
+        total_sp    => scalar(@$db_routines),
+    };
+}
+
 sub get_swagger_ui {
     my ($req) = @_;
 
@@ -58,19 +91,18 @@ sub get_swagger_ui {
 </head>
 <body>
   <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js" charset="UTF-8"></script>
-  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js" charset="UTF-8"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
   <script>
     window.onload = function() {
-      window.ui = SwaggerUIBundle({
+      SwaggerUIBundle({
         url: "/api/openapi.yaml",
         dom_id: '#swagger-ui',
         deepLinking: true,
         presets: [
           SwaggerUIBundle.presets.apis,
-          SwaggerUIStandalonePreset
+          SwaggerUIBundle.SwaggerUIStandalonePreset
         ],
-        layout: "StandaloneLayout"
+        layout: "BaseLayout"
       });
     };
   </script>

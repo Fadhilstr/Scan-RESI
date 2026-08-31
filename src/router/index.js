@@ -33,12 +33,13 @@ export default route((/* { store, ssrContext } */) => {
     // 2. Jika sudah login dan membuka halaman login -> arahkan ke dashboard masing-masing
     if (to.path === '/login' && authStore.isLoggedIn) {
       if (authStore.isAdmin) return next({ name: 'admin-dashboard' })
+      if (authStore.isDeveloper) return next({ name: 'dev-queries' })
       if (authStore.isCustomer) return next({ name: 'customer-dashboard' })
       return next({ name: 'petugas-dashboard' })
     }
 
     // 3. Pembatasan Akses Role Ketat:
-    // Setiap rute utama (/admin, /petugas, /customer) memiliki meta.role yang harus cocok
+    // Setiap rute utama (/admin, /petugas, /customer, /dev) memiliki meta.role yang harus cocok
     if (authStore.isLoggedIn) {
       const requiredRole = to.matched.find((r) => r.meta && r.meta.role)?.meta?.role
       if (requiredRole && requiredRole !== authStore.role) {
@@ -53,6 +54,7 @@ export default route((/* { store, ssrContext } */) => {
         })
 
         if (authStore.isAdmin) return next({ name: 'admin-dashboard' })
+        if (authStore.isDeveloper) return next({ name: 'dev-queries' })
         if (authStore.isCustomer) return next({ name: 'customer-dashboard' })
         return next({ name: 'petugas-dashboard' })
       }

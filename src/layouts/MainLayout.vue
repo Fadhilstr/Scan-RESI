@@ -112,6 +112,18 @@
                 <q-item-section avatar><q-icon name="receipt_long" size="20px" color="grey-7" /></q-item-section>
                 <q-item-section><q-item-label>Audit Log</q-item-label></q-item-section>
               </q-item>
+              <q-item clickable v-ripple to="/admin/queries" class="nav-item" active-class="is-active">
+                <q-item-section avatar><q-icon name="terminal" size="20px" color="grey-7" /></q-item-section>
+                <q-item-section><q-item-label>Query Inspector</q-item-label></q-item-section>
+              </q-item>
+            </template>
+
+            <!-- DEVELOPER MENU -->
+            <template v-else-if="authStore.isDeveloper">
+              <q-item clickable v-ripple to="/dev/queries" exact class="nav-item" active-class="is-active">
+                <q-item-section avatar><q-icon name="terminal" size="20px" color="grey-7" /></q-item-section>
+                <q-item-section><q-item-label>Query Inspector</q-item-label></q-item-section>
+              </q-item>
             </template>
 
             <!-- PETUGAS MENU -->

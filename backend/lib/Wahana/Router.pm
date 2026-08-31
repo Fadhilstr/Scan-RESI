@@ -45,6 +45,7 @@ my @ROUTES = (
     [ 'PATCH',  qr{^/api/paket/([^/]+)$},              \&Wahana::Controller::PaketController::update,        { auth => 1 } ],
     [ 'GET',    qr{^/api/paket/([^/]+)$},              \&Wahana::Controller::PaketController::detail,        { auth => 1 } ],
     [ 'GET',    qr{^/api/audit-logs$},                 \&Wahana::Controller::AuditController::list,          { auth => 1, admin => 1 } ],
+    [ 'GET',    qr{^/api/dev/procedures$},             \&Wahana::Controller::DocsController::get_procedures, { auth => 1, dev => 1 } ],
 );
 
 # Titik masuk utama semua adapter (dev server HTTP & CGI produksi).
@@ -67,7 +68,7 @@ sub handle_request {
         my @captures = $path =~ $r_regex or next;
 
         # --- Middleware Auth ---
-        if ($meta->{auth} || $meta->{admin}) {
+        if ($meta->{auth} || $meta->{admin} || $meta->{dev}) {
             my $payload = Wahana::Auth->authenticate_request(\%req);
             return json_response(
                 status => 401,
@@ -80,6 +81,14 @@ sub handle_request {
                     status => 403,
                     data   => { success => \0, message => 'Akses ditolak. Hanya ADMIN.' }
                 ) unless defined $role && $role eq 'ADMIN';
+            }
+
+            if ($meta->{dev}) {
+                my $role = get_user_role($payload->{uid});
+                return json_response(
+                    status => 403,
+                    data   => { success => \0, message => 'Akses ditolak. Hanya DEVELOPER atau ADMIN.' }
+                ) unless defined $role && ($role eq 'DEVELOPER' || $role eq 'ADMIN');
             }
 
             $req{auth_user} = $payload;
