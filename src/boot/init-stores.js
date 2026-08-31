@@ -27,5 +27,11 @@ export default async () => {
       taskStore.fetchTasks(),
       scanStore.fetchScans()
     ])
+  } else if (authStore.isLoggedIn) {
+    try {
+      await authStore.prefetchOperationalData()
+    } catch (e) {
+      console.warn('[BOOT] Gagal sinkronisasi data sesi:', e)
+    }
   }
 }

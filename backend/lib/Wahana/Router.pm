@@ -29,6 +29,8 @@ my @ROUTES = (
     [ 'POST',   qr{^/api/auth/logout$},                \&Wahana::Controller::AuthController::logout,         {} ],
     [ 'GET',    qr{^/api/users$},                      \&Wahana::Controller::UsersController::list,          { auth => 1 } ],
     [ 'POST',   qr{^/api/users$},                      \&Wahana::Controller::UsersController::create,        { auth => 1, admin => 1 } ],
+    [ 'PUT',    qr{^/api/users/([^/]+)$},              \&Wahana::Controller::UsersController::update,        { auth => 1, admin => 1 } ],
+    [ 'DELETE', qr{^/api/users/([^/]+)$},              \&Wahana::Controller::UsersController::delete,        { auth => 1, admin => 1 } ],
     [ 'PATCH',  qr{^/api/users/([^/]+)/status$},       \&Wahana::Controller::UsersController::toggle_status, { auth => 1, admin => 1 } ],
     [ 'GET',    qr{^/api/tasks$},                      \&Wahana::Controller::TasksController::list,          { auth => 1 } ],
     [ 'POST',   qr{^/api/tasks$},                      \&Wahana::Controller::TasksController::create,        { auth => 1, admin => 1 } ],

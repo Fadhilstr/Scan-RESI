@@ -16,15 +16,29 @@ import {
   logout as svcLogout,
   getUsers as svcGetUsers,
   addUser as svcAddUser,
+  updateUser as svcUpdateUser,
+  deleteUser as svcDeleteUser,
   toggleUserStatus as svcToggleUserStatus
 } from '../services/auth.service'
 import { useTaskStore } from './taskStore'
 import { useScanStore } from './scanStore'
+import { usePaketStore } from './paketStore'
+
+const getSavedUser = () => {
+  try {
+    const raw = localStorage.getItem('wahana_user')
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+const savedUser = getSavedUser()
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    currentUser: null,
-    isLoggedIn: false,
+    currentUser: savedUser,
+    isLoggedIn: !!savedUser && (import.meta.env.VITE_USE_LOCAL_DATA === 'true' || !!localStorage.getItem('wahana_token')),
 
     // Daftar user (diisi via fetchUsers)
     users: [],
@@ -51,10 +65,12 @@ export const useAuthStore = defineStore('auth', {
     async prefetchOperationalData() {
       const taskStore = useTaskStore()
       const scanStore = useScanStore()
+      const paketStore = usePaketStore()
       await Promise.all([
         this.fetchUsers(),
         taskStore.fetchTasks(),
-        scanStore.fetchScans()
+        scanStore.fetchScans(),
+        paketStore.fetchPakets()
       ])
     },
 
@@ -70,6 +86,7 @@ export const useAuthStore = defineStore('auth', {
         if (result.success) {
           this.currentUser = result.user
           this.isLoggedIn = true
+          localStorage.setItem('wahana_user', JSON.stringify(result.user))
           await this.prefetchOperationalData()
         }
         return result
@@ -92,6 +109,7 @@ export const useAuthStore = defineStore('auth', {
         if (result.success) {
           this.currentUser = result.user
           this.isLoggedIn = true
+          localStorage.setItem('wahana_user', JSON.stringify(result.user))
           await this.prefetchOperationalData()
         }
         return result
@@ -112,6 +130,8 @@ export const useAuthStore = defineStore('auth', {
       }
       this.currentUser = null
       this.isLoggedIn = false
+      localStorage.removeItem('wahana_user')
+      localStorage.removeItem('wahana_token')
     },
 
     /**
@@ -132,6 +152,42 @@ export const useAuthStore = defineStore('auth', {
       this.isLoading = true
       try {
         const result = await svcAddUser(newUserData)
+        if (result.success) {
+          await this.fetchUsers()
+        }
+        return result
+      } catch (err) {
+        return { success: false, message: err.message }
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    /**
+     * Update data user.
+     */
+    async updateUser(userId, userData) {
+      this.isLoading = true
+      try {
+        const result = await svcUpdateUser(userId, userData)
+        if (result.success) {
+          await this.fetchUsers()
+        }
+        return result
+      } catch (err) {
+        return { success: false, message: err.message }
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    /**
+     * Hapus user.
+     */
+    async deleteUser(userId) {
+      this.isLoading = true
+      try {
+        const result = await svcDeleteUser(userId)
         if (result.success) {
           await this.fetchUsers()
         }

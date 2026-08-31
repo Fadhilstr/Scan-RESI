@@ -29,7 +29,6 @@ const LOCAL_USERS = [
     username: 'admin',
     password: 'admin123',
     role: 'ADMIN',
-    supervisor_id: null,
     status: 'ONLINE',
     lastLogin: '28-08-2026 08:00:00'
   },
@@ -39,7 +38,6 @@ const LOCAL_USERS = [
     username: 'fadhil',
     password: 'fadhil123',
     role: 'PETUGAS_SCAN',
-    supervisor_id: null,
     status: 'ONLINE',
     lastLogin: '28-08-2026 10:20:00'
   },
@@ -49,7 +47,6 @@ const LOCAL_USERS = [
     username: 'budi',
     password: 'budi123',
     role: 'PETUGAS_SCAN',
-    supervisor_id: null,
     status: 'ONLINE',
     lastLogin: '28-08-2026 09:45:00'
   },
@@ -59,7 +56,6 @@ const LOCAL_USERS = [
     username: 'andi',
     password: 'andi123',
     role: 'PETUGAS_SCAN',
-    supervisor_id: null,
     status: 'OFFLINE',
     lastLogin: '23-08-2026 17:30:00'
   },
@@ -69,7 +65,6 @@ const LOCAL_USERS = [
     username: 'customer',
     password: 'cust123',
     role: 'CUSTOMER',
-    supervisor_id: null,
     status: 'OFFLINE',
     lastLogin: '28-08-2026 09:00:00'
   }
@@ -235,15 +230,22 @@ export async function getUsers() {
  * @returns {Promise<{success, user}>}
  */
 export async function addUser(newUserData) {
+  const role = typeof newUserData.role === 'object' && newUserData.role !== null
+    ? (newUserData.role.value || newUserData.role.label || 'PETUGAS_SCAN')
+    : (newUserData.role || 'PETUGAS_SCAN')
+
   if (USE_LOCAL_DATA) {
-    const newId = `USR-${String(LOCAL_USERS.length + 1).padStart(3, '0')}`
+    const isCustomer = role === 'CUSTOMER'
+    const newId = isCustomer
+      ? `USR-CUST-${String(LOCAL_USERS.filter((u) => u.role === 'CUSTOMER').length + 1).padStart(3, '0')}`
+      : `USR-${String(LOCAL_USERS.filter((u) => u.role !== 'CUSTOMER').length + 1).padStart(3, '0')}`
+
     const created = {
       id: newId,
       name: newUserData.name,
       username: newUserData.username,
       password: newUserData.password || '123456',
-      role: newUserData.role || 'PETUGAS_SCAN',
-      supervisor_id: null,
+      role,
       status: 'OFFLINE',
       lastLogin: '-'
     }
@@ -253,7 +255,11 @@ export async function addUser(newUserData) {
 
   // --- API MODE ---
   // POST /api/users
-  const data = await api.post('/api/users', newUserData)
+  const payload = {
+    ...newUserData,
+    role
+  }
+  const data = await api.post('/api/users', payload)
   return { success: true, user: data.user }
 }
 
@@ -272,5 +278,58 @@ export async function toggleUserStatus(userId) {
   // --- API MODE ---
   // PATCH /api/users/:id/status
   const data = await api.patch(`/api/users/${userId}/status`)
-  return { success: true, newStatus: data.status }
+  return { success: true, newStatus: data.newStatus }
+}
+
+/**
+ * Update data user (ADMIN only).
+ * @param {string} userId
+ * @param {object} userData
+ * @returns {Promise<{success, user, message}>}
+ */
+export async function updateUser(userId, userData) {
+  const role = typeof userData.role === 'object' && userData.role !== null
+    ? (userData.role.value || userData.role.label || 'PETUGAS_SCAN')
+    : (userData.role || 'PETUGAS_SCAN')
+
+  if (USE_LOCAL_DATA) {
+    const idx = LOCAL_USERS.findIndex((u) => u.id === userId)
+    if (idx === -1) return { success: false, message: 'User tidak ditemukan.' }
+    LOCAL_USERS[idx] = {
+      ...LOCAL_USERS[idx],
+      name: userData.name || LOCAL_USERS[idx].name,
+      username: userData.username || LOCAL_USERS[idx].username,
+      role
+    }
+    if (userData.password) LOCAL_USERS[idx].password = userData.password
+    return { success: true, user: { ...LOCAL_USERS[idx] } }
+  }
+
+  // --- API MODE ---
+  // PUT /api/users/:id
+  const payload = {
+    ...userData,
+    role
+  }
+  const data = await api.put(`/api/users/${userId}`, payload)
+  return data
+}
+
+/**
+ * Delete user (ADMIN only).
+ * @param {string} userId
+ * @returns {Promise<{success, message}>}
+ */
+export async function deleteUser(userId) {
+  if (USE_LOCAL_DATA) {
+    const idx = LOCAL_USERS.findIndex((u) => u.id === userId)
+    if (idx === -1) return { success: false, message: 'User tidak ditemukan.' }
+    LOCAL_USERS.splice(idx, 1)
+    return { success: true, message: 'User berhasil dihapus.' }
+  }
+
+  // --- API MODE ---
+  // DELETE /api/users/:id
+  const data = await api.delete(`/api/users/${userId}`)
+  return data
 }

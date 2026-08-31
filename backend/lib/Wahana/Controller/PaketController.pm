@@ -102,6 +102,9 @@ sub create_draft {
           WHERE p.nomor_resi = ?', undef, $resi
     );
 
+    return { success => \0, message => 'Gagal menyimpan draft paket ke database.' }
+        unless $row;
+
     return { success => \1, paket => map_paket($row) };
 }
 

@@ -84,17 +84,13 @@ sudo ln -s /etc/nginx/sites-available/wahana /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-## Akun Demo (PRD bagian 3)
+## Akun Bawaan (Admin Master)
 
 | User | Username | Password | Role |
 |------|----------|----------|------|
 | Admin System | `admin` | `admin123` | ADMIN |
-| Supervisor A | `supervisor` | `supervisor123` | SUPERVISOR |
-| Fadhil | `fadhil` | `fadhil123` | PETUGAS_SCAN |
-| Budi | `budi` | `budi123` | PETUGAS_SCAN |
-| Andi | `andi` | `andi123` | PETUGAS_SCAN |
 
-Tersedia juga **1-Click Quick Login** di halaman `/login`.
+Akun peran lain (`PETUGAS_SCAN`, `CUSTOMER`) dibuat secara dinamis melalui antarmuka **User Management** oleh Admin atau registrasi Customer.
 
 ## Kontrak API (dikonsumsi src/services)
 
@@ -104,6 +100,8 @@ Tersedia juga **1-Click Quick Login** di halaman `/login`.
 | POST | `/api/auth/quick-login` | Demo FR-1.2 → `{ success, user, token }` |
 | POST | `/api/auth/logout` | Tutup sesi |
 | GET/POST | `/api/users` | List / create user (create = ADMIN) |
+| PUT | `/api/users/:id` | Update nama, username, password, role (ADMIN) |
+| DELETE | `/api/users/:id` | Hapus user tanpa riwayat transaksi (ADMIN) |
 | PATCH | `/api/users/:id/status` | Toggle ENABLED/DISABLED (ADMIN) |
 | GET/POST | `/api/tasks` | List (+filter `user_id`,`status`) / create |
 | PATCH | `/api/tasks/:id/progress` | Increment progress |

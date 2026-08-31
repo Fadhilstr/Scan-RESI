@@ -111,12 +111,60 @@ paths:
                   type: string
                 role:
                   type: string
-                  enum: [ADMIN, SUPERVISOR, PETUGAS, CUSTOMER]
+                  enum: [ADMIN, PETUGAS_SCAN, CUSTOMER]
                 password:
                   type: string
       responses:
         '201':
           description: Pengguna berhasil dibuat
+
+  /users/{id}:
+    put:
+      summary: Perbarui data pengguna (Khusus Admin)
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                username:
+                  type: string
+                password:
+                  type: string
+                role:
+                  type: string
+                  enum: [ADMIN, PETUGAS_SCAN, CUSTOMER]
+      responses:
+        '200':
+          description: Pengguna berhasil diperbarui
+    delete:
+      summary: Hapus pengguna (Khusus Admin)
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pengguna berhasil dihapus
 
   /users/{id}/status:
     patch:

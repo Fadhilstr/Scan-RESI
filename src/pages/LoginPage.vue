@@ -117,13 +117,11 @@ const $q = useQuasar()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const username = ref('fadhil')
-const password = ref('fadhil123')
+const username = ref('admin')
+const password = ref('admin123')
 
 const quickAccounts = [
-  { userId: 'USR-ADMIN-001', label: 'Admin', icon: 'admin_panel_settings' },
-  { userId: 'USR-CUST-001', label: 'Customer', icon: 'person' },
-  { userId: 'USR-001', label: 'Petugas', icon: 'badge' }
+  { userId: 'USR-ADMIN-001', label: 'Admin (Master)', icon: 'admin_panel_settings' }
 ]
 
 const handleLogin = async () => {

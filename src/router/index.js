@@ -1,4 +1,5 @@
 import { route } from 'quasar/wrappers'
+import { Notify } from 'quasar'
 import {
   createMemoryHistory,
   createRouter,
@@ -20,37 +21,39 @@ export default route((/* { store, ssrContext } */) => {
     history: createHistory(import.meta.env.QUASAR_VUE_ROUTER_BASE)
   })
 
-  // Role Protection Guard (Requirement J & TEST 8)
+  // Role Protection Guard (Strict Multi-Layer RBAC)
   Router.beforeEach((to, from, next) => {
     const authStore = useAuthStore()
 
-    // 1. If not logged in and accessing protected route
+    // 1. Jika belum login dan mengakses rute berproteksi -> arahkan ke login
     if (to.meta.requiresAuth && !authStore.isLoggedIn) {
       return next({ name: 'login' })
     }
 
-    // 2. If logged in and visiting login page
+    // 2. Jika sudah login dan membuka halaman login -> arahkan ke dashboard masing-masing
     if (to.path === '/login' && authStore.isLoggedIn) {
       if (authStore.isAdmin) return next({ name: 'admin-dashboard' })
       if (authStore.isCustomer) return next({ name: 'customer-dashboard' })
       return next({ name: 'petugas-dashboard' })
     }
 
-    // 3. Role Access Restrictions
+    // 3. Pembatasan Akses Role Ketat:
+    // Setiap rute utama (/admin, /petugas, /customer) memiliki meta.role yang harus cocok
     if (authStore.isLoggedIn) {
-      // Petugas trying to access Admin routes
-      if (authStore.isPetugas && to.path.startsWith('/admin')) {
-        return next({ name: 'petugas-dashboard' })
-      }
+      const requiredRole = to.matched.find((r) => r.meta && r.meta.role)?.meta?.role
+      if (requiredRole && requiredRole !== authStore.role) {
+        // Tampilkan Alert Akses Ditolak
+        Notify.create({
+          type: 'negative',
+          icon: 'gpp_bad',
+          message: 'Akses Ditolak!',
+          caption: `Halaman ini khusus untuk ${requiredRole}. Akun Anda adalah ${authStore.role}.`,
+          position: 'top',
+          timeout: 3000
+        })
 
-      // Customer hanya boleh portal customer
-      if (authStore.isCustomer && !to.path.startsWith('/customer')) {
-        return next({ name: 'customer-dashboard' })
-      }
-
-      // Role non-customer dilarang masuk portal customer
-      if (!authStore.isCustomer && to.path.startsWith('/customer')) {
         if (authStore.isAdmin) return next({ name: 'admin-dashboard' })
+        if (authStore.isCustomer) return next({ name: 'customer-dashboard' })
         return next({ name: 'petugas-dashboard' })
       }
     }
