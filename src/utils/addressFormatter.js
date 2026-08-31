@@ -257,3 +257,95 @@ export function extractCityAndZip(addressSource, fallbackCity = '') {
   return city || fallbackCity
 }
 
+/**
+ * Masking nomor telepon untuk cetak label Customer.
+ * Ketentuan:
+ * - Pertahankan 2 digit pertama.
+ * - Pertahankan 2 digit terakhir.
+ * - Semua digit di tengah diganti dengan '*'.
+ * - Contoh: 081234567890 -> 08********90
+ * @param {string} phone
+ * @returns {string}
+ */
+export function maskPhone(phone) {
+  if (!phone) return ''
+  const str = String(phone).trim()
+  const digits = str.replace(/\D/g, '')
+  if (digits.length <= 4) {
+    return str
+  }
+  const first2 = digits.slice(0, 2)
+  const last2 = digits.slice(-2)
+  const middleAsterisks = '*'.repeat(digits.length - 4)
+  return `${first2}${middleAsterisks}${last2}`
+}
+
+/**
+ * Masking alamat untuk cetak label Customer.
+ * Ketentuan:
+ * - Detail nomor rumah, nama jalan lengkap, blok, RT/RW dsb diganti bintang.
+ * - Pertahankan informasi wilayah yang berguna seperti kota/kabupaten atau provinsi jika tersedia.
+ * - Contoh: "Jl. Contoh No. 123, Jakarta Selatan" -> "Jl. ************, Jakarta Selatan"
+ * @param {string|Array} addressInput - String alamat atau array baris alamat
+ * @param {Object} [detailObj] - Objek terstruktur detail alamat jika ada
+ * @returns {string}
+ */
+export function maskAddress(addressInput, detailObj = null) {
+  let addressStr = ''
+  if (Array.isArray(addressInput)) {
+    addressStr = addressInput.join(', ')
+  } else if (typeof addressInput === 'string') {
+    addressStr = addressInput.trim()
+  }
+
+  // 1. Ekstrak informasi wilayah (Kota / Kabupaten / Provinsi / Kode Pos)
+  let regionInfo = ''
+
+  if (detailObj && typeof detailObj === 'object') {
+    const city = (detailObj.kota || detailObj.kabupaten || detailObj.kota_kabupaten || '').trim()
+    const prov = (detailObj.provinsi || '').trim()
+    const zip = (detailObj.kode_pos || detailObj.kodepos || '').trim()
+
+    const regParts = []
+    if (city) regParts.push(city)
+    if (prov) regParts.push(prov)
+    if (zip) regParts.push(zip)
+
+    if (regParts.length > 0) {
+      regionInfo = regParts.join(', ')
+    }
+  }
+
+  if (!regionInfo && addressStr) {
+    const extractedCity = extractCityFromAddress(addressStr, '')
+    const parts = addressStr.split(/,\s*/)
+    if (parts.length >= 2) {
+      const cityIndex = parts.findIndex(p => extractedCity && p.toLowerCase().includes(extractedCity.toLowerCase()))
+      if (cityIndex > 0) {
+        regionInfo = parts.slice(cityIndex).join(', ')
+      } else {
+        regionInfo = parts.slice(1).join(', ')
+      }
+    } else if (extractedCity) {
+      regionInfo = extractedCity
+    }
+  }
+
+  // 2. Format street detail dengan masking "Jl. ************"
+  let prefix = 'Jl. '
+  if (/^jalan\b/i.test(addressStr)) {
+    prefix = 'Jalan '
+  } else if (/^gg\.?\b/i.test(addressStr) || /^gang\b/i.test(addressStr)) {
+    prefix = 'Gg. '
+  }
+
+  const maskedStreet = `${prefix}************`
+
+  if (regionInfo) {
+    return `${maskedStreet}, ${regionInfo}`
+  }
+
+  return maskedStreet
+}
+
+

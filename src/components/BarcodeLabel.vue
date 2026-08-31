@@ -101,7 +101,8 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import JsBarcode from 'jsbarcode'
 import { usePaketStore } from '../stores/paketStore'
-import { formatAddressInfo, extractCityFromAddress } from '../utils/addressFormatter'
+import { useAuthStore } from '../stores/authStore'
+import { formatAddressInfo, extractCityFromAddress, maskPhone, maskAddress } from '../utils/addressFormatter'
 
 const props = defineProps({
   modelValue: {
@@ -115,11 +116,23 @@ const props = defineProps({
   paketData: {
     type: Object,
     default: null
+  },
+  masked: {
+    type: Boolean,
+    default: undefined
   }
 })
 
 const emit = defineEmits(['update:modelValue'])
 const paketStore = usePaketStore()
+const authStore = useAuthStore()
+
+const isMasked = computed(() => {
+  if (props.masked !== undefined) {
+    return props.masked
+  }
+  return authStore.currentUser?.role === 'CUSTOMER'
+})
 
 const show = computed({
   get: () => props.modelValue,
@@ -164,19 +177,24 @@ const displayPengirimTlp = computed(() => {
                 currentPaket.value?.pengirim_detail?.telepon ||
                 pengirimFormatted.value?.phone ||
                 ''
-  return phone ? `No. Telp: ${phone}` : ''
+  if (!phone) return ''
+  const finalPhone = isMasked.value ? maskPhone(phone) : phone
+  return `No. Telp: ${finalPhone}`
 })
 
 const displayPengirimAlamat = computed(() => {
   const lines = pengirimFormatted.value?.addressLines
-  if (lines && lines.length > 0) return lines.join(', ')
-  if (currentPaket.value?.pengirim_alamat || currentPaket.value?.alamat_pengirim) {
-    return currentPaket.value.pengirim_alamat || currentPaket.value.alamat_pengirim
+  const rawAddr = (lines && lines.length > 0)
+    ? lines.join(', ')
+    : (currentPaket.value?.pengirim_alamat || currentPaket.value?.alamat_pengirim || currentPaket.value?.hub_asal || currentPaket.value?.kota_asal || '-')
+
+  if (rawAddr === '-') return '-'
+
+  if (isMasked.value) {
+    return maskAddress(rawAddr, currentPaket.value?.pengirim_detail)
   }
-  if (currentPaket.value?.hub_asal || currentPaket.value?.kota_asal) {
-    return currentPaket.value.hub_asal || currentPaket.value.kota_asal
-  }
-  return '-'
+
+  return rawAddr
 })
 
 const displayPenerimaNama = computed(() => {
@@ -188,15 +206,26 @@ const displayPenerimaTlp = computed(() => {
                 currentPaket.value?.penerima_detail?.telepon ||
                 penerimaFormatted.value?.phone ||
                 ''
-  return phone ? `No. Telp: ${phone}` : ''
+  if (!phone) return ''
+  const finalPhone = isMasked.value ? maskPhone(phone) : phone
+  return `No. Telp: ${finalPhone}`
 })
 
 const displayPenerimaAlamat = computed(() => {
   const lines = penerimaFormatted.value?.addressLines
-  if (lines && lines.length > 0) return lines.join(', ')
-  if (currentPaket.value?.alamat_tujuan) return currentPaket.value.alamat_tujuan
-  return '-'
+  const rawAddr = (lines && lines.length > 0)
+    ? lines.join(', ')
+    : (currentPaket.value?.alamat_tujuan || currentPaket.value?.hub_tujuan || currentPaket.value?.kota_tujuan || '-')
+
+  if (rawAddr === '-') return '-'
+
+  if (isMasked.value) {
+    return maskAddress(rawAddr, currentPaket.value?.penerima_detail)
+  }
+
+  return rawAddr
 })
+
 
 const displayJenisDanJumlah = computed(() => {
   const jenis = currentPaket.value?.nama_barang || currentPaket.value?.jenis_barang
