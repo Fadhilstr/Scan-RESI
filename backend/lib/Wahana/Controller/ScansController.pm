@@ -2,6 +2,7 @@ package Wahana::Controller::ScansController;
 use strict;
 use warnings;
 use Wahana::Db;
+use Wahana::Query;
 use Wahana::Util qw(fmt_datetime trim);
 use Wahana::Audit qw(record_audit);
 use Exporter 'import';
@@ -39,8 +40,8 @@ sub list {
     }
 
     my $dbh = Wahana::Db->connect();
-    my $sql = 'SELECT s.*, u.name AS user_name
-                 FROM scan_events s JOIN users u ON u.id = s.user_id'
+    my $base_sql = Wahana::Query->get('scans_list_base');
+    my $sql = $base_sql
         . (@where ? ' WHERE ' . join(' AND ', @where) : '')
         . ' ORDER BY s.scan_id DESC';
 
@@ -57,15 +58,15 @@ sub stats {
     my $dbh = Wahana::Db->connect();
 
     my ($success) = $dbh->selectrow_array(
-        "SELECT COUNT(*) FROM scan_events WHERE user_id = ? AND status_scan = 'SUCCESS'",
+        Wahana::Query->get('scans_stats_success'),
         undef, $user_id
     );
     my ($duplicate) = $dbh->selectrow_array(
-        "SELECT COUNT(*) FROM scan_events WHERE user_id = ? AND status_scan = 'DUPLICATE'",
+        Wahana::Query->get('scans_stats_duplicate'),
         undef, $user_id
     );
     my ($last) = $dbh->selectrow_array(
-        'SELECT MAX(waktu_scan) FROM scan_events WHERE user_id = ?',
+        Wahana::Query->get('scans_stats_last_scan'),
         undef, $user_id
     );
 
@@ -104,7 +105,7 @@ sub create {
     # --- Validasi ketat: hanya resi TERDAFTAR di tabel paket yang boleh discan ---
     # Resi tidak dikenal maupun masih DRAFT TIDAK dicatat sebagai scan event.
     my $paket = $dbh->selectrow_hashref(
-        'SELECT nomor_resi, status FROM paket WHERE nomor_resi = ?', undef, $resi
+        Wahana::Query->get('scans_check_paket_registered'), undef, $resi
     );
 
     unless ($paket) {
@@ -144,31 +145,24 @@ sub create {
     eval {
         # Kunci baris task untuk mencegah race condition antar petugas.
         my $task = $dbh->selectrow_hashref(
-            'SELECT * FROM tasks WHERE task_id = ? FOR UPDATE', undef, $task_id
+            Wahana::Query->get('scans_lock_task'), undef, $task_id
         );
         die "__notfound__" unless $task;
         die "__finished__" if $task->{status} eq 'SELESAI';
 
         my $dup = $dbh->selectrow_array(
-            "SELECT COUNT(*) FROM scan_events
-              WHERE task_id = ? AND UPPER(nomor_resi) = ? AND status_scan = 'SUCCESS'",
-            undef, $task_id, $resi
+            Wahana::Query->get('scans_check_duplicate'),
+            undef, $resi, $task_id
         );
 
         # Generate scan_id berurutan: SCN-00008, SCN-00009, ...
-        my $max_num = $dbh->selectrow_array(
-            "SELECT COALESCE(MAX(CAST(SUBSTRING(scan_id, 5) AS UNSIGNED)), 0)
-               FROM scan_events WHERE scan_id REGEXP '^SCN-[0-9]+\$'"
-        );
+        my $max_num = $dbh->selectrow_array(Wahana::Query->get('scans_get_max_id'));
         my $scan_id = sprintf 'SCN-%05d', $max_num + 1;
 
         my $status = $dup ? 'DUPLICATE' : 'SUCCESS';
 
         $dbh->do(
-            'INSERT INTO scan_events
-                (scan_id, nomor_resi, user_id, task_id, waktu_scan,
-                 lokasi, status_scan, device_id, jenis_scan)
-             VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?)',
+            Wahana::Query->get('scans_insert'),
             undef,
             $scan_id, $resi, $user_id, $task_id,
             trim($body->{lokasi}      // '') || $task->{lokasi} || 'CIPUTAT',
@@ -178,15 +172,13 @@ sub create {
         ) or die "insert gagal: " . ($dbh->errstr // '');
 
         # Progress hanya bertambah untuk scan SUCCESS (FR-4.2)
-        $dbh->do('UPDATE tasks SET progress = progress + 1 WHERE task_id = ?', undef, $task_id)
+        $dbh->do(Wahana::Query->get('tasks_increment_progress'), undef, 1, $task_id)
             unless $dup;
 
         $dbh->commit();
 
         my $row = $dbh->selectrow_hashref(
-            'SELECT s.*, u.name AS user_name
-               FROM scan_events s JOIN users u ON u.id = s.user_id
-              WHERE s.scan_id = ?', undef, $scan_id
+            Wahana::Query->get('scans_get_by_id'), undef, $scan_id
         );
         my $scan_obj = map_scan($row);
 

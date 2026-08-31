@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use POSIX qw(strftime);
 use Wahana::Db;
+use Wahana::Query;
 use Wahana::Util qw(fmt_datetime trim);
 use Wahana::Audit qw(record_audit);
 use Wahana::Controller::UsersController qw(get_user_role);
@@ -45,7 +46,7 @@ sub generate_resi {
             1 .. $RESI_LEN;
 
         my $exists = $dbh->selectrow_array(
-            'SELECT COUNT(*) FROM paket WHERE nomor_resi = ?', undef, $resi
+            Wahana::Query->get('paket_check_resi_exists'), undef, $resi
         );
         return $resi unless $exists;
     }
@@ -85,8 +86,8 @@ sub create_draft {
     }
 
     $dbh->do(
-        'INSERT INTO paket (nomor_resi, status, created_by, telepon_pengirim, telepon_penerima, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
-        undef, $resi, 'DRAFT', $user_id, '', ''
+        Wahana::Query->get('paket_insert_draft'),
+        undef, $resi, $user_id
     );
 
     record_audit(
@@ -97,9 +98,7 @@ sub create_draft {
     );
 
     my $row = $dbh->selectrow_hashref(
-        'SELECT p.*, u.name AS creator_name
-           FROM paket p LEFT JOIN users u ON u.id = p.created_by
-          WHERE p.nomor_resi = ?', undef, $resi
+        Wahana::Query->get('paket_get_detail'), undef, $resi
     );
 
     return { success => \0, message => 'Gagal menyimpan draft paket ke database.' }
@@ -124,7 +123,7 @@ sub update {
     my $dbh = Wahana::Db->connect();
 
     my $paket = $dbh->selectrow_hashref(
-        'SELECT * FROM paket WHERE nomor_resi = ?', undef, $resi
+        Wahana::Query->get('paket_get_by_resi'), undef, $resi
     );
     return { success => \0, reason => 'NOT_FOUND', message => 'Paket tidak ditemukan.' }
         unless $paket;
@@ -170,16 +169,11 @@ sub update {
     }
 
     $dbh->do(
-        'UPDATE paket
-            SET nama_barang = ?, pengirim = ?, alamat_pengirim = ?, telepon_pengirim = ?,
-                penerima = ?, alamat_tujuan = ?, telepon_penerima = ?,
-                berat_kg = ?, jenis_layanan = ?, status = ?,
-                created_at = NOW()
-          WHERE nomor_resi = ?',
+        Wahana::Query->get('paket_update_data'),
         undef, $nama, $pengirim, $alamat_pengirim, $telepon_pengirim,
             $penerima, $alamat_tujuan, $telepon_penerima,
             $berat, $layanan,
-        'TERDAFTAR', $resi
+            $resi
     );
 
     record_audit(
@@ -190,9 +184,7 @@ sub update {
     );
 
     my $row = $dbh->selectrow_hashref(
-        'SELECT p.*, u.name AS creator_name
-           FROM paket p LEFT JOIN users u ON u.id = p.created_by
-          WHERE p.nomor_resi = ?', undef, $resi
+        Wahana::Query->get('paket_get_detail'), undef, $resi
     );
 
     return { success => \1, message => "Paket $resi berhasil disimpan.",
@@ -234,8 +226,8 @@ sub list {
     }
 
     my $dbh = Wahana::Db->connect();
-    my $sql = 'SELECT p.*, u.name AS creator_name
-                 FROM paket p LEFT JOIN users u ON u.id = p.created_by'
+    my $base_sql = Wahana::Query->get('paket_list_base');
+    my $sql = $base_sql
         . (@where ? ' WHERE ' . join(' AND ', @where) : '')
         . ' ORDER BY p.created_at DESC, p.nomor_resi DESC';
 
@@ -256,9 +248,7 @@ sub detail {
 
     my $dbh = Wahana::Db->connect();
     my $row = $dbh->selectrow_hashref(
-        'SELECT p.*, u.name AS creator_name
-           FROM paket p LEFT JOIN users u ON u.id = p.created_by
-          WHERE p.nomor_resi = ?', undef, $resi
+        Wahana::Query->get('paket_get_detail'), undef, $resi
     );
 
     return { success => \0, reason => 'NOT_FOUND', message => 'Paket tidak ditemukan.' }

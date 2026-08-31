@@ -2,6 +2,7 @@ package Wahana::Controller::AuthController;
 use strict;
 use warnings;
 use Wahana::Db;
+use Wahana::Query;
 use Wahana::Auth ();
 use Wahana::Util qw(trim);
 use Wahana::Audit qw(record_audit);
@@ -20,10 +21,8 @@ sub login {
         unless length $username && length $password;
 
     my $dbh = Wahana::Db->connect();
-    my $row = $dbh->selectrow_hashref(
-        'SELECT * FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1',
-        undef, $username
-    );
+    my $sql = Wahana::Query->get('auth_get_user_by_username');
+    my $row = $dbh->selectrow_hashref($sql, undef, $username);
 
     if (!$row || !Wahana::Auth->verify_password($password, $row->{password_hash})) {
         record_audit(
@@ -38,8 +37,7 @@ sub login {
     return { success => \0, message => 'Akun Anda telah dinonaktifkan.' }
         if $row->{status} eq 'DISABLED';
 
-    $dbh->do("UPDATE users SET status = 'ONLINE', last_login = NOW() WHERE id = ?",
-        undef, $row->{id});
+    $dbh->do(Wahana::Query->get('auth_update_user_online'), undef, $row->{id});
 
     my $token = Wahana::Auth->issue_token($row->{id});
 
@@ -74,7 +72,8 @@ sub quick_login {
         unless length $user_id;
 
     my $dbh = Wahana::Db->connect();
-    my $row = $dbh->selectrow_hashref('SELECT * FROM users WHERE id = ?', undef, $user_id);
+    my $sql = Wahana::Query->get('auth_get_user_by_id');
+    my $row = $dbh->selectrow_hashref($sql, undef, $user_id);
 
     return { success => \0, message => 'User tidak ditemukan.' }
         unless $row;
@@ -82,8 +81,7 @@ sub quick_login {
     return { success => \0, message => 'Akun Anda telah dinonaktifkan.' }
         if $row->{status} eq 'DISABLED';
 
-    $dbh->do("UPDATE users SET status = 'ONLINE', last_login = NOW() WHERE id = ?",
-        undef, $row->{id});
+    $dbh->do(Wahana::Query->get('auth_update_user_online'), undef, $row->{id});
 
     my $token = Wahana::Auth->issue_token($row->{id});
 
@@ -114,7 +112,7 @@ sub logout {
 
     if ($uid) {
         my $dbh = Wahana::Db->connect();
-        $dbh->do("UPDATE users SET status = 'OFFLINE' WHERE id = ?", undef, $uid);
+        $dbh->do(Wahana::Query->get('auth_update_user_offline'), undef, $uid);
 
         record_audit(
             user_id    => $uid,
