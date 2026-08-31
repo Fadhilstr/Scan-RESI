@@ -154,7 +154,17 @@
                 </div>
                 <div class="column q-gutter-y-xs">
                   <q-input v-model="form.pengirim_nama" outlined dense label="1. Nama Lengkap *" bg-color="white" required />
-                  <q-input v-model="form.pengirim_telepon" outlined dense label="2. Nomor Telepon" bg-color="white" />
+                  <q-input
+                    v-model="form.pengirim_telepon"
+                    outlined
+                    dense
+                    label="2. Nomor Telepon *"
+                    bg-color="white"
+                    required
+                    :rules="[val => val && /^\d{8,15}$/.test(val) || 'Nomor telepon 8-15 digit angka']"
+                    type="tel"
+                    inputmode="numeric"
+                  />
                   <q-input v-model="form.pengirim_alamat" outlined dense label="3. Alamat / Nama Jalan *" bg-color="white" required />
                   
                   <div class="row q-col-gutter-xs">
@@ -195,7 +205,17 @@
                 </div>
                 <div class="column q-gutter-y-xs">
                   <q-input v-model="form.penerima_nama" outlined dense label="1. Nama Lengkap *" bg-color="white" required />
-                  <q-input v-model="form.penerima_telepon" outlined dense label="2. Nomor Telepon" bg-color="white" />
+                  <q-input
+                    v-model="form.penerima_telepon"
+                    outlined
+                    dense
+                    label="2. Nomor Telepon *"
+                    bg-color="white"
+                    required
+                    :rules="[val => val && /^\d{8,15}$/.test(val) || 'Nomor telepon 8-15 digit angka']"
+                    type="tel"
+                    inputmode="numeric"
+                  />
                   <q-input v-model="form.penerima_alamat" outlined dense label="3. Alamat / Nama Jalan *" bg-color="white" required />
 
                   <div class="row q-col-gutter-xs">
@@ -252,7 +272,7 @@
 
 <script setup>
 import { ref, reactive, watch, nextTick, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import JsBarcode from 'jsbarcode'
 import { useAuthStore } from '../../stores/authStore'
@@ -262,6 +282,7 @@ import BarcodeLabel from '../../components/BarcodeLabel.vue'
 
 const $q = useQuasar()
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const paketStore = usePaketStore()
 
@@ -397,8 +418,10 @@ const handleSave = async () => {
     berat_kg: form.berat_kg,
     pengirim: form.pengirim_nama,
     alamat_pengirim: buildSingleLineAddress(pengirim_detail),
+    telepon_pengirim: form.pengirim_telepon,
     penerima: form.penerima_nama,
     alamat_tujuan: buildSingleLineAddress(penerima_detail),
+    telepon_penerima: form.penerima_telepon,
     pengirim_detail,
     penerima_detail,
     hub_asal: form.pengirim_kota || 'Jakarta',

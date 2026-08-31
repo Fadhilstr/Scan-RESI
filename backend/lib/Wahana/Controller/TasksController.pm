@@ -3,6 +3,7 @@ use strict;
 use warnings;
 use POSIX qw(strftime);
 use Wahana::Db;
+use Wahana::Query;
 use Wahana::Util qw(fmt_date iso_date trim);
 use Wahana::Audit qw(record_audit);
 use Exporter 'import';
@@ -41,8 +42,8 @@ sub list {
     }
 
     my $dbh = Wahana::Db->connect();
-    my $sql = 'SELECT t.*, u.name AS user_name
-                 FROM tasks t JOIN users u ON u.id = t.user_id'
+    my $base_sql = Wahana::Query->get('tasks_list_base');
+    my $sql = $base_sql
         . (@where ? ' WHERE ' . join(' AND ', @where) : '')
         . ' ORDER BY t.task_id DESC';
 
@@ -72,21 +73,17 @@ sub create {
 
     # User harus ada
     my $user_exists = $dbh->selectrow_array(
-        'SELECT COUNT(*) FROM users WHERE id = ?', undef, $user_id
+        Wahana::Query->get('tasks_check_user_exists'), undef, $user_id
     );
     return { success => \0, message => "User '$user_id' tidak ditemukan." }
         unless $user_exists;
 
     # Generate ID berurutan: TASK-004, TASK-005, ...
-    my $max_num = $dbh->selectrow_array(
-        "SELECT COALESCE(MAX(CAST(SUBSTRING(task_id, 6) AS UNSIGNED)), 0)
-           FROM tasks WHERE task_id REGEXP '^TASK-[0-9]+\$'"
-    );
+    my $max_num = $dbh->selectrow_array(Wahana::Query->get('tasks_get_max_id'));
     my $new_id = sprintf 'TASK-%03d', $max_num + 1;
 
     $dbh->do(
-        "INSERT INTO tasks (task_id, user_id, shift, tanggal, target, progress, status, lokasi)
-         VALUES (?, ?, ?, ?, ?, 0, 'PROSES_SCAN', ?)",
+        Wahana::Query->get('tasks_insert'),
         undef, $new_id, $user_id, $shift, $tanggal, $target, $lokasi
     );
 
@@ -98,8 +95,7 @@ sub create {
     );
 
     my $row = $dbh->selectrow_hashref(
-        'SELECT t.*, u.name AS user_name FROM tasks t JOIN users u ON u.id = t.user_id
-          WHERE t.task_id = ?', undef, $new_id
+        Wahana::Query->get('tasks_get_by_id'), undef, $new_id
     );
 
     return { success => \1, task => map_task($row) };
@@ -112,8 +108,8 @@ sub progress {
 
     my $dbh = Wahana::Db->connect();
     my $rows = $dbh->do(
-        'UPDATE tasks SET progress = progress + 1 WHERE task_id = ? AND status <> ?',
-        undef, $task_id, 'SELESAI'
+        Wahana::Query->get('tasks_increment_progress'),
+        undef, 1, $task_id
     );
 
     return { success => \0, message => "Task $task_id tidak ditemukan atau sudah SELESAI." }
@@ -128,7 +124,7 @@ sub complete {
     my $task_id = $captures->[0];
 
     my $dbh = Wahana::Db->connect();
-    my $task = $dbh->selectrow_hashref('SELECT * FROM tasks WHERE task_id = ?', undef, $task_id);
+    my $task = $dbh->selectrow_hashref(Wahana::Query->get('tasks_get_by_id'), undef, $task_id);
 
     return { success => \0, message => 'Task tidak ditemukan.' }
         unless $task;
@@ -137,7 +133,7 @@ sub complete {
         return { success => \1, message => "Task $task_id sudah berstatus SELESAI." };
     }
 
-    $dbh->do("UPDATE tasks SET status = 'SELESAI' WHERE task_id = ?", undef, $task_id);
+    $dbh->do(Wahana::Query->get('tasks_complete'), undef, $task_id);
 
     record_audit(
         user_id    => $req->{auth_user}{uid},

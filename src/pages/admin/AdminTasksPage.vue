@@ -18,7 +18,14 @@
 
     <q-separator class="q-mb-lg" />
 
-    <div class="row q-col-gutter-md">
+    <div v-if="taskStore.allTasks.length === 0" class="text-center text-grey-6 q-pa-xl bg-white rounded-borders shadow-1">
+      <q-icon name="assignment" size="56px" color="grey-5" class="q-mb-sm" />
+      <div class="text-h6 text-weight-bold text-slate-800">Belum Ada Task / Batch</div>
+      <div class="text-body2 text-grey-6 q-mb-md">Klik tombol "Buat Task Baru" di atas untuk menugaskan alokasi scan ke petugas.</div>
+      <q-btn color="primary" icon="add_task" label="Buat Task Baru" no-caps unelevated @click="openAddTaskModal" />
+    </div>
+
+    <div v-else class="row q-col-gutter-md">
       <div v-for="task in taskStore.allTasks" :key="task.task_id" class="col-12 col-sm-6 col-md-4">
         <TaskCard :task="task" />
       </div>
@@ -76,7 +83,7 @@ const taskStore = useTaskStore()
 
 const showAddModal = ref(false)
 const newTask = ref({
-  user_id: 'USR-001',
+  user_id: '',
   target: 100,
   shift: 'Pagi',
   lokasi: 'CIPUTAT'
@@ -90,7 +97,23 @@ const petugasSelectOptions = computed(() => {
 })
 
 const openAddTaskModal = () => {
-  newTask.value = { user_id: 'USR-001', target: 100, shift: 'Pagi', lokasi: 'CIPUTAT' }
+  if (authStore.allPetugas.length === 0) {
+    $q.notify({
+      type: 'warning',
+      icon: 'people',
+      message: 'Belum ada akun Petugas Scan.',
+      caption: 'Silakan buat user Petugas terlebih dahulu di menu User Management.',
+      position: 'top',
+      timeout: 3000
+    })
+    return
+  }
+  newTask.value = {
+    user_id: authStore.allPetugas[0]?.id || '',
+    target: 100,
+    shift: 'Pagi',
+    lokasi: 'CIPUTAT'
+  }
   showAddModal.value = true
 }
 

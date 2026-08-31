@@ -2,6 +2,7 @@ package Wahana::Audit;
 use strict;
 use warnings;
 use Wahana::Db;
+use Wahana::Query;
 use Exporter 'import';
 
 our @EXPORT_OK = qw(record_audit);
@@ -13,8 +14,9 @@ sub record_audit {
 
     eval {
         my $dbh = Wahana::Db->connect();
+        my $sql = Wahana::Query->get('audit_insert');
         $dbh->do(
-            'INSERT INTO audit_logs (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)',
+            $sql,
             undef,
             $event{user_id},
             $event{action},

@@ -2,6 +2,7 @@ package Wahana::Controller::AuditController;
 use strict;
 use warnings;
 use Wahana::Db;
+use Wahana::Query;
 use Wahana::Util qw(fmt_datetime);
 use Exporter 'import';
 
@@ -28,8 +29,8 @@ sub list {
     $limit = 500 if $limit > 500;
 
     my $dbh = Wahana::Db->connect();
-    my $sql = 'SELECT a.*, u.name AS user_name
-                 FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id'
+    my $base_sql = Wahana::Query->get('audit_list_base');
+    my $sql = $base_sql
         . (@where ? ' WHERE ' . join(' AND ', @where) : '')
         . " ORDER BY a.log_id DESC LIMIT $limit";
 
