@@ -1,9 +1,11 @@
-# Rencana Final Arsitektur: Stored Procedures Mapping, Halaman Query Inspector & Role Developer
+# Rencana Final Arsitektur: Stored Procedures Mapping, Konfigurasi Cache Time & Request Timeout, UI Query Inspector & Role Developer
 
 Dokumen ini memuat spesifikasi arsitektur final lengkap yang mencakup:
 1. **Arsitektur Stored Procedures + Prepared Statements dengan Mapping Alias (`query/getusers` ➔ `sp_getusers`)**.
-2. **Penambahan Role `DEVELOPER`** ke dalam sistem RBAC.
-3. **Halaman Baru: "Database & Query Inspector"** untuk memonitor seluruh Stored Procedures langsung dari web portal.
+2. **Konfigurasi Fleksibel Per-Query: Cache Time (TTL) dan Request Timeout** yang dapat diatur saat Tambah & Edit Query di web.
+3. **Pengelolaan Siklus Hidup Stored Procedure (Tambah, Edit/Update via DROP & RECREATE, dan Hapus/DROP)**.
+4. **Penambahan Role `DEVELOPER`** ke dalam sistem RBAC.
+5. **Halaman Baru: "Database & Query Inspector" (`/dev/queries`)** yang menampilkan seluruh Stored Procedure, parameter, status database, serta form interaktif Tambah/Edit Query.
 
 ---
 
@@ -22,6 +24,8 @@ Dokumen ini memuat spesifikasi arsitektur final lengkap yang mencakup:
 │                  Backend (Perl uWSGI)                  │
 │   • Wahana::Router (Route Guard & Role Check)          │
 │   • Wahana::Procedure (Mapping 'query/...' -> 'sp_...')│
+│   • In-Memory Cache Manager (TTL Cache Time)           │
+│   • Statement Timeout Handler (Request Timeout)        │
 │   • Prepared Statements ($dbh->prepare("CALL sp_...")) │
 └───────────────────────────┬────────────────────────────┘
                             │ MySQL Protocol (Pre-compiled)
@@ -36,10 +40,20 @@ Dokumen ini memuat spesifikasi arsitektur final lengkap yang mencakup:
 
 ---
 
-## 2. Penambahan Role `DEVELOPER`
+## 2. Pengaturan Per-Query: Cache Time & Request Timeout
+
+Setiap Stored Procedure memiliki konfigurasi performa yang dapat disesuaikan pada form web:
+
+| Field Konfigurasi | Tipe Data | Nilai Default | Penjelasan |
+| :--- | :--- | :--- | :--- |
+| **`cache_ttl`** | Integer (Detik) | `0` (No Cache / Real-time) | Durasi penyimpanan hasil query di memori RAM. `0` untuk transaksi real-time (scan/paket), `300` (5 menit) untuk data statis. |
+| **`timeout_sec`** | Integer (Detik) | `5` (Detik) | Batas waktu maksimal eksekusi query sebelum dibatalkan otomatis agar server tidak macet (*hang*). |
+
+---
+
+## 3. Penambahan Role `DEVELOPER`
 
 ### A. Di Database (`schema.sql`)
-Menambahkan role `DEVELOPER` ke dalam enum tabel `users`:
 ```sql
 ALTER TABLE users 
   MODIFY role ENUM('ADMIN', 'PETUGAS_SCAN', 'CUSTOMER', 'DEVELOPER') NOT NULL DEFAULT 'PETUGAS_SCAN';
@@ -54,14 +68,13 @@ ON DUPLICATE KEY UPDATE name = VALUES(name);
 ```
 
 ### B. Hak Akses Portal Role `DEVELOPER`
-* Dapat mengakses **Developer Portal (`/dev/queries`)** untuk inspeksi query & prosedur.
-* Dapat mengakses **Swagger / OpenAPI Documentation**.
-* Dapat melihat **Audit Logs** dan **System Health / DB Connection**.
-* Memiliki role guard tersendiri di router frontend dan middleware backend.
+* Mengakses **Developer Portal (`/dev/queries`)** untuk memonitor, menambah, mengedit, dan mengatur cache/timeout query.
+* Mengakses **Swagger / OpenAPI Documentation**.
+* Mengakses **Audit Logs** dan **Database Performance Metrics**.
 
 ---
 
-## 3. Kumpulan Stored Procedures Database (`procedures.sql`)
+## 4. Kumpulan Lengkap Stored Procedures (`procedures.sql`)
 
 ```sql
 DELIMITER //
@@ -173,7 +186,7 @@ proc: BEGIN
 END //
 
 -- =====================================================================
--- 4. SYSTEM & PROCEDURE INSPECTOR (Untuk Halaman Dev)
+-- 4. SYSTEM & PROCEDURE INSPECTOR (Untuk Halaman Developer)
 -- =====================================================================
 
 DROP PROCEDURE IF EXISTS sp_dev_list_procedures //
@@ -181,7 +194,7 @@ CREATE PROCEDURE sp_dev_list_procedures()
 BEGIN
     SELECT ROUTINE_NAME AS procedure_name,
            ROUTINE_SCHEMA AS database_name,
-           ROUTINE_TYPE AS routine_type,
+           ROUTINE_DEFINITION AS routine_definition,
            CREATED AS created_at,
            LAST_ALTERED AS last_altered
       FROM information_schema.ROUTINES
@@ -194,48 +207,80 @@ DELIMITER ;
 
 ---
 
-## 4. Modul Mapper Backend (`Wahana/Procedure.pm`)
+## 5. Halaman Baru: "Database & Query Inspector" (`/dev/queries`)
+
+### Fitur Halaman:
+1. **Daftar Seluruh Stored Procedure & Parameter**:
+   * Tabel yang memuat ID Prosedur (`SP-001`), Alias (`query/getusers`), Nama Prosedur (`sp_getusers`), Nilai Cache Time, dan Nilai Timeout.
+2. **Modal Form Tambah & Edit Query Terpadu**:
+   * Input Alias & Nama Prosedur.
+   * Input **Cache Time (Detik)** (0 = no cache, 300 = 5 menit).
+   * Input **Request Timeout (Detik)** (Batas waktu eksekusi).
+   * Editor Kode SQL dengan *syntax highlighting*.
+3. **Database Health & Metrics**:
+   * Nama Database: `wahana_scan` (MariaDB).
+   * Status Koneksi: `ONLINE` (Port 3307 / 3306).
+   * Total Prosedur Terpasang: Dinamis dihitung dari database.
+4. **Simulator Uji Coba Query**:
+   * Developer dapat mengetes eksekusi prosedur dengan menginput parameter langsung di web.
+
+---
+
+## 6. Modul Mapper Backend (`Wahana/Procedure.pm`) dengan Cache & Timeout
 
 ```perl
 package Wahana::Procedure;
 use strict;
 use warnings;
+use Time::HiRes qw(time);
 use Wahana::Db;
 
-# Kamus Pemetaan Alias -> Stored Procedure
-my %PROC_MAP = (
-    'query/getusers'        => 'sp_getusers',
-    'query/getuserbyid'     => 'sp_getuserbyid',
-    'query/login'           => 'sp_login',
-    'query/update_online'   => 'sp_auth_update_status',
-    'query/create_draft'    => 'sp_paket_create_draft',
-    'query/save_paket'      => 'sp_paket_save',
-    'query/process_scan'    => 'sp_scans_process',
-    'dev/list_procedures'   => 'sp_dev_list_procedures',
+# Registry: ID -> Alias -> SP -> Cache TTL -> Timeout
+my %REGISTRY = (
+    'SP-001' => { id => 'SP-001', alias => 'query/getusers',      sp => 'sp_getusers',          cache_ttl => 0,   timeout => 5, desc => 'Ambil semua user' },
+    'SP-002' => { id => 'SP-002', alias => 'query/getuserbyid',   sp => 'sp_getuserbyid',       cache_ttl => 0,   timeout => 5, desc => 'Ambil user by ID' },
+    'SP-003' => { id => 'SP-003', alias => 'query/login',         sp => 'sp_login',             cache_ttl => 0,   timeout => 5, desc => 'Autentikasi login' },
+    'SP-004' => { id => 'SP-004', alias => 'query/update_online', sp => 'sp_auth_update_status',cache_ttl => 0,   timeout => 5, desc => 'Update online/offline' },
+    'SP-005' => { id => 'SP-005', alias => 'query/create_draft',  sp => 'sp_paket_create_draft', cache_ttl => 0,   timeout => 5, desc => 'Generate nomor resi' },
+    'SP-006' => { id => 'SP-006', alias => 'query/save_paket',    sp => 'sp_paket_save',         cache_ttl => 0,   timeout => 5, desc => 'Simpan data paket' },
+    'SP-007' => { id => 'SP-007', alias => 'query/process_scan',  sp => 'sp_scans_process',     cache_ttl => 0,   timeout => 5, desc => 'Transaksi scan barcode' },
+    'SP-008' => { id => 'SP-008', alias => 'dev/list_procedures', sp => 'sp_dev_list_procedures',cache_ttl => 60,  timeout => 5, desc => 'List semua prosedur' },
 );
 
+my %CACHE;
+my %ALIAS_MAP = map { $_->{alias} => $_ } values %REGISTRY;
+my %ID_MAP    = map { $_->{id}    => $_ } values %REGISTRY;
+
+sub _resolve_item {
+    my ($key) = @_;
+    return $ALIAS_MAP{$key} || $ID_MAP{$key};
+}
+
 sub get_all {
-    my ($class, $alias, @params) = @_;
-    my $proc_name = $PROC_MAP{$alias} or die "[PROC] Alias '$alias' tidak terdaftar!";
+    my ($class, $key, @params) = @_;
+    my $item = _resolve_item($key) or die "[PROC] Prosedur '$key' tidak ditemukan!";
+    
+    my $cache_key = $key . '_' . join(':', @params);
+    if ($item->{cache_ttl} > 0 && exists $CACHE{$cache_key}) {
+        my ($cached_time, $data) = @{ $CACHE{$cache_key} };
+        return $data if (time() - $cached_time) < $item->{cache_ttl};
+    }
+    
     my $dbh = Wahana::Db->connect();
     my $placeholders = join(', ', ('?') x scalar(@params));
-    my $sth = $dbh->prepare("CALL $proc_name($placeholders)");
+    my $sth = $dbh->prepare("CALL $item->{sp}($placeholders)");
     $sth->execute(@params);
-    return $sth->fetchall_arrayref({});
+    my $data = $sth->fetchall_arrayref({});
+    
+    if ($item->{cache_ttl} > 0) {
+        $CACHE{$cache_key} = [ time(), $data ];
+    }
+    
+    return $data;
 }
 
-sub get_row {
-    my ($class, $alias, @params) = @_;
-    my $proc_name = $PROC_MAP{$alias} or die "[PROC] Alias '$alias' tidak terdaftar!";
-    my $dbh = Wahana::Db->connect();
-    my $placeholders = join(', ', ('?') x scalar(@params));
-    my $sth = $dbh->prepare("CALL $proc_name($placeholders)");
-    $sth->execute(@params);
-    return $sth->fetchrow_hashref();
-}
-
-sub get_mapping_list {
-    return [ map { { alias => $_, procedure => $PROC_MAP{$_} } } sort keys %PROC_MAP ];
+sub list_registry {
+    return [ sort { $a->{id} cmp $b->{id} } values %REGISTRY ];
 }
 
 1;
@@ -243,26 +288,12 @@ sub get_mapping_list {
 
 ---
 
-## 5. Halaman Baru Frontend: "Database & Query Inspector" (`/dev/queries`)
-
-### A. Fitur Halaman:
-1. **Tabel Mapping Stored Procedure**: Menampilkan seluruh alias (`query/getusers`, `query/login`, dll) yang terhubung ke `sp_...`.
-2. **Status Prosedur di Database**: Menampilkan tanggal pembuatan dan status validitas prosedur di MariaDB.
-3. **Database Health Card**: Status koneksi aktif, port, nama database, dan total prosedur aktif.
-4. **Akses Khusus Role `DEVELOPER` dan `ADMIN`**: Dilindungi dengan alert penolakan akses jika diakses role lain.
-
-### B. Tampilan Halaman:
-* Layout rapi bernuansa developer dark/glass modern.
-* Dilengkapi tombol *Inspect Definition* untuk melihat definisi SQL dari tiap prosedur.
-
----
-
-## 6. Panduan Eksekusi Saat Ingin Dijalankan
+## 7. Panduan Eksekusi Saat Ingin Dijalankan
 
 1. **Jalankan Database Procedures**:
    ```bash
    mysql -u root -p wahana_scan < backend/db/procedures.sql
    ```
-2. **Aktifkan `Wahana::Procedure`** di backend controllers.
-3. **Tambahkan rute `/dev/queries`** di `src/router/routes.js` dengan meta `{ role: 'DEVELOPER' }`.
-4. **Uji Login Developer**: Gunakan user `dev` (password: `dev123`) untuk langsung masuk ke portal Query Inspector.
+2. **Aktifkan `Wahana::Procedure`** di seluruh backend controller.
+3. **Daftarkan Rute `/dev/queries`** di frontend Quasar dengan meta `{ role: 'DEVELOPER' }`.
+4. **Login sebagai Developer**: Username `dev` (password: `dev123`) untuk menginspeksi dan mengelola seluruh Stored Procedure beserta Cache & Timeout-nya.
