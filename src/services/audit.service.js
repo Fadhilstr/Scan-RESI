@@ -1,20 +1,15 @@
 /**
- * audit.service.js — Service Layer Audit Log
+ * audit.service.js — Service Layer Audit Log (Request Object Style)
  *
- * MODE LOCAL (VITE_USE_LOCAL_DATA=true):
- *   Event audit dicatat ke array lokal (in-memory) dan dibaca dari sana.
- *
- * MODE API (VITE_USE_LOCAL_DATA=false):
- *   Pencatatan dilakukan SERVER-SIDE oleh backend Perl
- *   (login, scan, complete task → otomatis insert ke tabel AUDIT_LOGS).
- *   Frontend hanya MEMBACA via GET /api/audit-logs.
+ * Menggunakan gaya pemanggilan:
+ *   api({
+ *     url: '/api/audit-logs',
+ *     method: 'GET',
+ *     params: { ... }
+ *   })
  */
-
 import api, { USE_LOCAL_DATA } from './api'
 
-// =====================================================================
-// LOCAL DUMMY DATA — seed awal agar halaman Audit Log tidak kosong
-// =====================================================================
 let LOCAL_AUDIT_LOGS = [
   {
     log_id: 3,
@@ -24,28 +19,9 @@ let LOCAL_AUDIT_LOGS = [
     details: 'Login berhasil.',
     ip_address: '192.168.3.102 (demo)',
     created_at: '28-08-2026 09:45:00'
-  },
-  {
-    log_id: 2,
-    user_id: 'USR-001',
-    user_name: 'Fadhil',
-    action: 'SCAN_EVENT_CREATED',
-    details: 'Resi: GJXL8FLB, Status: SUCCESS',
-    ip_address: '192.168.3.189 (demo)',
-    created_at: '28-08-2026 10:21:32'
-  },
-  {
-    log_id: 1,
-    user_id: 'USR-001',
-    user_name: 'Fadhil',
-    action: 'LOGIN_SUCCESS',
-    details: 'Login berhasil.',
-    ip_address: '192.168.3.189 (demo)',
-    created_at: '28-08-2026 10:20:00'
   }
 ]
 
-// Helper: format datetime string lokal (dd-mm-yyyy HH:MM:SS)
 const nowString = () => {
   const now = new Date()
   const d = String(now.getDate()).padStart(2, '0')
@@ -54,15 +30,6 @@ const nowString = () => {
   return `${d}-${m}-${y} ${now.toTimeString().split(' ')[0]}`
 }
 
-// =====================================================================
-// SERVICE FUNCTIONS
-// =====================================================================
-
-/**
- * Ambil daftar audit log (terbaru lebih dulu).
- * @param {Object} filters - optional: { user_id, action }
- * @returns {Promise<AuditLog[]>}
- */
 export async function getAuditLogs(filters = {}) {
   if (USE_LOCAL_DATA) {
     let result = [...LOCAL_AUDIT_LOGS]
@@ -71,27 +38,17 @@ export async function getAuditLogs(filters = {}) {
     return result.sort((a, b) => b.log_id - a.log_id)
   }
 
-  // --- API MODE ---
-  // GET /api/audit-logs
-  const data = await api.get('/api/audit-logs', { params: filters })
+  // --- API MODE (Object Style with url) ---
+  const data = await api({
+    url: '/api/audit-logs',
+    method: 'GET',
+    params: filters
+  })
   return data.logs || []
 }
 
-/**
- * Catat satu event audit baru.
- * Hanya berfungsi di MODE LOCAL. Di MODE API pencatatan dilakukan server-side.
- *
- * @param {Object} event
- * @param {string} event.user_id
- * @param {string} event.user_name
- * @param {string} event.action   — LOGIN_SUCCESS | LOGOUT | SCAN_EVENT_CREATED |
- *                                  SCAN_DUPLICATE | TASK_COMPLETED
- * @param {string} event.details
- * @returns {Promise<{success, log}>}
- */
 export async function addAuditLog(event) {
   if (!USE_LOCAL_DATA) {
-    // Server mencatat otomatis; frontend tidak perlu melakukan apa pun.
     return { success: true, log: null }
   }
 

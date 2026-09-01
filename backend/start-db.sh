@@ -40,6 +40,9 @@ echo "[DB] MariaDB aktif."
 echo "[DB] Load schema dari db/schema.sql ..."
 docker exec -i "$DB_CONTAINER" mariadb -uroot -p"$DB_ROOT_PASS" < "$SCRIPT_DIR/db/schema.sql"
 
+echo "[DB] Load stored procedures & sys_queries dari db/procedures.sql ..."
+docker exec -i "$DB_CONTAINER" mariadb -uroot -p"$DB_ROOT_PASS" < "$SCRIPT_DIR/db/procedures.sql"
+
 echo "[DB] Selesai."
 echo ""
 echo "Konfigurasi koneksi untuk API server:"

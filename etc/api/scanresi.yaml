@@ -1,18 +1,23 @@
 openapi: 3.0.3
 info:
   title: Scan Resi Wahana API
-  description: REST API untuk platform pemindaian resi, manifest, dan tracking logistik Wahana Express.
-  version: 1.0.0
+  description: |
+    REST API untuk platform pemindaian resi, manifest, dan tracking logistik Wahana Express.
+    Didukung arsitektur **Pure Stored Procedures** MariaDB, **DCAF Query Object Pattern**, dan **sys_queries Registry**.
+  version: 2.0.0
 servers:
   - url: http://localhost:8080/api
-    description: Nginx Reverse Proxy / Gateway
+    description: Nginx Reverse Proxy / Gateway (Akses Utama)
   - url: http://localhost:5000/api
-    description: Direct uWSGI Backend API Server
+    description: Direct Perl uWSGI Backend API Server
 
 paths:
   /auth/login:
     post:
+      operationId: AuthLogin
+      x-dcaf-query: AuthLogin
       summary: Login pengguna menggunakan username dan password
+      description: Memanggil Stored Procedure `sp_login` via query code `AuthLogin`.
       tags:
         - Authentication
       requestBody:
@@ -43,6 +48,8 @@ paths:
 
   /auth/quick-login:
     post:
+      operationId: AuthQuickLogin
+      x-dcaf-query: AuthLogin
       summary: Quick login simulator untuk keperluan testing role demo
       tags:
         - Authentication
@@ -68,7 +75,9 @@ paths:
 
   /auth/logout:
     post:
-      summary: Logout dan hapus sesi token
+      operationId: AuthLogout
+      x-dcaf-query: AuthUpdateStatus
+      summary: Logout dan perbarui status akun menjadi OFFLINE
       tags:
         - Authentication
       security:
@@ -79,7 +88,10 @@ paths:
 
   /users:
     get:
-      summary: Dapatkan daftar pengguna
+      operationId: UsersListAll
+      x-dcaf-query: UsersListAll
+      summary: Dapatkan seluruh daftar pengguna (Admin & Dev)
+      description: Memanggil Stored Procedure `sp_getusers` via query code `UsersListAll`.
       tags:
         - Users
       security:
@@ -88,7 +100,10 @@ paths:
         '200':
           description: Daftar pengguna berhasil diambil
     post:
+      operationId: UsersInsert
+      x-dcaf-query: UsersInsert
       summary: Buat pengguna baru (Khusus Admin)
+      description: Memanggil Stored Procedure `sp_users_insert` via query code `UsersInsert`.
       tags:
         - Users
       security:
@@ -100,27 +115,34 @@ paths:
             schema:
               type: object
               required:
+                - name
                 - username
-                - nama
-                - role
                 - password
+                - role
               properties:
+                name:
+                  type: string
+                  example: Petugas Gudang 1
                 username:
                   type: string
-                nama:
-                  type: string
-                role:
-                  type: string
-                  enum: [ADMIN, PETUGAS_SCAN, CUSTOMER]
+                  example: petugas01
                 password:
                   type: string
+                  example: pass123
+                role:
+                  type: string
+                  enum: [ADMIN, PETUGAS_SCAN, CUSTOMER, DEVELOPER]
+                  example: PETUGAS_SCAN
       responses:
         '201':
           description: Pengguna berhasil dibuat
 
   /users/{id}:
     put:
+      operationId: UsersUpdate
+      x-dcaf-query: UsersUpdate
       summary: Perbarui data pengguna (Khusus Admin)
+      description: Memanggil Stored Procedure `sp_users_update` via query code `UsersUpdate`.
       tags:
         - Users
       security:
@@ -146,12 +168,15 @@ paths:
                   type: string
                 role:
                   type: string
-                  enum: [ADMIN, PETUGAS_SCAN, CUSTOMER]
+                  enum: [ADMIN, PETUGAS_SCAN, CUSTOMER, DEVELOPER]
       responses:
         '200':
           description: Pengguna berhasil diperbarui
     delete:
+      operationId: UsersDelete
+      x-dcaf-query: UsersDelete
       summary: Hapus pengguna (Khusus Admin)
+      description: Memanggil Stored Procedure `sp_users_delete` via query code `UsersDelete`.
       tags:
         - Users
       security:
@@ -168,7 +193,10 @@ paths:
 
   /users/{id}/status:
     patch:
-      summary: Ubah status aktif/non-aktif pengguna (Khusus Admin)
+      operationId: UsersToggleStatus
+      x-dcaf-query: UsersToggleStatus
+      summary: Toggle status aktif/nonaktif akun pengguna
+      description: Memanggil Stored Procedure `sp_users_toggle_status` via query code `UsersToggleStatus`.
       tags:
         - Users
       security:
@@ -179,32 +207,37 @@ paths:
           required: true
           schema:
             type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                status:
-                  type: string
-                  enum: [AKTIF, NONAKTIF]
       responses:
         '200':
-          description: Status pengguna berhasil diperbarui
+          description: Status pengguna berhasil diubah
 
   /tasks:
     get:
-      summary: Dapatkan daftar tugas kurir / manifest
+      operationId: TasksListAll
+      x-dcaf-query: TasksListAll
+      summary: Dapatkan daftar tugas pemindaian
+      description: Memanggil Stored Procedure `sp_tasks_list` via query code `TasksListAll`.
       tags:
         - Tasks
       security:
         - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
       responses:
         '200':
           description: Daftar tugas berhasil diambil
     post:
+      operationId: TasksInsert
+      x-dcaf-query: TasksInsert
       summary: Buat penugasan baru (Khusus Admin)
+      description: Memanggil Stored Procedure `sp_tasks_insert` via query code `TasksInsert`.
       tags:
         - Tasks
       security:
@@ -216,22 +249,35 @@ paths:
             schema:
               type: object
               required:
-                - title
-                - assigned_to
+                - user_id
+                - target
               properties:
-                title:
+                user_id:
                   type: string
-                assigned_to:
+                  example: USR-SCAN-001
+                shift:
                   type: string
-                description:
+                  example: Pagi
+                tanggal:
                   type: string
+                  format: date
+                  example: 2026-09-01
+                target:
+                  type: integer
+                  example: 100
+                lokasi:
+                  type: string
+                  example: CIPUTAT
       responses:
         '201':
           description: Tugas berhasil dibuat
 
   /tasks/{id}/progress:
     patch:
-      summary: Perbarui progres tugas
+      operationId: TasksProgress
+      x-dcaf-query: TasksProgress
+      summary: Tambahkan progres tugas (+1 scan berhasil)
+      description: Memanggil Stored Procedure `sp_tasks_progress` via query code `TasksProgress`.
       tags:
         - Tasks
       security:
@@ -244,11 +290,14 @@ paths:
             type: string
       responses:
         '200':
-          description: Progres berhasil diperbarui
+          description: Progres tugas bertambah
 
   /tasks/{id}/complete:
     patch:
-      summary: Selesaikan tugas
+      operationId: TasksComplete
+      x-dcaf-query: TasksComplete
+      summary: Selesaikan tugas pemindaian (Kunci status)
+      description: Memanggil Stored Procedure `sp_tasks_complete` via query code `TasksComplete`.
       tags:
         - Tasks
       security:
@@ -261,11 +310,14 @@ paths:
             type: string
       responses:
         '200':
-          description: Tugas selesai
+          description: Tugas berhasil diselesaikan
 
   /scans:
     get:
-      summary: Dapatkan riwayat pemindaian barcode resi
+      operationId: ScansListAll
+      x-dcaf-query: ScansListAll
+      summary: Dapatkan riwayat scan barcode
+      description: Memanggil Stored Procedure `sp_scans_list` via query code `ScansListAll`.
       tags:
         - Scans
       security:
@@ -274,7 +326,10 @@ paths:
         '200':
           description: Riwayat scan berhasil diambil
     post:
-      summary: Simpan event pemindaian resi baru
+      operationId: ScansProcess
+      x-dcaf-query: ScansProcess
+      summary: Transaksi pemindaian barcode resi (Atomik Stored Procedure)
+      description: Memanggil Stored Procedure `sp_scans_process` via query code `ScansProcess` dengan row locking anti duplikasi.
       tags:
         - Scans
       security:
@@ -286,26 +341,34 @@ paths:
             schema:
               type: object
               required:
-                - barcode
-                - scan_type
+                - nomor_resi
+                - task_id
               properties:
-                barcode:
+                nomor_resi:
                   type: string
-                  example: WX-JKT-100293
-                scan_type:
+                  example: 93V5NQ9M
+                task_id:
                   type: string
-                  enum: [INBOUND, OUTBOUND, SORTING, DELIVERY]
+                  example: TASK-001
                 lokasi:
                   type: string
-                catatan:
+                  example: CIPUTAT
+                device_id:
                   type: string
+                  example: SCAN-DEVICE-01
+                jenis_scan:
+                  type: string
+                  example: INBOUND
       responses:
         '200':
-          description: Event scan berhasil dicatat
+          description: Pemindaian berhasil diproses
 
   /scans/stats/{user_id}:
     get:
-      summary: Dapatkan statistik scan petugas tertentu
+      operationId: ScansStats
+      x-dcaf-query: ScansStats
+      summary: Dapatkan rekap statistik scan petugas
+      description: Memanggil Stored Procedure `sp_scans_stats` via query code `ScansStats`.
       tags:
         - Scans
       security:
@@ -318,49 +381,28 @@ paths:
             type: string
       responses:
         '200':
-          description: Statistik berhasil diambil
+          description: Statistik scan berhasil diambil
 
   /paket/resi:
     post:
-      summary: Buat draft paket baru dan generate nomor resi unik (Server-Side)
+      operationId: PaketCreateDraft
+      x-dcaf-query: PaketCreateDraft
+      summary: Generate nomor resi draft di sisi server
+      description: Memanggil Stored Procedure `sp_paket_create_draft` via query code `PaketCreateDraft`.
       tags:
         - Packages
       security:
         - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - sender_name
-                - recipient_name
-                - destination
-              properties:
-                sender_name:
-                  type: string
-                sender_phone:
-                  type: string
-                recipient_name:
-                  type: string
-                recipient_phone:
-                  type: string
-                destination:
-                  type: string
-                weight_kg:
-                  type: number
-                  example: 1.5
-                service_type:
-                  type: string
-                  example: REGULER
       responses:
-        '201':
-          description: Resi berhasil dibuat
+        '200':
+          description: Nomor resi draft berhasil dibuat
 
   /paket:
     get:
+      operationId: PaketListAll
+      x-dcaf-query: PaketListAll
       summary: Dapatkan daftar paket / kiriman
+      description: Memanggil Stored Procedure `sp_paket_list` via query code `PaketListAll`.
       tags:
         - Packages
       security:
@@ -371,7 +413,10 @@ paths:
 
   /paket/{id}:
     get:
+      operationId: PaketGetDetail
+      x-dcaf-query: PaketGetDetail
       summary: Dapatkan detail paket dan tracking history berdasarkan nomor resi
+      description: Memanggil Stored Procedure `sp_paket_get_detail` via query code `PaketGetDetail`.
       tags:
         - Packages
       security:
@@ -386,7 +431,10 @@ paths:
         '200':
           description: Detail paket berhasil diambil
     patch:
-      summary: Perbarui status paket
+      operationId: CustInsert
+      x-dcaf-query: CustInsert
+      summary: Simpan data paket lengkap dari DRAFT menjadi TERDAFTAR
+      description: Memanggil Stored Procedure `sp_paket_save` via query code `CustInsert`.
       tags:
         - Packages
       security:
@@ -397,13 +445,59 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nama_barang
+                - pengirim
+                - alamat_pengirim
+                - telepon_pengirim
+                - penerima
+                - alamat_tujuan
+                - telepon_penerima
+              properties:
+                nama_barang:
+                  type: string
+                  example: Sparepart Mesin
+                pengirim:
+                  type: string
+                  example: Budi Santoso
+                alamat_pengirim:
+                  type: string
+                  example: Jl. Raya Bogor No. 12
+                telepon_pengirim:
+                  type: string
+                  example: "08123456789"
+                penerima:
+                  type: string
+                  example: Toko Maju Jaya
+                alamat_tujuan:
+                  type: string
+                  example: Jl. Merdeka No. 45, Bandung
+                telepon_penerima:
+                  type: string
+                  example: "08987654321"
+                berat_kg:
+                  type: number
+                  example: 2.5
+                jenis_layanan:
+                  type: string
+                  enum: [REGULER, EXPRESS, SAME_DAY]
+                  example: REGULER
       responses:
         '200':
-          description: Status paket berhasil diperbarui
+          description: Data paket berhasil disimpan
 
   /audit-logs:
     get:
+      operationId: AuditListAll
+      x-dcaf-query: AuditListAll
       summary: Dapatkan catatan aktivitas audit log sistem (Khusus Admin)
+      description: Memanggil Stored Procedure `sp_audit_list` via query code `AuditListAll`.
       tags:
         - Audit
       security:
@@ -411,6 +505,95 @@ paths:
       responses:
         '200':
           description: Audit log berhasil diambil
+
+  /dev/procedures:
+    get:
+      operationId: DevProceduresStatus
+      x-dcaf-query: DevListQueries
+      summary: Dapatkan status mesin Stored Procedures & koneksi DB (Khusus Developer / Admin)
+      tags:
+        - Developer & System
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Status Stored Procedures & DB info
+
+  /dev/queries:
+    get:
+      operationId: DevListQueries
+      x-dcaf-query: DevListQueries
+      summary: Ambil seluruh daftar katalog query dari tabel sys_queries (Khusus Developer / Admin)
+      description: Memanggil Stored Procedure `sp_sys_get_queries` via query code `DevListQueries`.
+      tags:
+        - Developer & System
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Daftar registry query berhasil diambil
+    post:
+      operationId: DevCreateQuery
+      x-dcaf-query: DevListQueries
+      summary: Daftarkan query baru ke dalam sys_queries
+      description: Memanggil Stored Procedure `sp_sys_upsert_query`.
+      tags:
+        - Developer & System
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SysQueryItem'
+      responses:
+        '201':
+          description: Query berhasil didaftarkan
+
+  /dev/queries/{id}:
+    put:
+      operationId: DevUpdateQuery
+      x-dcaf-query: DevListQueries
+      summary: Perbarui konfigurasi query pada sys_queries
+      description: Memanggil Stored Procedure `sp_sys_upsert_query`.
+      tags:
+        - Developer & System
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SysQueryItem'
+      responses:
+        '200':
+          description: Query berhasil diperbarui
+    delete:
+      operationId: DevDeleteQuery
+      x-dcaf-query: DevListQueries
+      summary: Hapus query dari sys_queries
+      description: Memanggil Stored Procedure `sp_sys_delete_query`.
+      tags:
+        - Developer & System
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Query berhasil dihapus
 
 components:
   securitySchemes:
@@ -437,9 +620,48 @@ components:
             username:
               type: string
               example: admin
-            nama:
+            name:
               type: string
               example: Administrator
             role:
               type: string
+              enum: [ADMIN, PETUGAS_SCAN, CUSTOMER, DEVELOPER]
               example: ADMIN
+    SysQueryItem:
+      type: object
+      required:
+        - query_id
+        - query_code
+        - sp_name
+      properties:
+        query_id:
+          type: string
+          example: QRY-024
+        query_code:
+          type: string
+          example: CustomReport
+        sp_name:
+          type: string
+          example: sp_custom_report
+        param_keys:
+          type: array
+          items:
+            type: string
+          example: ["start_date", "end_date"]
+        query_type:
+          type: string
+          enum: [SELECT_ROW, SELECT_ALL, EXECUTE]
+          example: SELECT_ALL
+        required_role:
+          type: string
+          enum: [PUBLIC, PETUGAS_SCAN, ADMIN, DEVELOPER]
+          example: ADMIN
+        cache_ttl:
+          type: integer
+          example: 60
+        timeout_sec:
+          type: integer
+          example: 5
+        deskripsi:
+          type: string
+          example: Ambil data rekapitulasi kustom

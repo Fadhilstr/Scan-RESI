@@ -30,22 +30,22 @@ sub list {
     my ($req) = @_;
     my $params = $req->{params} // {};
 
-    my @where;
-    my @bind;
-    for my $f (qw(user_id task_id status_scan)) {
-        if (my $v = trim($params->{$f} // '')) {
-            push @where, "s.$f = ?";
-            push @bind,  $v;
-        }
+    my $uid         = trim($params->{user_id} // '');
+    my $task_id     = trim($params->{task_id} // '');
+    my $status_scan = trim($params->{status_scan} // '');
+
+    my $roq = Wahana::Query->new(name => 'ScansListAll');
+    my $rows = $roq->selectall();
+
+    if ($uid) {
+        @$rows = grep { $_->{user_id} && $_->{user_id} eq $uid } @$rows;
     }
-
-    my $dbh = Wahana::Db->connect();
-    my $base_sql = Wahana::Query->get('scans_list_base');
-    my $sql = $base_sql
-        . (@where ? ' WHERE ' . join(' AND ', @where) : '')
-        . ' ORDER BY s.scan_id DESC';
-
-    my $rows = $dbh->selectall_arrayref($sql, { Slice => {} }, @bind);
+    if ($task_id) {
+        @$rows = grep { $_->{task_id} && $_->{task_id} eq $task_id } @$rows;
+    }
+    if ($status_scan) {
+        @$rows = grep { $_->{status_scan} && $_->{status_scan} eq $status_scan } @$rows;
+    }
 
     return { scans => [ map { map_scan($_) } @$rows ] };
 }
@@ -55,41 +55,27 @@ sub stats {
     my ($req, $captures) = @_;
     my $user_id = $captures->[0];
 
-    my $dbh = Wahana::Db->connect();
-
-    my ($success) = $dbh->selectrow_array(
-        Wahana::Query->get('scans_stats_success'),
-        undef, $user_id
+    my $roq = Wahana::Query->new(
+        name => 'ScansStats',
+        data => { user_id => $user_id }
     );
-    my ($duplicate) = $dbh->selectrow_array(
-        Wahana::Query->get('scans_stats_duplicate'),
-        undef, $user_id
-    );
-    my ($last) = $dbh->selectrow_array(
-        Wahana::Query->get('scans_stats_last_scan'),
-        undef, $user_id
-    );
+    my $stats_row = $roq->selectrow() // {};
 
     return {
         stats => {
-            total    => int($success // 0),
-            success  => int($success // 0),
-            duplicate => int($duplicate // 0),
-            lastScan => $last ? fmt_datetime($last) : '-',
+            total     => int(($stats_row->{total_success} // 0) + ($stats_row->{total_duplicate} // 0)),
+            success   => int($stats_row->{total_success} // 0),
+            duplicate => int($stats_row->{total_duplicate} // 0),
+            lastScan  => $stats_row->{last_scan} ? fmt_datetime($stats_row->{last_scan}) : '-',
         }
     };
 }
 
-# POST /api/scans
-# Body: { nomor_resi, user_id?, task_id, lokasi?, device_id?, jenis_scan? }
-#
-# Validasi duplikasi + increment progress dilakukan TRANSAKSIONAL di server:
-#   BEGIN → LOCK task → cek duplikat → INSERT scan → UPDATE progress → COMMIT
+# POST /api/scans (Transaksi Atomik Stored Procedure: sp_scans_process)
 sub create {
     my ($req) = @_;
     my $body = $req->{body} // {};
 
-    # Prioritaskan user_id dari token auth; fallback ke body.
     my $user_id = $req->{auth_user}{uid} // trim($body->{user_id} // '');
     my $resi    = uc(trim($body->{nomor_resi} // ''));
     my $task_id = trim($body->{task_id} // '');
@@ -101,14 +87,33 @@ sub create {
         unless length $task_id;
 
     my $dbh = Wahana::Db->connect();
+    my $max_num = $dbh->selectrow_array("SELECT COALESCE(MAX(CAST(SUBSTRING(scan_id, 5) AS UNSIGNED)), 0) FROM scan_events WHERE scan_id REGEXP '^SCN-[0-9]+$'") // 0;
+    my $scan_id = sprintf 'SCN-%05d', $max_num + 1;
 
-    # --- Validasi ketat: hanya resi TERDAFTAR di tabel paket yang boleh discan ---
-    # Resi tidak dikenal maupun masih DRAFT TIDAK dicatat sebagai scan event.
-    my $paket = $dbh->selectrow_hashref(
-        Wahana::Query->get('scans_check_paket_registered'), undef, $resi
-    );
+    my $lokasi  = trim($body->{lokasi}    // '') || 'CIPUTAT';
+    my $device  = trim($body->{device_id} // '') || 'SCAN-DEVICE-01';
+    my $jenis   = trim($body->{jenis_scan}// '') || 'INBOUND';
 
-    unless ($paket) {
+    my $res = Wahana::Query->new(
+        name => 'ScansProcess',
+        data => {
+            scan_id    => $scan_id,
+            nomor_resi => $resi,
+            user_id    => $user_id,
+            task_id    => $task_id,
+            lokasi     => $lokasi,
+            device_id  => $device,
+            jenis_scan => $jenis,
+        }
+    )->selectrow();
+
+    if (!$res) {
+        return { success => \0, message => 'Terjadi kesalahan sistem saat memproses scan.' };
+    }
+
+    my $code = $res->{result_code} // '';
+
+    if ($code eq 'UNKNOWN_RESI') {
         record_audit(
             user_id    => $user_id,
             action     => 'SCAN_REJECTED',
@@ -116,14 +121,14 @@ sub create {
             ip_address => $req->{ip},
         );
         return {
-            success => \0,
-            reason  => 'UNKNOWN_RESI',
+            success     => \0,
+            reason      => 'UNKNOWN_RESI',
             status_scan => 'REJECTED',
             message     => "Nomor resi $resi tidak terdaftar. Pastikan customer sudah membuat resi.",
         };
     }
 
-    if ($paket->{status} eq 'DRAFT') {
+    if ($code eq 'DRAFT') {
         record_audit(
             user_id    => $user_id,
             action     => 'SCAN_REJECTED',
@@ -131,102 +136,59 @@ sub create {
             ip_address => $req->{ip},
         );
         return {
-            success => \0,
-            reason  => 'DRAFT',
+            success     => \0,
+            reason      => 'DRAFT',
             status_scan => 'REJECTED',
             message     => "Nomor resi $resi masih DRAFT — data barang belum disimpan customer.",
         };
     }
 
-    $dbh->begin_work();
-    my $failed = 0;
-    my $result;
+    if ($code eq 'FINISHED') {
+        return {
+            success => \0,
+            reason  => 'FINISHED',
+            message => 'Task sudah selesai dan tidak dapat melakukan scan.',
+        };
+    }
 
-    eval {
-        # Kunci baris task untuk mencegah race condition antar petugas.
-        my $task = $dbh->selectrow_hashref(
-            Wahana::Query->get('scans_lock_task'), undef, $task_id
-        );
-        die "__notfound__" unless $task;
-        die "__finished__" if $task->{status} eq 'SELESAI';
+    my $is_dup = ($code eq 'DUPLICATE');
+    my $status = $is_dup ? 'DUPLICATE' : 'SUCCESS';
 
-        my $dup = $dbh->selectrow_array(
-            Wahana::Query->get('scans_check_duplicate'),
-            undef, $resi, $task_id
-        );
-
-        # Generate scan_id berurutan: SCN-00008, SCN-00009, ...
-        my $max_num = $dbh->selectrow_array(Wahana::Query->get('scans_get_max_id'));
-        my $scan_id = sprintf 'SCN-%05d', $max_num + 1;
-
-        my $status = $dup ? 'DUPLICATE' : 'SUCCESS';
-
-        $dbh->do(
-            Wahana::Query->get('scans_insert'),
-            undef,
-            $scan_id, $resi, $user_id, $task_id,
-            trim($body->{lokasi}      // '') || $task->{lokasi} || 'CIPUTAT',
-            $status,
-            trim($body->{device_id}   // '') || 'SCAN-DEVICE-01',
-            trim($body->{jenis_scan}  // '') || 'INBOUND',
-        ) or die "insert gagal: " . ($dbh->errstr // '');
-
-        # Progress hanya bertambah untuk scan SUCCESS (FR-4.2)
-        $dbh->do(Wahana::Query->get('tasks_increment_progress'), undef, 1, $task_id)
-            unless $dup;
-
-        $dbh->commit();
-
-        my $row = $dbh->selectrow_hashref(
-            Wahana::Query->get('scans_get_by_id'), undef, $scan_id
-        );
-        my $scan_obj = map_scan($row);
-
-        record_audit(
-            user_id    => $user_id,
-            action     => $dup ? 'SCAN_DUPLICATE' : 'SCAN_EVENT_CREATED',
-            details    => "Resi: $resi, Status: $status",
-            ip_address => $req->{ip},
-        );
-
-        $result = $dup
-            ? {
-                success     => \0,
-                reason      => 'DUPLICATE',
-                status_scan => 'DUPLICATE',
-                message     => "Nomor resi $resi sudah pernah discan.",
-                scan        => $scan_obj,
-            }
-            : {
-                success     => \1,
-                resi        => $resi,
-                status_scan => 'SUCCESS',
-                message     => "Nomor resi $resi berhasil discan.",
-                scan        => $scan_obj,
-            };
-
-        1;
-    } or do {
-        my $err = $@;
-        eval { $dbh->rollback() };
-        $failed = 1;
-
-        if ($err =~ /__notfound__/) {
-            $result = { success => \0, reason => 'NOT_FOUND', message => 'Task tidak ditemukan.' };
-        }
-        elsif ($err =~ /__finished__/) {
-            $result = {
-                success => \0, reason => 'FINISHED',
-                message => 'Task sudah selesai dan tidak dapat melakukan scan.',
-            };
-        }
-        else {
-            warn "[SCANS] Transaksi gagal: $err";
-            die $err;   # ditangkap Router → HTTP 500
-        }
+    my $scan_obj = {
+        scan_id     => $scan_id,
+        nomor_resi  => $resi,
+        user_id     => $user_id,
+        user_name   => $req->{auth_user}{name} // '(user)',
+        task_id     => $task_id,
+        waktu_scan  => 'Baru saja',
+        lokasi      => $lokasi,
+        status_scan => $status,
+        device_id   => $device,
+        jenis_scan  => $jenis,
     };
 
-    return $result;
+    record_audit(
+        user_id    => $user_id,
+        action     => $is_dup ? 'SCAN_DUPLICATE' : 'SCAN_EVENT_CREATED',
+        details    => "Resi: $resi, Status: $status",
+        ip_address => $req->{ip},
+    );
+
+    return $is_dup
+        ? {
+            success     => \0,
+            reason      => 'DUPLICATE',
+            status_scan => 'DUPLICATE',
+            message     => "Nomor resi $resi sudah pernah discan.",
+            scan        => $scan_obj,
+        }
+        : {
+            success     => \1,
+            resi        => $resi,
+            status_scan => 'SUCCESS',
+            message     => "Nomor resi $resi berhasil discan.",
+            scan        => $scan_obj,
+        };
 }
 
 1;

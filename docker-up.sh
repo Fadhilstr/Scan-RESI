@@ -12,8 +12,11 @@ echo "=========================================================="
 docker compose up --build -d
 
 echo ""
-echo "Menunggu database & backend siap..."
+echo "Menunggu database siap..."
 sleep 5
+
+echo "Memasang Stored Procedures & sys_queries catalog ke MariaDB..."
+docker compose exec -T db mysql -uroot -proot wahana_scan < backend/db/procedures.sql || true
 
 echo ""
 echo "=========================================================="

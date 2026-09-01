@@ -20,9 +20,11 @@ sub login {
     return { success => \0, message => 'Username dan password wajib diisi.' }
         unless length $username && length $password;
 
-    my $dbh = Wahana::Db->connect();
-    my $sql = Wahana::Query->get('auth_get_user_by_username');
-    my $row = $dbh->selectrow_hashref($sql, undef, $username);
+    my $roq = Wahana::Query->new(
+        name => 'AuthLogin',
+        data => { username => $username }
+    );
+    my $row = $roq->selectrow();
 
     if (!$row || !Wahana::Auth->verify_password($password, $row->{password_hash})) {
         record_audit(
@@ -37,7 +39,10 @@ sub login {
     return { success => \0, message => 'Akun Anda telah dinonaktifkan.' }
         if $row->{status} eq 'DISABLED';
 
-    $dbh->do(Wahana::Query->get('auth_update_user_online'), undef, $row->{id});
+    Wahana::Query->new(
+        name => 'AuthUpdateStatus',
+        data => { user_id => $row->{id}, status => 'ONLINE' }
+    )->execute();
 
     my $token = Wahana::Auth->issue_token($row->{id});
 
@@ -60,9 +65,6 @@ sub login {
 }
 
 # POST /api/auth/quick-login
-# Body: { user_id }
-# Fitur DEMO sesuai PRD FR-1.2 (bypass password). Nonaktifkan di produksi
-# dengan menghapus route ini dari Wahana::Router.
 sub quick_login {
     my ($req) = @_;
     my $body = $req->{body} // {};
@@ -71,9 +73,11 @@ sub quick_login {
     return { success => \0, message => 'user_id wajib diisi.' }
         unless length $user_id;
 
-    my $dbh = Wahana::Db->connect();
-    my $sql = Wahana::Query->get('auth_get_user_by_id');
-    my $row = $dbh->selectrow_hashref($sql, undef, $user_id);
+    my $roq = Wahana::Query->new(
+        name => 'UsersGetById',
+        data => { id => $user_id }
+    );
+    my $row = $roq->selectrow();
 
     return { success => \0, message => 'User tidak ditemukan.' }
         unless $row;
@@ -81,7 +85,10 @@ sub quick_login {
     return { success => \0, message => 'Akun Anda telah dinonaktifkan.' }
         if $row->{status} eq 'DISABLED';
 
-    $dbh->do(Wahana::Query->get('auth_update_user_online'), undef, $row->{id});
+    Wahana::Query->new(
+        name => 'AuthUpdateStatus',
+        data => { user_id => $row->{id}, status => 'ONLINE' }
+    )->execute();
 
     my $token = Wahana::Auth->issue_token($row->{id});
 
@@ -111,8 +118,10 @@ sub logout {
     my $uid     = $payload ? $payload->{uid} : ($req->{body}{user_id} // undef);
 
     if ($uid) {
-        my $dbh = Wahana::Db->connect();
-        $dbh->do(Wahana::Query->get('auth_update_user_offline'), undef, $uid);
+        Wahana::Query->new(
+            name => 'AuthUpdateStatus',
+            data => { user_id => $uid, status => 'OFFLINE' }
+        )->execute();
 
         record_audit(
             user_id    => $uid,

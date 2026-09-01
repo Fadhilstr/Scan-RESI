@@ -14,27 +14,24 @@ sub list {
     my ($req) = @_;
     my $params = $req->{params} // {};
 
-    my @where;
-    my @bind;
-    if (my $uid = $params->{user_id}) {
-        push @where, 'a.user_id = ?';
-        push @bind,  $uid;
-    }
-    if (my $action = $params->{action}) {
-        push @where, 'a.action = ?';
-        push @bind,  $action;
-    }
-
-    my $limit = int($params->{limit} || 200);
+    my $uid    = $params->{user_id};
+    my $action = $params->{action};
+    my $limit  = int($params->{limit} || 200);
     $limit = 500 if $limit > 500;
 
-    my $dbh = Wahana::Db->connect();
-    my $base_sql = Wahana::Query->get('audit_list_base');
-    my $sql = $base_sql
-        . (@where ? ' WHERE ' . join(' AND ', @where) : '')
-        . " ORDER BY a.log_id DESC LIMIT $limit";
+    my $roq = Wahana::Query->new(name => 'AuditListAll');
+    my $rows = $roq->selectall();
 
-    my $rows = $dbh->selectall_arrayref($sql, { Slice => {} }, @bind);
+    # In-memory filter jika ada query params
+    if ($uid) {
+        @$rows = grep { $_->{user_id} && $_->{user_id} eq $uid } @$rows;
+    }
+    if ($action) {
+        @$rows = grep { $_->{action} && $_->{action} eq $action } @$rows;
+    }
+    if (scalar(@$rows) > $limit) {
+        @$rows = @$rows[0 .. $limit - 1];
+    }
 
     my $logs = [ map {
         {

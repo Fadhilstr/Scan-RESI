@@ -11,7 +11,6 @@ use Exporter 'import';
 
 our @EXPORT_OK = qw(map_paket);
 
-# Alfabet resi tanpa karakter ambigu (I, O, 0, 1) agar aman dibaca/disalin.
 my $RESI_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 my $RESI_LEN   = 8;
 
@@ -35,37 +34,26 @@ sub map_paket {
     };
 }
 
-# Generate nomor resi acak di SERVER (klien tidak pernah mengirim resi).
-# Loop pengecekan menjamin unik terhadap tabel paket.
 sub generate_resi {
     my ($dbh) = @_;
-
     for (1 .. 20) {
         my $resi = join '',
             map { substr $RESI_CHARS, int rand(length $RESI_CHARS), 1 }
             1 .. $RESI_LEN;
 
-        my $exists = $dbh->selectrow_array(
-            Wahana::Query->get('paket_check_resi_exists'), undef, $resi
-        );
+        my $exists = $dbh->selectrow_array("SELECT COUNT(*) FROM paket WHERE nomor_resi = ?", undef, $resi);
         return $resi unless $exists;
     }
-
     die "__resi_exhausted__";
 }
 
-# Role user yang sedang request ('CUSTOMER', 'ADMIN', ...).
 sub _requester_role {
     my ($req) = @_;
     my $uid = $req->{auth_user}{uid} or return undef;
     return get_user_role($uid);
 }
 
-# ---------------------------------------------------------------------
-# POST /api/paket/resi
-# Membuat baris paket DRAFT dengan nomor resi dari server.
-# Hanya CUSTOMER & ADMIN yang boleh memicu generate.
-# ---------------------------------------------------------------------
+# POST /api/paket/resi (Generate Draft)
 sub create_draft {
     my ($req) = @_;
 
@@ -73,11 +61,10 @@ sub create_draft {
     my $role    = _requester_role($req) // '';
 
     return { success => \0, reason => 'FORBIDDEN',
-             message => 'Hanya CUSTOMER atau ADMIN yang dapat membuat nomor resi.' }
-        unless $role eq 'CUSTOMER' || $role eq 'ADMIN';
+             message => 'Hanya CUSTOMER, ADMIN, atau DEVELOPER yang dapat membuat nomor resi.' }
+        unless $role eq 'CUSTOMER' || $role eq 'ADMIN' || $role eq 'DEVELOPER';
 
     my $dbh = Wahana::Db->connect();
-
     my $resi = eval { generate_resi($dbh) };
     if (!$resi) {
         warn "[PAKET] Generate resi gagal: $@";
@@ -85,10 +72,10 @@ sub create_draft {
                  message => 'Gagal membuat nomor resi unik. Coba lagi.' };
     }
 
-    $dbh->do(
-        Wahana::Query->get('paket_insert_draft'),
-        undef, $resi, $user_id
-    );
+    my $row = Wahana::Query->new(
+        name => 'PaketCreateDraft',
+        data => { resi => $resi, created_by => $user_id }
+    )->selectrow();
 
     record_audit(
         user_id    => $user_id,
@@ -97,21 +84,13 @@ sub create_draft {
         ip_address => $req->{ip},
     );
 
-    my $row = $dbh->selectrow_hashref(
-        Wahana::Query->get('paket_get_detail'), undef, $resi
-    );
-
     return { success => \0, message => 'Gagal menyimpan draft paket ke database.' }
         unless $row;
 
     return { success => \1, paket => map_paket($row) };
 }
 
-# ---------------------------------------------------------------------
-# PATCH /api/paket/:nomor_resi
-# Melengkapi data barang pada paket DRAFT → status TERDAFTAR.
-# Hanya pembuat paket (customer) atau ADMIN yang boleh menyimpan.
-# ---------------------------------------------------------------------
+# PATCH /api/paket/:nomor_resi (Simpan Paket TERDAFTAR)
 sub update {
     my ($req, $captures) = @_;
     my $resi = uc(trim($captures->[0] // ''));
@@ -120,25 +99,24 @@ sub update {
     my $user_id = $req->{auth_user}{uid};
     my $role    = _requester_role($req) // '';
 
-    my $dbh = Wahana::Db->connect();
+    my $paket = Wahana::Query->new(
+        name => 'PaketGetDetail',
+        data => { resi => $resi }
+    )->selectrow();
 
-    my $paket = $dbh->selectrow_hashref(
-        Wahana::Query->get('paket_get_by_resi'), undef, $resi
-    );
     return { success => \0, reason => 'NOT_FOUND', message => 'Paket tidak ditemukan.' }
         unless $paket;
 
     my $is_owner = defined $paket->{created_by} && $paket->{created_by} eq $user_id;
     return { success => \0, reason => 'FORBIDDEN',
-             message => 'Hanya pembuat paket atau ADMIN yang dapat menyimpan data barang.' }
-        unless $role eq 'ADMIN' || $is_owner;
+             message => 'Hanya pembuat paket, ADMIN, atau DEVELOPER yang dapat menyimpan data barang.' }
+        unless $role eq 'ADMIN' || $role eq 'DEVELOPER' || $is_owner;
 
     if ($paket->{status} eq 'TERDAFTAR') {
         return { success => \1, message => 'Data paket sudah tersimpan (TERDAFTAR).',
                  paket => map_paket($paket) };
     }
 
-    # Field wajib untuk naik ke TERDAFTAR
     my %valid_layanan = map { $_ => 1 } qw(REGULER EXPRESS SAME_DAY);
     my $layanan = $valid_layanan{ trim($body->{jenis_layanan} // '') }
         ? $body->{jenis_layanan} : $paket->{jenis_layanan} || 'REGULER';
@@ -153,7 +131,6 @@ sub update {
     my $berat            = $body->{berat_kg};
     $berat = 0 unless defined $berat && $berat =~ /^\d+(\.\d+)?$/;
 
-    # Validasi field wajib (termasuk telepon)
     for my $field (['nama_barang', $nama], ['pengirim', $pengirim], ['penerima', $penerima],
                    ['telepon_pengirim', $telepon_pengirim], ['telepon_penerima', $telepon_penerima]) {
         return { success => \0, reason => 'VALIDATION',
@@ -161,20 +138,27 @@ sub update {
             unless length $field->[1];
     }
 
-    # Validasi format telepon: minimal 8 digit angka, maksimal 15 digit
     for my $field (['telepon_pengirim', $telepon_pengirim], ['telepon_penerima', $telepon_penerima]) {
         return { success => \0, reason => 'VALIDATION',
                  message => $field->[0] . ' harus berupa angka 8-15 digit.' }
             unless $field->[1] =~ /^\d{8,15}$/;
     }
 
-    $dbh->do(
-        Wahana::Query->get('paket_update_data'),
-        undef, $nama, $pengirim, $alamat_pengirim, $telepon_pengirim,
-            $penerima, $alamat_tujuan, $telepon_penerima,
-            $berat, $layanan,
-            $resi
-    );
+    my $row = Wahana::Query->new(
+        name => 'CustInsert',
+        data => {
+            resi             => $resi,
+            nama_barang      => $nama,
+            pengirim         => $pengirim,
+            alamat_pengirim  => $alamat_pengirim,
+            telepon_pengirim => $telepon_pengirim,
+            penerima         => $penerima,
+            alamat_tujuan    => $alamat_tujuan,
+            telepon_penerima => $telepon_penerima,
+            berat_kg         => $berat,
+            jenis_layanan    => $layanan,
+        }
+    )->selectrow();
 
     record_audit(
         user_id    => $user_id,
@@ -183,18 +167,11 @@ sub update {
         ip_address => $req->{ip},
     );
 
-    my $row = $dbh->selectrow_hashref(
-        Wahana::Query->get('paket_get_detail'), undef, $resi
-    );
-
     return { success => \1, message => "Paket $resi berhasil disimpan.",
-             paket => map_paket($row) };
+             paket => map_paket($row // $paket) };
 }
 
-# ---------------------------------------------------------------------
 # GET /api/paket?q=&status=&mine=1
-# CUSTOMER hanya melihat paket miliknya; role lain melihat semua.
-# ---------------------------------------------------------------------
 sub list {
     my ($req) = @_;
     my $params = $req->{params} // {};
@@ -202,43 +179,33 @@ sub list {
     my $user_id = $req->{auth_user}{uid};
     my $role    = _requester_role($req) // '';
 
-    my @where;
-    my @bind;
+    my $roq = Wahana::Query->new(name => 'PaketListAll');
+    my $rows = $roq->selectall();
 
-    # CUSTOMER selalu di-scope ke miliknya sendiri
     if ($role eq 'CUSTOMER') {
-        push @where, 'p.created_by = ?';
-        push @bind,  $user_id;
-    }
-    elsif (trim($params->{created_by} // '')) {
-        push @where, 'p.created_by = ?';
-        push @bind,  trim($params->{created_by});
+        @$rows = grep { $_->{created_by} && $_->{created_by} eq $user_id } @$rows;
+    } elsif (trim($params->{created_by} // '')) {
+        my $cb = trim($params->{created_by});
+        @$rows = grep { $_->{created_by} && $_->{created_by} eq $cb } @$rows;
     }
 
     if (my $status = trim($params->{status} // '')) {
-        push @where, 'p.status = ?';
-        push @bind,  $status;
+        @$rows = grep { $_->{status} && $_->{status} eq $status } @$rows;
     }
 
     if (my $q = trim($params->{q} // '')) {
-        push @where, '(UPPER(p.nomor_resi) LIKE ? OR LOWER(p.nama_barang) LIKE ?)';
-        push @bind,  '%' . uc($q) . '%', '%' . lc($q) . '%';
+        my $uq = uc($q);
+        my $lq = lc($q);
+        @$rows = grep {
+            (index(uc($_->{nomor_resi} // ''), $uq) != -1) ||
+            (index(lc($_->{nama_barang} // ''), $lq) != -1)
+        } @$rows;
     }
-
-    my $dbh = Wahana::Db->connect();
-    my $base_sql = Wahana::Query->get('paket_list_base');
-    my $sql = $base_sql
-        . (@where ? ' WHERE ' . join(' AND ', @where) : '')
-        . ' ORDER BY p.created_at DESC, p.nomor_resi DESC';
-
-    my $rows = $dbh->selectall_arrayref($sql, { Slice => {} }, @bind);
 
     return { pakets => [ map { map_paket($_) } @$rows ] };
 }
 
-# ---------------------------------------------------------------------
-# GET /api/paket/:nomor_resi — lookup detail (tahap "Cari Data Paket")
-# ---------------------------------------------------------------------
+# GET /api/paket/:nomor_resi
 sub detail {
     my ($req, $captures) = @_;
     my $resi = uc(trim($captures->[0] // ''));
@@ -246,10 +213,10 @@ sub detail {
     my $user_id = $req->{auth_user}{uid};
     my $role    = _requester_role($req) // '';
 
-    my $dbh = Wahana::Db->connect();
-    my $row = $dbh->selectrow_hashref(
-        Wahana::Query->get('paket_get_detail'), undef, $resi
-    );
+    my $row = Wahana::Query->new(
+        name => 'PaketGetDetail',
+        data => { resi => $resi }
+    )->selectrow();
 
     return { success => \0, reason => 'NOT_FOUND', message => 'Paket tidak ditemukan.' }
         unless $row;

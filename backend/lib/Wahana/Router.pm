@@ -40,12 +40,22 @@ my @ROUTES = (
     [ 'POST',   qr{^/api/scans$},                      \&Wahana::Controller::ScansController::create,        { auth => 1 } ],
     [ 'GET',    qr{^/api/scans/stats/([^/]+)$},        \&Wahana::Controller::ScansController::stats,         { auth => 1 } ],
     # Paket: resi digenerate SERVER (CUSTOMER/ADMIN); petugas hanya scan & lookup
-    [ 'POST',   qr{^/api/paket/resi$},                 \&Wahana::Controller::PaketController::create_draft,  { auth => 1 } ],
-    [ 'GET',    qr{^/api/paket$},                      \&Wahana::Controller::PaketController::list,          { auth => 1 } ],
-    [ 'PATCH',  qr{^/api/paket/([^/]+)$},              \&Wahana::Controller::PaketController::update,        { auth => 1 } ],
-    [ 'GET',    qr{^/api/paket/([^/]+)$},              \&Wahana::Controller::PaketController::detail,        { auth => 1 } ],
+    [ 'POST',   qr{^(?:/api)?/paket/resi$},            \&Wahana::Controller::PaketController::create_draft,  { auth => 1 } ],
+    [ 'GET',    qr{^(?:/api)?/paket$},                 \&Wahana::Controller::PaketController::list,          { auth => 1 } ],
+    [ 'PATCH',  qr{^(?:/api)?/paket/([^/]+)$},         \&Wahana::Controller::PaketController::update,        { auth => 1 } ],
+    [ 'GET',    qr{^(?:/api)?/paket/([^/]+)$},         \&Wahana::Controller::PaketController::detail,        { auth => 1 } ],
+    # Alias 3PL Customer Endpoints (/3pl/Customer & /api/3pl/Customer)
+    [ 'POST',   qr{^(?:/api)?/3pl/Customer/resi$},     \&Wahana::Controller::PaketController::create_draft,  { auth => 1 } ],
+    [ 'GET',    qr{^(?:/api)?/3pl/Customer$},          \&Wahana::Controller::PaketController::list,          { auth => 1 } ],
+    [ 'PATCH',  qr{^(?:/api)?/3pl/Customer/([^/]+)$},  \&Wahana::Controller::PaketController::update,        { auth => 1 } ],
+    [ 'POST',   qr{^(?:/api)?/3pl/Customer/([^/]+)$},  \&Wahana::Controller::PaketController::update,        { auth => 1 } ],
+    [ 'GET',    qr{^(?:/api)?/3pl/Customer/([^/]+)$},  \&Wahana::Controller::PaketController::detail,        { auth => 1 } ],
     [ 'GET',    qr{^/api/audit-logs$},                 \&Wahana::Controller::AuditController::list,          { auth => 1, admin => 1 } ],
     [ 'GET',    qr{^/api/dev/procedures$},             \&Wahana::Controller::DocsController::get_procedures, { auth => 1, dev => 1 } ],
+    [ 'GET',    qr{^/api/dev/queries$},                \&Wahana::Controller::DocsController::list_queries,    { auth => 1, dev => 1 } ],
+    [ 'POST',   qr{^/api/dev/queries$},                \&Wahana::Controller::DocsController::create_query,   { auth => 1, dev => 1 } ],
+    [ 'PUT',    qr{^/api/dev/queries/([^/]+)$},        \&Wahana::Controller::DocsController::update_query,   { auth => 1, dev => 1 } ],
+    [ 'DELETE', qr{^/api/dev/queries/([^/]+)$},        \&Wahana::Controller::DocsController::delete_query,   { auth => 1, dev => 1 } ],
 );
 
 # Titik masuk utama semua adapter (dev server HTTP & CGI produksi).

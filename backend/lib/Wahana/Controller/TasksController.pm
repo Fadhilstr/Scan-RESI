@@ -30,30 +30,23 @@ sub list {
     my ($req) = @_;
     my $params = $req->{params} // {};
 
-    my @where;
-    my @bind;
-    if (my $uid = trim($params->{user_id} // '')) {
-        push @where, 't.user_id = ?';
-        push @bind,  $uid;
-    }
-    if (my $status = trim($params->{status} // '')) {
-        push @where, 't.status = ?';
-        push @bind,  $status;
-    }
+    my $uid    = trim($params->{user_id} // '');
+    my $status = trim($params->{status} // '');
 
-    my $dbh = Wahana::Db->connect();
-    my $base_sql = Wahana::Query->get('tasks_list_base');
-    my $sql = $base_sql
-        . (@where ? ' WHERE ' . join(' AND ', @where) : '')
-        . ' ORDER BY t.task_id DESC';
+    my $roq = Wahana::Query->new(name => 'TasksListAll');
+    my $rows = $roq->selectall();
 
-    my $rows = $dbh->selectall_arrayref($sql, { Slice => {} }, @bind);
+    if ($uid) {
+        @$rows = grep { $_->{user_id} && $_->{user_id} eq $uid } @$rows;
+    }
+    if ($status) {
+        @$rows = grep { $_->{status} && $_->{status} eq $status } @$rows;
+    }
 
     return { tasks => [ map { map_task($_) } @$rows ] };
 }
 
 # POST /api/tasks  (ADMIN only)
-# Body: { user_id, shift?, tanggal?, target?, lokasi? }
 sub create {
     my ($req) = @_;
     my $body = $req->{body} // {};
@@ -71,21 +64,25 @@ sub create {
 
     my $dbh = Wahana::Db->connect();
 
-    # User harus ada
-    my $user_exists = $dbh->selectrow_array(
-        Wahana::Query->get('tasks_check_user_exists'), undef, $user_id
-    );
+    # Cek user
+    my $user = Wahana::Query->new(name => 'UsersGetById', data => { id => $user_id })->selectrow();
     return { success => \0, message => "User '$user_id' tidak ditemukan." }
-        unless $user_exists;
+        unless $user;
 
-    # Generate ID berurutan: TASK-004, TASK-005, ...
-    my $max_num = $dbh->selectrow_array(Wahana::Query->get('tasks_get_max_id'));
+    my $max_num = $dbh->selectrow_array("SELECT COALESCE(MAX(CAST(SUBSTRING(task_id, 6) AS UNSIGNED)), 0) FROM tasks WHERE task_id REGEXP '^TASK-[0-9]+$'") // 0;
     my $new_id = sprintf 'TASK-%03d', $max_num + 1;
 
-    $dbh->do(
-        Wahana::Query->get('tasks_insert'),
-        undef, $new_id, $user_id, $shift, $tanggal, $target, $lokasi
-    );
+    Wahana::Query->new(
+        name => 'TasksInsert',
+        data => {
+            task_id => $new_id,
+            user_id => $user_id,
+            shift   => $shift,
+            tanggal => $tanggal,
+            target  => $target,
+            lokasi  => $lokasi,
+        }
+    )->execute();
 
     record_audit(
         user_id    => $req->{auth_user}{uid},
@@ -94,9 +91,7 @@ sub create {
         ip_address => $req->{ip},
     );
 
-    my $row = $dbh->selectrow_hashref(
-        Wahana::Query->get('tasks_get_by_id'), undef, $new_id
-    );
+    my $row = Wahana::Query->new(name => 'TasksGetById', data => { task_id => $new_id })->selectrow();
 
     return { success => \1, task => map_task($row) };
 }
@@ -106,14 +101,10 @@ sub progress {
     my ($req, $captures) = @_;
     my $task_id = $captures->[0];
 
-    my $dbh = Wahana::Db->connect();
-    my $rows = $dbh->do(
-        Wahana::Query->get('tasks_increment_progress'),
-        undef, 1, $task_id
-    );
-
-    return { success => \0, message => "Task $task_id tidak ditemukan atau sudah SELESAI." }
-        unless $rows;
+    Wahana::Query->new(
+        name => 'TasksProgress',
+        data => { task_id => $task_id, increment => 1 }
+    )->execute();
 
     return { success => \1 };
 }
@@ -123,9 +114,7 @@ sub complete {
     my ($req, $captures) = @_;
     my $task_id = $captures->[0];
 
-    my $dbh = Wahana::Db->connect();
-    my $task = $dbh->selectrow_hashref(Wahana::Query->get('tasks_get_by_id'), undef, $task_id);
-
+    my $task = Wahana::Query->new(name => 'TasksGetById', data => { task_id => $task_id })->selectrow();
     return { success => \0, message => 'Task tidak ditemukan.' }
         unless $task;
 
@@ -133,7 +122,10 @@ sub complete {
         return { success => \1, message => "Task $task_id sudah berstatus SELESAI." };
     }
 
-    $dbh->do(Wahana::Query->get('tasks_complete'), undef, $task_id);
+    Wahana::Query->new(
+        name => 'TasksComplete',
+        data => { task_id => $task_id }
+    )->execute();
 
     record_audit(
         user_id    => $req->{auth_user}{uid},

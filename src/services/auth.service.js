@@ -1,27 +1,16 @@
 /**
- * auth.service.js — Service Layer Autentikasi
+ * auth.service.js — Service Layer Autentikasi (Request Object Style)
  *
- * Semua operasi autentikasi dan manajemen user ada di sini.
- *
- * MODE LOCAL (VITE_USE_LOCAL_DATA=true):
- *   Menggunakan data dummy array lokal.
- *
- * MODE API (VITE_USE_LOCAL_DATA=false):
- *   Menggunakan HTTP calls ke backend Perl via axios.
- *   Endpoint yang dituju:
- *     POST   /api/auth/login
- *     POST   /api/auth/logout
- *     GET    /api/users
- *     POST   /api/users
- *     PATCH  /api/users/:id/status
+ * Menggunakan gaya pemanggilan:
+ *   api({
+ *     url: '/api/auth/login',
+ *     method: 'POST',
+ *     data: { ... }
+ *   })
  */
-
 import api, { USE_LOCAL_DATA } from './api'
 import { addAuditLog } from './audit.service'
 
-// =====================================================================
-// LOCAL DUMMY DATA — Digunakan saat USE_LOCAL_DATA=true
-// =====================================================================
 const LOCAL_USERS = [
   {
     id: 'USR-ADMIN-001',
@@ -70,7 +59,6 @@ const LOCAL_USERS = [
   }
 ]
 
-// Helper: format datetime string
 const nowString = () => {
   const now = new Date()
   const d = String(now.getDate()).padStart(2, '0')
@@ -79,30 +67,16 @@ const nowString = () => {
   return `${d}-${m}-${y} ${now.toTimeString().split(' ')[0]}`
 }
 
-// =====================================================================
-// SERVICE FUNCTIONS
-// =====================================================================
-
-/**
- * Login user dengan username & password.
- * @returns {Promise<{success, user, role, message}>}
- */
 export async function login(username, password) {
   if (USE_LOCAL_DATA) {
-    // --- LOCAL MODE ---
     const user = LOCAL_USERS.find(
       (u) =>
         u.username.toLowerCase() === (username || '').trim().toLowerCase() &&
         u.password === password
     )
 
-    if (!user) {
-      return { success: false, message: 'Username atau password salah.' }
-    }
-
-    if (user.status === 'DISABLED') {
-      return { success: false, message: 'Akun Anda telah dinonaktifkan.' }
-    }
+    if (!user) return { success: false, message: 'Username atau password salah.' }
+    if (user.status === 'DISABLED') return { success: false, message: 'Akun Anda telah dinonaktifkan.' }
 
     user.status = 'ONLINE'
     user.lastLogin = nowString()
@@ -122,13 +96,13 @@ export async function login(username, password) {
     }
   }
 
-  // --- API MODE ---
-  // POST /api/auth/login
-  // Response JSON dari Perl: { success, user, token, message }
-  // (Server mencatat LOGIN_SUCCESS ke tabel AUDIT_LOGS secara otomatis.)
+  // --- API MODE (Object Style with url) ---
   try {
-    const data = await api.post('/api/auth/login', { username, password })
-    // Simpan JWT token jika ada
+    const data = await api({
+      url: '/api/auth/login',
+      method: 'POST',
+      data: { username, password }
+    })
     if (data.token) localStorage.setItem('wahana_token', data.token)
     return { success: true, user: data.user, role: data.user?.role, message: data.message }
   } catch (err) {
@@ -136,12 +110,6 @@ export async function login(username, password) {
   }
 }
 
-/**
- * Quick login 1-click untuk demo (PRD FR-1.2).
- * MODE LOCAL : bypass password dari data dummy.
- * MODE API   : POST /api/auth/quick-login (endpoint demo backend).
- * @returns {Promise<{success, user, role, message}>}
- */
 export async function quickLogin(userId) {
   if (USE_LOCAL_DATA) {
     const user = LOCAL_USERS.find((u) => u.id === userId)
@@ -164,10 +132,13 @@ export async function quickLogin(userId) {
     }
   }
 
-  // --- API MODE ---
-  // POST /api/auth/quick-login (endpoint demo sesuai PRD FR-1.2)
+  // --- API MODE (Object Style with url) ---
   try {
-    const data = await api.post('/api/auth/quick-login', { user_id: userId })
+    const data = await api({
+      url: '/api/auth/quick-login',
+      method: 'POST',
+      data: { user_id: userId }
+    })
     if (data.token) localStorage.setItem('wahana_token', data.token)
     return {
       success: true,
@@ -180,9 +151,6 @@ export async function quickLogin(userId) {
   }
 }
 
-/**
- * Logout user.
- */
 export async function logout(userId) {
   if (USE_LOCAL_DATA) {
     const user = LOCAL_USERS.find((u) => u.id === userId)
@@ -198,37 +166,33 @@ export async function logout(userId) {
     return { success: true }
   }
 
-  // --- API MODE ---
-  // POST /api/auth/logout
+  // --- API MODE (Object Style with url) ---
   try {
-    await api.post('/api/auth/logout', { user_id: userId })
+    await api({
+      url: '/api/auth/logout',
+      method: 'POST',
+      data: { user_id: userId }
+    })
     localStorage.removeItem('wahana_token')
     return { success: true }
   } catch {
-    return { success: true } // logout local tetap berhasil
+    return { success: true }
   }
 }
 
-/**
- * Ambil seluruh daftar user dari sistem.
- * @returns {Promise<User[]>}
- */
 export async function getUsers() {
   if (USE_LOCAL_DATA) {
     return [...LOCAL_USERS]
   }
 
-  // --- API MODE ---
-  // GET /api/users
-  // Response: { users: [...] }
-  const data = await api.get('/api/users')
+  // --- API MODE (Object Style with url) ---
+  const data = await api({
+    url: '/api/users',
+    method: 'GET'
+  })
   return data.users || []
 }
 
-/**
- * Tambah user baru.
- * @returns {Promise<{success, user}>}
- */
 export async function addUser(newUserData) {
   const role = typeof newUserData.role === 'object' && newUserData.role !== null
     ? (newUserData.role.value || newUserData.role.label || 'PETUGAS_SCAN')
@@ -253,20 +217,19 @@ export async function addUser(newUserData) {
     return { success: true, user: { ...created } }
   }
 
-  // --- API MODE ---
-  // POST /api/users
+  // --- API MODE (Object Style with url) ---
   const payload = {
     ...newUserData,
     role
   }
-  const data = await api.post('/api/users', payload)
+  const data = await api({
+    url: '/api/users',
+    method: 'POST',
+    data: payload
+  })
   return { success: true, user: data.user }
 }
 
-/**
- * Toggle status user (ACTIVE <-> DISABLED).
- * @returns {Promise<{success, newStatus}>}
- */
 export async function toggleUserStatus(userId) {
   if (USE_LOCAL_DATA) {
     const target = LOCAL_USERS.find((u) => u.id === userId)
@@ -275,18 +238,14 @@ export async function toggleUserStatus(userId) {
     return { success: true, newStatus: target.status }
   }
 
-  // --- API MODE ---
-  // PATCH /api/users/:id/status
-  const data = await api.patch(`/api/users/${userId}/status`)
+  // --- API MODE (Object Style with url) ---
+  const data = await api({
+    url: `/api/users/${encodeURIComponent(userId)}/status`,
+    method: 'PATCH'
+  })
   return { success: true, newStatus: data.newStatus }
 }
 
-/**
- * Update data user (ADMIN only).
- * @param {string} userId
- * @param {object} userData
- * @returns {Promise<{success, user, message}>}
- */
 export async function updateUser(userId, userData) {
   const role = typeof userData.role === 'object' && userData.role !== null
     ? (userData.role.value || userData.role.label || 'PETUGAS_SCAN')
@@ -305,21 +264,19 @@ export async function updateUser(userId, userData) {
     return { success: true, user: { ...LOCAL_USERS[idx] } }
   }
 
-  // --- API MODE ---
-  // PUT /api/users/:id
+  // --- API MODE (Object Style with url) ---
   const payload = {
     ...userData,
     role
   }
-  const data = await api.put(`/api/users/${userId}`, payload)
+  const data = await api({
+    url: `/api/users/${encodeURIComponent(userId)}`,
+    method: 'PUT',
+    data: payload
+  })
   return data
 }
 
-/**
- * Delete user (ADMIN only).
- * @param {string} userId
- * @returns {Promise<{success, message}>}
- */
 export async function deleteUser(userId) {
   if (USE_LOCAL_DATA) {
     const idx = LOCAL_USERS.findIndex((u) => u.id === userId)
@@ -328,8 +285,10 @@ export async function deleteUser(userId) {
     return { success: true, message: 'User berhasil dihapus.' }
   }
 
-  // --- API MODE ---
-  // DELETE /api/users/:id
-  const data = await api.delete(`/api/users/${userId}`)
+  // --- API MODE (Object Style with url) ---
+  const data = await api({
+    url: `/api/users/${encodeURIComponent(userId)}`,
+    method: 'DELETE'
+  })
   return data
 }

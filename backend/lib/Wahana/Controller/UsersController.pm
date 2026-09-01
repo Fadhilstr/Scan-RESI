@@ -11,7 +11,6 @@ use Exporter 'import';
 our @EXPORT_OK = qw(map_user get_user_role);
 
 # Map baris tabel users ke bentuk JSON yang dikonsumsi frontend.
-# CATATAN: password_hash TIDAK PERNAH dikirim ke klien.
 sub map_user {
     my ($r) = @_;
     return {
@@ -26,20 +25,19 @@ sub map_user {
 
 sub get_user_role {
     my ($user_id) = @_;
-    my $dbh  = Wahana::Db->connect();
-    my $sql  = Wahana::Query->get('users_get_role');
-    my $role = $dbh->selectrow_array($sql, undef, $user_id);
-    return $role;
+    my $roq = Wahana::Query->new(
+        name => 'UsersGetById',
+        data => { id => $user_id }
+    );
+    my $row = $roq->selectrow();
+    return $row ? $row->{role} : undef;
 }
 
 # GET /api/users
 sub list {
     my ($req) = @_;
-
-    my $dbh  = Wahana::Db->connect();
-    my $sql  = Wahana::Query->get('users_list_all');
-    my $rows = $dbh->selectall_arrayref($sql, { Slice => {} });
-
+    my $roq = Wahana::Query->new(name => 'UsersListAll');
+    my $rows = $roq->selectall();
     return { users => [ map { map_user($_) } @$rows ] };
 }
 
@@ -58,174 +56,158 @@ sub create {
     my $role = uc(trim($raw_role // 'PETUGAS_SCAN'));
     $role = 'PETUGAS_SCAN' if $role eq 'PETUGAS' || $role eq 'PETUGAS SCAN';
     $role = 'CUSTOMER'     if $role eq 'CUST';
+    $role = 'DEVELOPER'    if $role eq 'DEV';
 
     return { success => \0, message => 'Nama dan username wajib diisi.' }
         unless length $name && length $username;
 
-    my %valid_roles = map { $_ => 1 } qw(ADMIN PETUGAS_SCAN CUSTOMER);
-    return { success => \0, message => 'Role tidak valid.' }
-        unless $valid_roles{$role};
-
+    # Cek duplikasi username
     my $dbh = Wahana::Db->connect();
-
-    # Username harus unik
-    my $check_sql = Wahana::Query->get('users_check_username_exists');
-    my $exists = $dbh->selectrow_array($check_sql, undef, $username);
+    my $existing = $dbh->selectrow_array("SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?)", undef, $username);
     return { success => \0, message => "Username '$username' sudah digunakan." }
-        if $exists;
+        if $existing;
 
-    # Generate ID berurutan sesuai role:
-    my $new_id;
-    if ($role eq 'CUSTOMER') {
-        my $max_cust = $dbh->selectrow_array(Wahana::Query->get('users_get_max_cust_id'));
-        $new_id = sprintf 'USR-CUST-%03d', ($max_cust // 0) + 1;
-    } elsif ($role eq 'ADMIN') {
-        my $max_admin = $dbh->selectrow_array(Wahana::Query->get('users_get_max_admin_id'));
-        $new_id = sprintf 'USR-ADMIN-%03d', ($max_admin // 0) + 1;
+    # Generate format ID
+    my $id;
+    if ($role eq 'ADMIN') {
+        my $max_num = $dbh->selectrow_array("SELECT COALESCE(MAX(CAST(SUBSTRING(id, 11) AS UNSIGNED)), 0) FROM users WHERE id REGEXP '^USR-ADMIN-[0-9]+$'") // 0;
+        $id = sprintf('USR-ADMIN-%03d', $max_num + 1);
+    } elsif ($role eq 'CUSTOMER') {
+        my $max_num = $dbh->selectrow_array("SELECT COALESCE(MAX(CAST(SUBSTRING(id, 10) AS UNSIGNED)), 0) FROM users WHERE id REGEXP '^USR-CUST-[0-9]+$'") // 0;
+        $id = sprintf('USR-CUST-%03d', $max_num + 1);
+    } elsif ($role eq 'DEVELOPER') {
+        my $max_num = $dbh->selectrow_array("SELECT COALESCE(MAX(CAST(SUBSTRING(id, 9) AS UNSIGNED)), 0) FROM users WHERE id REGEXP '^USR-DEV-[0-9]+$'") // 0;
+        $id = sprintf('USR-DEV-%03d', $max_num + 1);
     } else {
-        my $max_num = $dbh->selectrow_array(Wahana::Query->get('users_get_max_petugas_id'));
-        $new_id = sprintf 'USR-%03d', ($max_num // 0) + 1;
+        my $max_num = $dbh->selectrow_array("SELECT COALESCE(MAX(CAST(SUBSTRING(id, 5) AS UNSIGNED)), 0) FROM users WHERE id REGEXP '^USR-[0-9]+$'") // 0;
+        $id = sprintf('USR-%03d', $max_num + 1);
     }
 
-    $dbh->do(
-        Wahana::Query->get('users_insert'),
-        undef,
-        $new_id, $name, $username,
-        Wahana::Auth->hash_password($password),
-        $role, 'OFFLINE'
-    );
+    my $pass_hash = Wahana::Auth->hash_password($password);
+
+    Wahana::Query->new(
+        name => 'UsersInsert',
+        data => {
+            id            => $id,
+            name          => $name,
+            username      => $username,
+            password_hash => $pass_hash,
+            role          => $role,
+            status        => 'OFFLINE',
+        }
+    )->execute();
 
     record_audit(
         user_id    => $req->{auth_user}{uid},
         action     => 'USER_CREATED',
-        details    => "User baru $name ($new_id) dengan role $role.",
+        details    => "Membuat user '$username' ($role) dengan ID $id.",
         ip_address => $req->{ip},
     );
 
-    my $row = $dbh->selectrow_hashref(Wahana::Query->get('users_get_by_id'), undef, $new_id);
-    return { success => \1, user => map_user($row) };
-}
-
-# PATCH /api/users/:id/status  (ADMIN only)
-sub toggle_status {
-    my ($req, $captures) = @_;
-    my $user_id = $captures->[0];
-
-    my $dbh = Wahana::Db->connect();
-    my $row = $dbh->selectrow_hashref(Wahana::Query->get('users_get_by_id'), undef, $user_id);
-
-    return { success => \0, message => 'User tidak ditemukan.' }
-        unless $row;
-
-    my $new_status = $row->{status} eq 'DISABLED' ? 'OFFLINE' : 'DISABLED';
-    $dbh->do(Wahana::Query->get('users_toggle_status'), undef, $new_status, $user_id);
-
-    record_audit(
-        user_id    => $req->{auth_user}{uid},
-        action     => 'USER_STATUS_CHANGED',
-        details    => "Status $user_id diubah dari $row->{status} menjadi $new_status.",
-        ip_address => $req->{ip},
-    );
-
-    return { success => \1, newStatus => $new_status };
+    return {
+        success => \1,
+        user    => { id => $id, name => $name, username => $username, role => $role, status => 'OFFLINE' },
+        message => 'User berhasil dibuat.',
+    };
 }
 
 # PUT /api/users/:id  (ADMIN only)
 sub update {
     my ($req, $captures) = @_;
-    my $user_id = $captures->[0];
-    my $body = $req->{body} // {};
+    my $user_id = $captures->[0] or return { success => \0, message => 'ID tidak valid.' };
+    my $body    = $req->{body} // {};
 
-    my $dbh = Wahana::Db->connect();
-    my $row = $dbh->selectrow_hashref(Wahana::Query->get('users_get_by_id'), undef, $user_id);
-    return { success => \0, message => 'User tidak ditemukan.' } unless $row;
-
-    my $name     = trim($body->{name} // $row->{name});
-    my $username = trim($body->{username} // $row->{username});
-    my $password = $body->{password};
-
-    my $raw_role = $body->{role} // $row->{role};
+    my $name     = trim($body->{name}     // '');
+    my $username = trim($body->{username} // '');
+    my $raw_role = $body->{role};
     if (ref $raw_role eq 'HASH') {
         $raw_role = $raw_role->{value} // $raw_role->{label};
     }
-    my $role = uc(trim($raw_role // $row->{role}));
+    my $role = uc(trim($raw_role // 'PETUGAS_SCAN'));
     $role = 'PETUGAS_SCAN' if $role eq 'PETUGAS' || $role eq 'PETUGAS SCAN';
     $role = 'CUSTOMER'     if $role eq 'CUST';
+    $role = 'DEVELOPER'    if $role eq 'DEV';
 
     return { success => \0, message => 'Nama dan username wajib diisi.' }
         unless length $name && length $username;
 
-    my %valid_roles = map { $_ => 1 } qw(ADMIN PETUGAS_SCAN CUSTOMER);
-    return { success => \0, message => 'Role tidak valid.' }
-        unless $valid_roles{$role};
+    my $dbh = Wahana::Db->connect();
+    my $existing = $dbh->selectrow_array("SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?) AND id != ?", undef, $username, $user_id);
+    return { success => \0, message => "Username '$username' sudah digunakan user lain." }
+        if $existing;
 
-    # Username harus unik kecuali untuk user itu sendiri
-    my $exists = $dbh->selectrow_array(
-        Wahana::Query->get('users_check_username_exists_except_self'),
-        undef, $username, $user_id
-    );
-    return { success => \0, message => "Username '$username' sudah digunakan oleh user lain." }
-        if $exists;
-
-    if (defined $password && length trim($password)) {
-        $dbh->do(
-            Wahana::Query->get('users_update_with_password'),
-            undef, $name, $username, $role, Wahana::Auth->hash_password(trim($password)), $user_id
-        );
-    } else {
-        $dbh->do(
-            Wahana::Query->get('users_update_without_password'),
-            undef, $name, $username, $role, $user_id
-        );
+    my $pass_hash = '';
+    if (defined $body->{password} && length trim($body->{password})) {
+        $pass_hash = Wahana::Auth->hash_password(trim($body->{password}));
     }
+
+    Wahana::Query->new(
+        name => 'UsersUpdate',
+        data => {
+            id            => $user_id,
+            name          => $name,
+            username      => $username,
+            role          => $role,
+            password_hash => $pass_hash,
+        }
+    )->execute();
 
     record_audit(
         user_id    => $req->{auth_user}{uid},
         action     => 'USER_UPDATED',
-        details    => "Data user $name ($user_id) diperbarui. Role: $role.",
+        details    => "Update user '$username' ($user_id).",
         ip_address => $req->{ip},
     );
 
-    my $updated = $dbh->selectrow_hashref(Wahana::Query->get('users_get_by_id'), undef, $user_id);
-    return { success => \1, user => map_user($updated), message => 'Data user berhasil diperbarui.' };
+    return { success => \1, message => 'Data user berhasil diperbarui.' };
 }
 
 # DELETE /api/users/:id  (ADMIN only)
 sub delete {
     my ($req, $captures) = @_;
-    my $user_id = $captures->[0];
+    my $user_id = $captures->[0] or return { success => \0, message => 'ID tidak valid.' };
 
-    my $dbh = Wahana::Db->connect();
-    my $row = $dbh->selectrow_hashref(Wahana::Query->get('users_get_by_id'), undef, $user_id);
-    return { success => \0, message => 'User tidak ditemukan.' } unless $row;
+    return { success => \0, message => 'Anda tidak dapat menghapus akun Anda sendiri.' }
+        if $req->{auth_user}{uid} eq $user_id;
 
-    # Cegah admin menghapus dirinya sendiri
-    if ($req->{auth_user}{uid} eq $user_id) {
-        return { success => \0, message => 'Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif.' };
-    }
-
-    # Cek relasi data (tasks, paket, scan_events)
-    my $has_tasks = $dbh->selectrow_array(Wahana::Query->get('users_count_tasks'), undef, $user_id);
-    my $has_scans = $dbh->selectrow_array(Wahana::Query->get('users_count_scans'), undef, $user_id);
-    my $has_paket = $dbh->selectrow_array(Wahana::Query->get('users_count_paket'), undef, $user_id);
-
-    if ($has_tasks || $has_scans || $has_paket) {
-        return {
-            success => \0,
-            message => "User $row->{name} tidak dapat dihapus karena memiliki riwayat operasional (Tasks/Scans/Paket). Silakan nonaktifkan (Disable) user."
-        };
-    }
-
-    $dbh->do(Wahana::Query->get('users_delete'), undef, $user_id);
+    Wahana::Query->new(
+        name => 'UsersDelete',
+        data => { id => $user_id }
+    )->execute();
 
     record_audit(
         user_id    => $req->{auth_user}{uid},
         action     => 'USER_DELETED',
-        details    => "User $row->{name} ($user_id) telah dihapus dari sistem.",
+        details    => "Menghapus user ID $user_id.",
         ip_address => $req->{ip},
     );
 
-    return { success => \1, message => "User $row->{name} berhasil dihapus." };
+    return { success => \1, message => 'User berhasil dihapus.' };
+}
+
+# PATCH /api/users/:id/status  (ADMIN only)
+sub toggle_status {
+    my ($req, $captures) = @_;
+    my $user_id = $captures->[0] or return { success => \0, message => 'ID tidak valid.' };
+    my $body    = $req->{body} // {};
+
+    my $new_status = uc(trim($body->{status} // ''));
+    return { success => \0, message => 'Status harus ONLINE, OFFLINE, atau DISABLED.' }
+        unless $new_status =~ /^(ONLINE|OFFLINE|DISABLED)$/;
+
+    Wahana::Query->new(
+        name => 'UsersToggleStatus',
+        data => { id => $user_id, status => $new_status }
+    )->execute();
+
+    record_audit(
+        user_id    => $req->{auth_user}{uid},
+        action     => 'USER_STATUS_CHANGED',
+        details    => "Status user ID $user_id diubah menjadi $new_status.",
+        ip_address => $req->{ip},
+    );
+
+    return { success => \1, status => $new_status };
 }
 
 1;

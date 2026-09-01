@@ -1,32 +1,19 @@
 /**
- * paket.service.js — Service Layer Paket (Master Data Barang)
+ * paket.service.js — Service Layer Paket & Customer (Request Object Style)
  *
- * Nomor resi SELALU dibuat oleh BACKEND (prinsip inti sistem):
- *   CUSTOMER klik generate → POST /api/paket/resi → server susun
- *   8 karakter acak → barcode dirender frontend DARI resi tersebut.
- *
- * MODE LOCAL (VITE_USE_LOCAL_DATA=true):
- *   Array lokal kosong + generator resi sisi-klien yang meniru aturan server.
- *   TIDAK ADA DUMMY DATA - user harus create paket baru.
- *
- * MODE API (VITE_USE_LOCAL_DATA=false):
- *   Endpoint:
- *     POST  /api/paket/resi       — Generate resi + buat baris DRAFT (CUSTOMER/ADMIN)
- *     GET   /api/paket            — Daftar paket (customer otomatis di-scope miliknya)
- *     PATCH /api/paket/:resi      — Simpan data barang → TERDAFTAR
- *     GET   /api/paket/:resi      — Detail / cari data paket by nomor resi
+ * Menggunakan gaya pemanggilan:
+ *   api({
+ *     url: `/3pl/Customer/${resi}`,
+ *     method: 'PATCH',
+ *     data: { ... }
+ *   })
  */
-
 import api, { USE_LOCAL_DATA } from './api'
 import { addAuditLog } from './audit.service'
 
-// =====================================================================
-// ALFABET RESI — sama dengan backend (tanpa I, O, 0, 1)
-// =====================================================================
 const RESI_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const RESI_LEN = 8
 
-// Helper: format datetime string Waktu Indonesia Barat (WIB - Asia/Jakarta)
 export const getWIBTimeString = (dateObj = new Date()) => {
   const options = {
     timeZone: 'Asia/Jakarta',
@@ -53,12 +40,8 @@ export const getRelativeWIBTime = (minutesAgo = 0) => {
 
 const nowString = () => getWIBTimeString()
 
-// =====================================================================
-// LOCAL DATA — KOSONG (tidak ada dummy data)
-// =====================================================================
 export const LOCAL_PAKETS = []
 
-// Generator lokal — HANYA untuk mode demo; produksi selalu via backend.
 const makeLocalResi = () => {
   let resi = ''
   do {
@@ -69,23 +52,13 @@ const makeLocalResi = () => {
   return resi
 }
 
-// =====================================================================
-// SERVICE FUNCTIONS
-// =====================================================================
-
-/**
- * Minta backend membuat nomor resi baru + baris paket DRAFT.
- * @param {Object} currentUser - user pembuat (harus CUSTOMER/ADMIN)
- * @returns {Promise<{success, paket?, reason?, message?}>}
- */
 export async function generateResi(currentUser) {
   if (!currentUser) {
     return { success: false, message: 'Sesi tidak valid.' }
   }
 
   if (USE_LOCAL_DATA) {
-    // --- LOCAL MODE: tiru perilaku server ---
-    if (currentUser.role !== 'CUSTOMER' && currentUser.role !== 'ADMIN') {
+    if (currentUser.role !== 'CUSTOMER' && currentUser.role !== 'ADMIN' && currentUser.role !== 'DEVELOPER') {
       return { success: false, reason: 'FORBIDDEN', message: 'Hanya CUSTOMER atau ADMIN yang dapat membuat nomor resi.' }
     }
 
@@ -100,7 +73,7 @@ export async function generateResi(currentUser) {
       alamat_tujuan: null,
       telepon_penerima: '',
       berat_kg: 0,
-      jenis_layanan: 'REG',
+      jenis_layanan: 'REGULER',
       status: 'DRAFT',
       created_by: currentUser.id,
       creator_name: currentUser.name,
@@ -118,32 +91,27 @@ export async function generateResi(currentUser) {
     return { success: true, paket: { ...paket } }
   }
 
-  // --- API MODE: resi dibuat server-side ---
+  // --- API MODE (Object Style with url) ---
   try {
-    const data = await api.post('/api/paket/resi')
+    const data = await api({
+      url: '/3pl/Customer/resi',
+      method: 'POST'
+    })
     return { success: !!data.success, paket: data.paket, message: data.message }
   } catch (err) {
     return { success: false, reason: 'ERROR', message: err.message || 'Gagal membuat nomor resi.' }
   }
 }
 
-/**
- * Simpan data barang pada paket DRAFT → status TERDAFTAR.
- * @param {string} nomorResi
- * @param {Object} data - { nama_barang, pengirim, penerima, alamat_pengirim?, alamat_tujuan?, telepon_pengirim, telepon_penerima, berat_kg?, jenis_layanan?, pengirim_detail?, penerima_detail?, hub_asal?, hub_tujuan?, cod_amount? }
- * @param {Object} currentUser
- */
 export async function savePaketData(nomorResi, data, currentUser) {
   const resi = (nomorResi || '').trim().toUpperCase()
 
-  // Validasi field wajib (mirror backend)
   for (const field of ['nama_barang', 'pengirim', 'penerima', 'telepon_pengirim', 'telepon_penerima']) {
     if (!(data[field] || '').trim()) {
       return { success: false, reason: 'VALIDATION', message: `${field.replace('_', ' ')} wajib diisi.` }
     }
   }
 
-  // Validasi format telepon: 8-15 digit angka
   for (const field of ['telepon_pengirim', 'telepon_penerima']) {
     const val = (data[field] || '').trim()
     if (!/^\d{8,15}$/.test(val)) {
@@ -152,12 +120,11 @@ export async function savePaketData(nomorResi, data, currentUser) {
   }
 
   if (USE_LOCAL_DATA) {
-    // --- LOCAL MODE ---
     const paket = LOCAL_PAKETS.find((p) => p.nomor_resi === resi)
     if (!paket) {
       return { success: false, reason: 'NOT_FOUND', message: 'Paket tidak ditemukan.' }
     }
-    if (currentUser.role !== 'ADMIN' && paket.created_by !== currentUser.id) {
+    if (currentUser.role !== 'ADMIN' && currentUser.role !== 'DEVELOPER' && paket.created_by !== currentUser.id) {
       return { success: false, reason: 'FORBIDDEN', message: 'Hanya pembuat paket atau ADMIN yang dapat menyimpan data barang.' }
     }
 
@@ -170,12 +137,7 @@ export async function savePaketData(nomorResi, data, currentUser) {
       alamat_tujuan: (data.alamat_tujuan || '').trim(),
       telepon_penerima: data.telepon_penerima.trim(),
       berat_kg: Number(data.berat_kg) || 0,
-      jenis_layanan: data.jenis_layanan || 'REG',
-      pengirim_detail: data.pengirim_detail || null,
-      penerima_detail: data.penerima_detail || null,
-      hub_asal: data.hub_asal || 'Jakarta',
-      hub_tujuan: data.hub_tujuan || 'Bandung',
-      cod_amount: Number(data.cod_amount) || 0,
+      jenis_layanan: data.jenis_layanan || 'REGULER',
       status: 'TERDAFTAR'
     })
 
@@ -189,18 +151,22 @@ export async function savePaketData(nomorResi, data, currentUser) {
     return { success: true, message: `Paket ${resi} berhasil disimpan.`, paket: { ...paket } }
   }
 
-  // --- API MODE ---
+  // --- API MODE (Object Style with url: /3pl/Customer/...) ---
   try {
-    const res = await api.patch(`/api/paket/${encodeURIComponent(resi)}`, {
-      nama_barang: data.nama_barang,
-      pengirim: data.pengirim,
-      alamat_pengirim: data.alamat_pengirim,
-      telepon_pengirim: data.telepon_pengirim,
-      penerima: data.penerima,
-      alamat_tujuan: data.alamat_tujuan,
-      telepon_penerima: data.telepon_penerima,
-      berat_kg: data.berat_kg,
-      jenis_layanan: data.jenis_layanan
+    const res = await api({
+      url: `/3pl/Customer/${encodeURIComponent(resi)}`,
+      method: 'PATCH',
+      data: {
+        nama_barang: data.nama_barang,
+        pengirim: data.pengirim,
+        alamat_pengirim: data.alamat_pengirim,
+        telepon_pengirim: data.telepon_pengirim,
+        penerima: data.penerima,
+        alamat_tujuan: data.alamat_tujuan,
+        telepon_penerima: data.telepon_penerima,
+        berat_kg: data.berat_kg,
+        jenis_layanan: data.jenis_layanan
+      }
     })
     return {
       success: !!res.success,
@@ -232,14 +198,9 @@ export function parseDateToTime(dateStr) {
   return isNaN(parsed) ? 0 : parsed
 }
 
-/**
- * Ambil daftar paket (CUSTOMER otomatis hanya miliknya via backend).
- * @param {Object} filters - optional: { q, status, created_by }
- */
 export async function getPakets(filters = {}) {
   let result = []
   if (USE_LOCAL_DATA) {
-    // --- LOCAL MODE: scope customer dilakukan pemanggil (store) ---
     result = [...LOCAL_PAKETS]
     if (filters.created_by) result = result.filter((p) => p.created_by === filters.created_by)
     if (filters.status) result = result.filter((p) => p.status === filters.status)
@@ -252,20 +213,18 @@ export async function getPakets(filters = {}) {
       )
     }
   } else {
-    // --- API MODE ---
-    const data = await api.get('/api/paket', { params: filters })
+    // --- API MODE (Object Style with url: /3pl/Customer) ---
+    const data = await api({
+      url: '/3pl/Customer',
+      method: 'GET',
+      params: filters
+    })
     result = data.pakets || []
   }
 
-  // Urutkan paket secara descending berdasarkan timestamp pembuatan (created_at)
   return result.sort((a, b) => parseDateToTime(b.created_at) - parseDateToTime(a.created_at))
 }
 
-/**
- * Cari satu paket berdasarkan nomor resi (tahap "Cari Data Paket").
- * @param {string} nomorResi
- * @returns {Promise<{success, paket?, reason?, message?}>}
- */
 export async function getPaketByResi(nomorResi) {
   const resi = (nomorResi || '').trim().toUpperCase()
   if (!resi) {
@@ -273,7 +232,6 @@ export async function getPaketByResi(nomorResi) {
   }
 
   if (USE_LOCAL_DATA) {
-    // --- LOCAL MODE ---
     const paket = LOCAL_PAKETS.find((p) => p.nomor_resi === resi)
     if (!paket) {
       return { success: false, reason: 'NOT_FOUND', message: `Paket dengan resi ${resi} tidak ditemukan.` }
@@ -281,9 +239,12 @@ export async function getPaketByResi(nomorResi) {
     return { success: true, paket: { ...paket } }
   }
 
-  // --- API MODE ---
+  // --- API MODE (Object Style with url: /3pl/Customer/:id) ---
   try {
-    const data = await api.get(`/api/paket/${encodeURIComponent(resi)}`)
+    const data = await api({
+      url: `/3pl/Customer/${encodeURIComponent(resi)}`,
+      method: 'GET'
+    })
     return { success: !!data.success, reason: data.reason, paket: data.paket, message: data.message }
   } catch (err) {
     return { success: false, reason: 'ERROR', message: err.message || 'Gagal mencari data paket.' }
