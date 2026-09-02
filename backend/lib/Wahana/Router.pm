@@ -25,6 +25,11 @@ my @ROUTES = (
     [ 'GET',    qr{^/api/docs/?$},                     \&Wahana::Controller::DocsController::get_swagger_ui,  {} ],
 
     [ 'POST',   qr{^/api/auth/login$},                 \&Wahana::Controller::AuthController::login,          {} ],
+    [ 'POST',   qr{^/api/auth/verify-otp$},            \&Wahana::Controller::AuthController::verify_otp,     {} ],
+    [ 'POST',   qr{^/api/auth/resend-otp$},            \&Wahana::Controller::AuthController::resend_otp,     {} ],
+    [ 'POST',   qr{^/api/auth/forgot-password$},    \&Wahana::Controller::AuthController::forgot_password_request,   {} ],
+    [ 'POST',   qr{^/api/auth/verify-forgot-otp$}, \&Wahana::Controller::AuthController::verify_forgot_password_otp, {} ],
+    [ 'POST',   qr{^/api/auth/reset-password$},     \&Wahana::Controller::AuthController::reset_password,             {} ],
     [ 'POST',   qr{^/api/auth/quick-login$},           \&Wahana::Controller::AuthController::quick_login,    {} ],
     [ 'POST',   qr{^/api/auth/logout$},                \&Wahana::Controller::AuthController::logout,         {} ],
     [ 'GET',    qr{^/api/users$},                      \&Wahana::Controller::UsersController::list,          { auth => 1 } ],

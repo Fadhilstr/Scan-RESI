@@ -9,7 +9,7 @@
 -- =====================================================================
 
 -- name: auth_get_user_by_username
-SELECT * FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1;
+SELECT * FROM users WHERE LOWER(username) = LOWER(?) OR (email IS NOT NULL AND LOWER(email) = LOWER(?)) LIMIT 1;
 
 -- name: auth_get_user_by_id
 SELECT * FROM users WHERE id = ? LIMIT 1;
@@ -19,6 +19,25 @@ UPDATE users SET status = 'ONLINE', last_login = NOW() WHERE id = ?;
 
 -- name: auth_update_user_offline
 UPDATE users SET status = 'OFFLINE' WHERE id = ?;
+
+-- name: otp_invalidate_old
+UPDATE user_otps SET used = 1 WHERE user_id = ? AND used = 0;
+
+-- name: otp_insert
+INSERT INTO user_otps (user_id, email, otp_hash, expires_at) VALUES (?, ?, ?, ?);
+
+-- name: otp_get_latest
+SELECT * FROM user_otps WHERE user_id = ? AND used = 0 ORDER BY id DESC LIMIT 1;
+
+-- name: otp_increment_attempt
+UPDATE user_otps SET attempt_count = attempt_count + 1 WHERE id = ?;
+
+-- name: otp_mark_used
+UPDATE user_otps SET used = 1 WHERE id = ?;
+
+
+-- name: auth_update_user_password
+UPDATE users SET password_hash = ? WHERE id = ?;
 
 -- name: users_get_role
 SELECT role FROM users WHERE id = ?;
@@ -31,6 +50,12 @@ SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?);
 
 -- name: users_check_username_exists_except_self
 SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?) AND id != ?;
+
+-- name: users_check_email_exists
+SELECT COUNT(*) FROM users WHERE email IS NOT NULL AND email != '' AND LOWER(email) = LOWER(?);
+
+-- name: users_check_email_exists_except_self
+SELECT COUNT(*) FROM users WHERE email IS NOT NULL AND email != '' AND LOWER(email) = LOWER(?) AND id != ?;
 
 -- name: users_get_max_admin_id
 SELECT COALESCE(MAX(CAST(SUBSTRING(id, 11) AS UNSIGNED)), 0)
@@ -45,8 +70,8 @@ SELECT COALESCE(MAX(CAST(SUBSTRING(id, 5) AS UNSIGNED)), 0)
   FROM users WHERE id REGEXP '^USR-[0-9]+$';
 
 -- name: users_insert
-INSERT INTO users (id, name, username, password_hash, role, status)
-VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO users (id, name, username, email, password_hash, role, status)
+VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- name: users_get_by_id
 SELECT * FROM users WHERE id = ?;
@@ -55,10 +80,10 @@ SELECT * FROM users WHERE id = ?;
 UPDATE users SET status = ? WHERE id = ?;
 
 -- name: users_update_with_password
-UPDATE users SET name = ?, username = ?, role = ?, password_hash = ? WHERE id = ?;
+UPDATE users SET name = ?, username = ?, email = ?, role = ?, password_hash = ? WHERE id = ?;
 
 -- name: users_update_without_password
-UPDATE users SET name = ?, username = ?, role = ? WHERE id = ?;
+UPDATE users SET name = ?, username = ?, email = ?, role = ? WHERE id = ?;
 
 -- name: users_count_tasks
 SELECT COUNT(*) FROM tasks WHERE user_id = ?;

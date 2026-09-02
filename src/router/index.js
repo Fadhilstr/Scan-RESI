@@ -30,19 +30,24 @@ export default route((/* { store, ssrContext } */) => {
       return next({ name: 'login' })
     }
 
-    // 2. Jika sudah login dan membuka halaman login -> arahkan ke dashboard masing-masing
-    if (to.path === '/login' && authStore.isLoggedIn) {
-      if (authStore.isAdmin) return next({ name: 'admin-dashboard' })
-      if (authStore.isCustomer) return next({ name: 'customer-dashboard' })
-      return next({ name: 'petugas-dashboard' })
+    // 2. Sesi terdeteksi login tetapi role tidak valid / null -> reset sesi ke login
+    if (authStore.isLoggedIn && !authStore.role) {
+      authStore.logout()
+      return next({ name: 'login' })
     }
 
-    // 3. Pembatasan Akses Role Ketat:
-    // Setiap rute utama (/admin, /petugas, /customer) memiliki meta.role yang harus cocok
+    // 3. Jika sudah login dan membuka halaman login -> arahkan ke dashboard masing-masing
+    if ((to.path === '/login' || to.path === '/') && authStore.isLoggedIn) {
+      if (authStore.isAdmin) return next({ name: 'admin-dashboard' })
+      if (authStore.isCustomer) return next({ name: 'customer-dashboard' })
+      if (authStore.isPetugas) return next({ name: 'petugas-dashboard' })
+      return next({ name: 'login' })
+    }
+
+    // 4. Pembatasan Akses Role Ketat:
     if (authStore.isLoggedIn) {
       const requiredRole = to.matched.find((r) => r.meta && r.meta.role)?.meta?.role
       if (requiredRole && requiredRole !== authStore.role) {
-        // Tampilkan Alert Akses Ditolak
         Notify.create({
           type: 'negative',
           icon: 'gpp_bad',
@@ -54,7 +59,8 @@ export default route((/* { store, ssrContext } */) => {
 
         if (authStore.isAdmin) return next({ name: 'admin-dashboard' })
         if (authStore.isCustomer) return next({ name: 'customer-dashboard' })
-        return next({ name: 'petugas-dashboard' })
+        if (authStore.isPetugas) return next({ name: 'petugas-dashboard' })
+        return next({ name: 'login' })
       }
     }
 

@@ -47,6 +47,12 @@
             </q-td>
           </template>
 
+          <template v-slot:body-cell-email="props">
+            <q-td :props="props" class="font-mono text-primary text-weight-bold">
+              {{ props.row.email || '-' }}
+            </q-td>
+          </template>
+
           <template v-slot:body-cell-role="props">
             <q-td :props="props">
               <q-badge
@@ -131,6 +137,22 @@
         <q-card-section class="q-pt-md">
           <q-form @submit.prevent="saveNewUser" class="q-gutter-y-md">
             <q-input v-model="form.name" outlined dense label="Nama Lengkap" required />
+            <q-input
+              v-model="form.email"
+              outlined
+              dense
+              type="email"
+              label="Gmail / Email Penerima OTP"
+              placeholder="cth: budi@gmail.com"
+              hint="Email ini digunakan untuk penerimaan kode OTP saat login & reset password"
+              :rules="[
+                v => !!v || 'Gmail wajib diisi',
+                v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || 'Format Gmail tidak valid'
+              ]"
+              required
+            >
+              <template v-slot:prepend><q-icon name="email" size="20px" class="text-primary" /></template>
+            </q-input>
             <q-input v-model="form.username" outlined dense label="Username" required />
             <q-input v-model="form.password" outlined dense type="password" label="Password" required />
             <q-select
@@ -167,6 +189,21 @@
         <q-card-section class="q-pt-md">
           <q-form @submit.prevent="saveEditUser" class="q-gutter-y-md">
             <q-input v-model="editForm.name" outlined dense label="Nama Lengkap" required />
+            <q-input
+              v-model="editForm.email"
+              outlined
+              dense
+              type="email"
+              label="Gmail / Email Penerima OTP"
+              hint="Ubah Gmail ini untuk memperbarui alamat tujuan pengiriman OTP user"
+              :rules="[
+                v => !!v || 'Gmail wajib diisi',
+                v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || 'Format Gmail tidak valid'
+              ]"
+              required
+            >
+              <template v-slot:prepend><q-icon name="email" size="20px" class="text-primary" /></template>
+            </q-input>
             <q-input v-model="editForm.username" outlined dense label="Username" required />
             <q-input
               v-model="editForm.password"
@@ -242,6 +279,7 @@ const showAddDialog = ref(false)
 const form = ref({
   name: '',
   username: '',
+  email: '',
   password: '',
   role: 'PETUGAS_SCAN'
 })
@@ -251,6 +289,7 @@ const selectedEditUser = ref(null)
 const editForm = ref({
   name: '',
   username: '',
+  email: '',
   password: '',
   role: 'PETUGAS_SCAN'
 })
@@ -262,6 +301,7 @@ const columns = [
   { name: 'id', label: 'User ID', field: 'id', align: 'left', sortable: true },
   { name: 'name', label: 'Nama', field: 'name', align: 'left', sortable: true },
   { name: 'username', label: 'Username', field: 'username', align: 'left', sortable: true },
+  { name: 'email', label: 'Gmail / Email', field: 'email', align: 'left', sortable: true },
   { name: 'role', label: 'Role', field: 'role', align: 'center', sortable: true },
   { name: 'status', label: 'Status', field: 'status', align: 'center', sortable: true },
   { name: 'lastLogin', label: 'Last Login', field: 'lastLogin', align: 'center' },
@@ -269,7 +309,7 @@ const columns = [
 ]
 
 const openAddDialog = () => {
-  form.value = { name: '', username: '', password: '', role: 'PETUGAS_SCAN' }
+  form.value = { name: '', username: '', email: '', password: '', role: 'PETUGAS_SCAN' }
   showAddDialog.value = true
 }
 
@@ -300,6 +340,7 @@ const openEditDialog = (user) => {
   editForm.value = {
     name: user.name,
     username: user.username,
+    email: user.email || '',
     password: '',
     role: user.role
   }
@@ -311,6 +352,7 @@ const saveEditUser = async () => {
   const payload = {
     name: editForm.value.name,
     username: editForm.value.username,
+    email: editForm.value.email,
     role: editForm.value.role
   }
   if (editForm.value.password) {

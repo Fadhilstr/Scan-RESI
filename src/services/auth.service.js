@@ -124,11 +124,17 @@ export async function login(username, password) {
 
   // --- API MODE ---
   // POST /api/auth/login
-  // Response JSON dari Perl: { success, user, token, message }
-  // (Server mencatat LOGIN_SUCCESS ke tabel AUDIT_LOGS secara otomatis.)
   try {
     const data = await api.post('/api/auth/login', { username, password })
-    // Simpan JWT token jika ada
+    if (data.requires_otp) {
+      return {
+        success: true,
+        requires_otp: true,
+        preauth_token: data.preauth_token,
+        masked_email: data.masked_email,
+        message: data.message
+      }
+    }
     if (data.token) localStorage.setItem('wahana_token', data.token)
     return { success: true, user: data.user, role: data.user?.role, message: data.message }
   } catch (err) {
@@ -165,9 +171,17 @@ export async function quickLogin(userId) {
   }
 
   // --- API MODE ---
-  // POST /api/auth/quick-login (endpoint demo sesuai PRD FR-1.2)
   try {
     const data = await api.post('/api/auth/quick-login', { user_id: userId })
+    if (data.requires_otp) {
+      return {
+        success: true,
+        requires_otp: true,
+        preauth_token: data.preauth_token,
+        masked_email: data.masked_email,
+        message: data.message
+      }
+    }
     if (data.token) localStorage.setItem('wahana_token', data.token)
     return {
       success: true,
@@ -177,6 +191,128 @@ export async function quickLogin(userId) {
     }
   } catch (err) {
     return { success: false, message: err.message || 'Quick login gagal.' }
+  }
+}
+
+/**
+ * Verifikasi 6-digit OTP
+ */
+export async function verifyOtp(preauth_token, otp) {
+  if (USE_LOCAL_DATA) {
+    const user = LOCAL_USERS[0]
+    return {
+      success: true,
+      user: { ...user },
+      role: user.role,
+      message: 'Verifikasi OTP berhasil.'
+    }
+  }
+
+  try {
+    const data = await api.post('/api/auth/verify-otp', { preauth_token, otp })
+    if (data.token) localStorage.setItem('wahana_token', data.token)
+    return {
+      success: true,
+      user: data.user,
+      role: data.user?.role,
+      token: data.token,
+      message: data.message
+    }
+  } catch (err) {
+    return { success: false, message: err.message || 'Verifikasi OTP gagal.' }
+  }
+}
+
+/**
+ * Kirim ulang OTP (cooldown 60 detik)
+ */
+export async function resendOtp(preauth_token) {
+  if (USE_LOCAL_DATA) {
+    return { success: true, message: 'Kode OTP baru telah dikirim (mode simulasi).' }
+  }
+
+  try {
+    const data = await api.post('/api/auth/resend-otp', { preauth_token })
+    return {
+      success: true,
+      masked_email: data.masked_email,
+      message: data.message
+    }
+  } catch (err) {
+    return { success: false, message: err.message || 'Gagal mengirim ulang OTP.' }
+  }
+}
+
+/**
+ * Minta OTP Reset Password (Lupa Password)
+ */
+export async function forgotPasswordRequest(identity) {
+  if (USE_LOCAL_DATA) {
+    return {
+      success: true,
+      reset_token: 'local-reset-token-demo',
+      masked_email: 'f***2@gmail.com',
+      message: 'Kode OTP reset password dikirim (mode simulasi).'
+    }
+  }
+
+  try {
+    const data = await api.post('/api/auth/forgot-password', { identity })
+    return {
+      success: true,
+      reset_token: data.reset_token,
+      masked_email: data.masked_email,
+      message: data.message
+    }
+  } catch (err) {
+    return { success: false, message: err.message || 'Gagal meminta kode reset password.' }
+  }
+}
+
+/**
+ * Verifikasi OTP 6-Digit Reset Password
+ */
+export async function verifyForgotOtp(reset_token, otp) {
+  if (USE_LOCAL_DATA) {
+    return {
+      success: true,
+      reset_verified_token: 'local-verified-token-demo',
+      message: 'OTP berhasil diverifikasi.'
+    }
+  }
+
+  try {
+    const data = await api.post('/api/auth/verify-forgot-otp', { reset_token, otp })
+    return {
+      success: true,
+      reset_verified_token: data.reset_verified_token,
+      message: data.message
+    }
+  } catch (err) {
+    return { success: false, message: err.message || 'Verifikasi OTP gagal.' }
+  }
+}
+
+/**
+ * Reset / Buat Password Baru
+ */
+export async function resetPassword(reset_verified_token, new_password, confirm_password) {
+  if (USE_LOCAL_DATA) {
+    return { success: true, message: 'Password Anda berhasil diubah (mode simulasi).' }
+  }
+
+  try {
+    const data = await api.post('/api/auth/reset-password', {
+      reset_verified_token,
+      new_password,
+      confirm_password
+    })
+    return {
+      success: true,
+      message: data.message
+    }
+  } catch (err) {
+    return { success: false, message: err.message || 'Gagal mereset password.' }
   }
 }
 

@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(32) NOT NULL,
     name VARCHAR(100) NOT NULL,
     username VARCHAR(50) NOT NULL,
+    email VARCHAR(100) NULL,
     password_hash VARCHAR(255) NOT NULL,
     role ENUM(
         'ADMIN',
@@ -60,6 +61,22 @@ CREATE TABLE IF NOT EXISTS users (
     PRIMARY KEY (id),
     UNIQUE KEY uq_users_username (username)
 ) ENGINE = InnoDB;
+
+-- ---------------------------------------------------------------------
+-- Tabel USER_OTPS (OTP 2-Factor Authentication)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_otps (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(32) NOT NULL,
+    email VARCHAR(100) NOT NULL,
+    otp_hash VARCHAR(255) NOT NULL,
+    attempt_count INT DEFAULT 0,
+    used TINYINT(1) DEFAULT 0,
+    expires_at DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_otps (user_id, used, expires_at)
+) ENGINE = InnoDB;
+
 
 -- ---------------------------------------------------------------------
 -- Tabel TASKS

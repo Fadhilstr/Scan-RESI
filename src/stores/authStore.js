@@ -14,6 +14,11 @@ import {
   login as svcLogin,
   quickLogin as svcQuickLogin,
   logout as svcLogout,
+  verifyOtp as svcVerifyOtp,
+  resendOtp as svcResendOtp,
+  forgotPasswordRequest as svcForgotPasswordRequest,
+  verifyForgotOtp as svcVerifyForgotOtp,
+  resetPassword as svcResetPassword,
   getUsers as svcGetUsers,
   addUser as svcAddUser,
   updateUser as svcUpdateUser,
@@ -27,8 +32,17 @@ import { usePaketStore } from './paketStore'
 const getSavedUser = () => {
   try {
     const raw = localStorage.getItem('wahana_user')
-    return raw ? JSON.parse(raw) : null
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed && parsed.id && parsed.role) {
+      return parsed
+    }
+    localStorage.removeItem('wahana_user')
+    localStorage.removeItem('wahana_token')
+    return null
   } catch {
+    localStorage.removeItem('wahana_user')
+    localStorage.removeItem('wahana_token')
     return null
   }
 }
@@ -66,12 +80,24 @@ export const useAuthStore = defineStore('auth', {
       const taskStore = useTaskStore()
       const scanStore = useScanStore()
       const paketStore = usePaketStore()
-      await Promise.all([
-        this.fetchUsers(),
-        taskStore.fetchTasks(),
-        scanStore.fetchScans(),
-        paketStore.fetchPakets()
-      ])
+
+      const promises = []
+
+      // Hanya ADMIN yang boleh mengambil seluruh daftar user
+      if (this.isAdmin) {
+        promises.push(this.fetchUsers().catch((err) => console.warn('[FETCH_USERS]', err)))
+      }
+
+      // Task & Scan untuk ADMIN dan PETUGAS_SCAN
+      if (this.isAdmin || this.isPetugas) {
+        promises.push(taskStore.fetchTasks().catch((err) => console.warn('[FETCH_TASKS]', err)))
+        promises.push(scanStore.fetchScans().catch((err) => console.warn('[FETCH_SCANS]', err)))
+      }
+
+      // Paket untuk semua role
+      promises.push(paketStore.fetchPakets().catch((err) => console.warn('[FETCH_PAKETS]', err)))
+
+      await Promise.allSettled(promises)
     },
 
     /**
@@ -83,7 +109,7 @@ export const useAuthStore = defineStore('auth', {
       this.error = null
       try {
         const result = await svcLogin(username, password)
-        if (result.success) {
+        if (result.success && !result.requires_otp) {
           this.currentUser = result.user
           this.isLoggedIn = true
           localStorage.setItem('wahana_user', JSON.stringify(result.user))
@@ -106,6 +132,29 @@ export const useAuthStore = defineStore('auth', {
       this.error = null
       try {
         const result = await svcQuickLogin(userId)
+        if (result.success && !result.requires_otp) {
+          this.currentUser = result.user
+          this.isLoggedIn = true
+          localStorage.setItem('wahana_user', JSON.stringify(result.user))
+          await this.prefetchOperationalData()
+        }
+        return result
+      } catch (err) {
+        this.error = err.message
+        return { success: false, message: err.message }
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    /**
+     * Verifikasi 6-digit OTP
+     */
+    async verifyOtp(preauth_token, otp) {
+      this.isLoading = true
+      this.error = null
+      try {
+        const result = await svcVerifyOtp(preauth_token, otp)
         if (result.success) {
           this.currentUser = result.user
           this.isLoggedIn = true
@@ -113,6 +162,65 @@ export const useAuthStore = defineStore('auth', {
           await this.prefetchOperationalData()
         }
         return result
+      } catch (err) {
+        this.error = err.message
+        return { success: false, message: err.message }
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    /**
+     * Kirim ulang OTP
+     */
+    async resendOtp(preauth_token) {
+      try {
+        return await svcResendOtp(preauth_token)
+      } catch (err) {
+        return { success: false, message: err.message }
+      }
+    },
+
+    /**
+     * Minta OTP Reset Password (Lupa Password)
+     */
+    async forgotPasswordRequest(identity) {
+      this.isLoading = true
+      this.error = null
+      try {
+        return await svcForgotPasswordRequest(identity)
+      } catch (err) {
+        this.error = err.message
+        return { success: false, message: err.message }
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    /**
+     * Verifikasi OTP 6-Digit Reset Password
+     */
+    async verifyForgotOtp(reset_token, otp) {
+      this.isLoading = true
+      this.error = null
+      try {
+        return await svcVerifyForgotOtp(reset_token, otp)
+      } catch (err) {
+        this.error = err.message
+        return { success: false, message: err.message }
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    /**
+     * Simpan / Reset Password Baru
+     */
+    async resetPassword(reset_verified_token, new_password, confirm_password) {
+      this.isLoading = true
+      this.error = null
+      try {
+        return await svcResetPassword(reset_verified_token, new_password, confirm_password)
       } catch (err) {
         this.error = err.message
         return { success: false, message: err.message }

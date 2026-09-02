@@ -18,6 +18,7 @@ sub map_user {
         id        => $r->{id},
         name      => $r->{name},
         username  => $r->{username},
+        email     => $r->{email} // '',
         role      => $r->{role},
         status    => $r->{status},
         lastLogin => fmt_datetime($r->{last_login}),
@@ -50,6 +51,7 @@ sub create {
 
     my $name     = trim($body->{name}         // '');
     my $username = trim($body->{username}     // '');
+    my $email    = trim($body->{email} // $body->{gmail} // '');
     my $password = $body->{password}          // '123456';
     my $raw_role = $body->{role};
     if (ref $raw_role eq 'HASH') {
@@ -59,8 +61,11 @@ sub create {
     $role = 'PETUGAS_SCAN' if $role eq 'PETUGAS' || $role eq 'PETUGAS SCAN';
     $role = 'CUSTOMER'     if $role eq 'CUST';
 
-    return { success => \0, message => 'Nama dan username wajib diisi.' }
-        unless length $name && length $username;
+    return { success => \0, message => 'Nama, Gmail/Email, dan Username wajib diisi.' }
+        unless length $name && length $username && length $email;
+
+    return { success => \0, message => 'Format Gmail/Email tidak valid.' }
+        unless $email =~ /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     my %valid_roles = map { $_ => 1 } qw(ADMIN PETUGAS_SCAN CUSTOMER);
     return { success => \0, message => 'Role tidak valid.' }
@@ -73,6 +78,11 @@ sub create {
     my $exists = $dbh->selectrow_array($check_sql, undef, $username);
     return { success => \0, message => "Username '$username' sudah digunakan." }
         if $exists;
+
+    # Gmail harus unik
+    my $exists_em = $dbh->selectrow_array(Wahana::Query->get('users_check_email_exists'), undef, $email);
+    return { success => \0, message => "Gmail '$email' sudah digunakan oleh user lain." }
+        if $exists_em;
 
     # Generate ID berurutan sesuai role:
     my $new_id;
@@ -90,7 +100,7 @@ sub create {
     $dbh->do(
         Wahana::Query->get('users_insert'),
         undef,
-        $new_id, $name, $username,
+        $new_id, $name, $username, $email,
         Wahana::Auth->hash_password($password),
         $role, 'OFFLINE'
     );
@@ -98,7 +108,7 @@ sub create {
     record_audit(
         user_id    => $req->{auth_user}{uid},
         action     => 'USER_CREATED',
-        details    => "User baru $name ($new_id) dengan role $role.",
+        details    => "User baru $name ($new_id) dengan Gmail $email dan role $role.",
         ip_address => $req->{ip},
     );
 
@@ -142,6 +152,7 @@ sub update {
 
     my $name     = trim($body->{name} // $row->{name});
     my $username = trim($body->{username} // $row->{username});
+    my $email    = trim($body->{email} // $body->{gmail} // $row->{email} // '');
     my $password = $body->{password};
 
     my $raw_role = $body->{role} // $row->{role};
@@ -152,30 +163,41 @@ sub update {
     $role = 'PETUGAS_SCAN' if $role eq 'PETUGAS' || $role eq 'PETUGAS SCAN';
     $role = 'CUSTOMER'     if $role eq 'CUST';
 
-    return { success => \0, message => 'Nama dan username wajib diisi.' }
-        unless length $name && length $username;
+    return { success => \0, message => 'Nama, Gmail/Email, dan username wajib diisi.' }
+        unless length $name && length $username && length $email;
+
+    return { success => \0, message => 'Format Gmail/Email tidak valid.' }
+        unless $email =~ /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     my %valid_roles = map { $_ => 1 } qw(ADMIN PETUGAS_SCAN CUSTOMER);
     return { success => \0, message => 'Role tidak valid.' }
         unless $valid_roles{$role};
 
     # Username harus unik kecuali untuk user itu sendiri
-    my $exists = $dbh->selectrow_array(
+    my $exists_un = $dbh->selectrow_array(
         Wahana::Query->get('users_check_username_exists_except_self'),
         undef, $username, $user_id
     );
     return { success => \0, message => "Username '$username' sudah digunakan oleh user lain." }
-        if $exists;
+        if $exists_un;
+
+    # Gmail harus unik kecuali untuk user itu sendiri
+    my $exists_em = $dbh->selectrow_array(
+        Wahana::Query->get('users_check_email_exists_except_self'),
+        undef, $email, $user_id
+    );
+    return { success => \0, message => "Gmail '$email' sudah digunakan oleh user lain." }
+        if $exists_em;
 
     if (defined $password && length trim($password)) {
         $dbh->do(
             Wahana::Query->get('users_update_with_password'),
-            undef, $name, $username, $role, Wahana::Auth->hash_password(trim($password)), $user_id
+            undef, $name, $username, $email, $role, Wahana::Auth->hash_password(trim($password)), $user_id
         );
     } else {
         $dbh->do(
             Wahana::Query->get('users_update_without_password'),
-            undef, $name, $username, $role, $user_id
+            undef, $name, $username, $email, $role, $user_id
         );
     }
 

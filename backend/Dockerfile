@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libdbd-mysql-perl \
     libjson-pp-perl \
     libjson-xs-perl \
+    libio-socket-ssl-perl \
+    libnet-ssleay-perl \
+    libauthen-sasl-perl \
     uwsgi \
     uwsgi-plugin-psgi \
     default-mysql-client \
