@@ -66,9 +66,11 @@ sub login {
 
     # Kirim OTP via SMTP Gmail
     my ($mail_ok, $mail_msg) = send_otp_email(
-        to_email => $email,
-        otp_code => $otp_code,
-        app_name => 'DIJAK EXPRESS'
+        to_email  => $email,
+        user_name => $row->{name},
+        otp_code  => $otp_code,
+        context   => 'LOGIN',
+        app_name  => 'DIJAK EXPRESS'
     );
 
     record_audit(
@@ -301,9 +303,11 @@ sub quick_login {
     );
 
     send_otp_email(
-        to_email => $email,
-        otp_code => $otp_code,
-        app_name => 'DIJAK EXPRESS'
+        to_email  => $email,
+        user_name => $row->{name},
+        otp_code  => $otp_code,
+        context   => 'LOGIN',
+        app_name  => 'DIJAK EXPRESS'
     );
 
     record_audit(
@@ -394,9 +398,11 @@ sub forgot_password_request {
 
     # Kirim OTP Reset Password via SMTP Gmail
     send_otp_email(
-        to_email => $email,
-        otp_code => $otp_code,
-        app_name => 'DIJAK EXPRESS - Kode Reset Password'
+        to_email  => $email,
+        user_name => $row->{name},
+        otp_code  => $otp_code,
+        context   => 'FORGOT_PASSWORD',
+        app_name  => 'DIJAK EXPRESS'
     );
 
     record_audit(
