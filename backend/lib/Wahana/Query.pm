@@ -81,11 +81,4 @@ sub get_sql {
     return __PACKAGE__->get($name);
 }
 
-sub all {
-    my ($class) = @_;
-    _init() unless $INITIALIZED;
-    return \%QUERIES;
-}
-
-
 1;
