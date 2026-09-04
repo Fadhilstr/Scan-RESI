@@ -1,3 +1,1 @@
-Belajar Aplikasi Scan Barcode
-
-admin pass : admin123
+SCAN RESI BERBASIS BARCODE 128 DAN VERIFIKASI GMAIL MENGGUNAKAN OTP
