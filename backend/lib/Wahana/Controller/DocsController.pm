@@ -12,7 +12,7 @@ sub get_openapi_yaml {
         "$FindBin::Bin/etc/api/scanresi.yaml",
         "$FindBin::Bin/../etc/api/scanresi.yaml",
         "/app/etc/api/scanresi.yaml",
-        "/Documents/Scan-resi-magang/etc/api/scanresi.yaml"
+        "/Documents/Scan-resi-magang/backend/etc/api/scanresi.yaml"
     );
 
     my $content = '';

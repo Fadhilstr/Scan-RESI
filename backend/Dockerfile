@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libio-socket-ssl-perl \
     libnet-ssleay-perl \
     libauthen-sasl-perl \
+    libyaml-syck-perl \
+    libyaml-tiny-perl \
     uwsgi \
     uwsgi-plugin-psgi \
     default-mysql-client \

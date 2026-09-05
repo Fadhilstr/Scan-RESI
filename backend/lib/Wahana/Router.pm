@@ -2,71 +2,177 @@ package Wahana::Router;
 use strict;
 use warnings;
 use Exporter 'import';
+use FindBin;
+use File::stat;
+
+# Perl YAML Parser (Mendukung YAML::Syck sesuai standar DCAF SWB, dengan fallback ke YAML::Tiny)
+BEGIN {
+    if (eval { require YAML::Syck; 1 }) {
+        *load_yaml_file = sub { YAML::Syck::LoadFile($_[0]) };
+    } elsif (eval { require YAML::Tiny; 1 }) {
+        *load_yaml_file = sub { YAML::Tiny::LoadFile($_[0]) };
+    } else {
+        die "Modul YAML tidak ditemukan. Pastikan libyaml-syck-perl atau libyaml-tiny-perl terpasang.\n";
+    }
+}
+
 use Wahana::Config qw(config);
 use Wahana::Auth ();
 use Wahana::Response qw(json_response);
-use Wahana::Controller::AuthController   ();
-use Wahana::Controller::UsersController  qw(get_user_role);
-use Wahana::Controller::TasksController  ();
-use Wahana::Controller::ScansController  ();
-use Wahana::Controller::PaketController  ();
-use Wahana::Controller::AuditController  ();
-use Wahana::Controller::DocsController   ();
+use Wahana::Controller::UsersController qw(get_user_role);
 
-our @EXPORT_OK = qw(handle_request);
+# Controllers
+use Wahana::Controller::AuthController ();
+use Wahana::Controller::UsersController ();
+use Wahana::Controller::TasksController ();
+use Wahana::Controller::ScansController ();
+use Wahana::Controller::PaketController ();
+use Wahana::Controller::AuditController ();
+use Wahana::Controller::DocsController ();
 
-# =====================================================================
-# TABEL ROUTE — kontrak REST yang dikonsumsi frontend (src/services/)
-# meta: { auth => butuh token Bearer, admin => khusus role ADMIN }
-# =====================================================================
-my @ROUTES = (
-    # Dokumentasi API & OpenAPI Specification
-    [ 'GET',    qr{^/api/openapi\.ya?ml$},             \&Wahana::Controller::DocsController::get_openapi_yaml,{} ],
-    [ 'GET',    qr{^/api/docs/?$},                     \&Wahana::Controller::DocsController::get_swagger_ui,  {} ],
+our @EXPORT_OK = qw(handle_request load_api_routes);
 
-    [ 'POST',   qr{^/api/auth/login$},                 \&Wahana::Controller::AuthController::login,          {} ],
-    [ 'POST',   qr{^/api/auth/verify-otp$},            \&Wahana::Controller::AuthController::verify_otp,     {} ],
-    [ 'POST',   qr{^/api/auth/resend-otp$},            \&Wahana::Controller::AuthController::resend_otp,     {} ],
-    [ 'POST',   qr{^/api/auth/forgot-password$},    \&Wahana::Controller::AuthController::forgot_password_request,   {} ],
-    [ 'POST',   qr{^/api/auth/verify-forgot-otp$}, \&Wahana::Controller::AuthController::verify_forgot_password_otp, {} ],
-    [ 'POST',   qr{^/api/auth/reset-password$},     \&Wahana::Controller::AuthController::reset_password,             {} ],
-    [ 'POST',   qr{^/api/auth/quick-login$},           \&Wahana::Controller::AuthController::quick_login,    {} ],
-    [ 'POST',   qr{^/api/auth/logout$},                \&Wahana::Controller::AuthController::logout,         {} ],
-    [ 'GET',    qr{^/api/users$},                      \&Wahana::Controller::UsersController::list,          { auth => 1 } ],
-    [ 'POST',   qr{^/api/users$},                      \&Wahana::Controller::UsersController::create,        { auth => 1, admin => 1 } ],
-    [ 'PUT',    qr{^/api/users/([^/]+)$},              \&Wahana::Controller::UsersController::update,        { auth => 1, admin => 1 } ],
-    [ 'DELETE', qr{^/api/users/([^/]+)$},              \&Wahana::Controller::UsersController::delete,        { auth => 1, admin => 1 } ],
-    [ 'PATCH',  qr{^/api/users/([^/]+)/status$},       \&Wahana::Controller::UsersController::toggle_status, { auth => 1, admin => 1 } ],
-    [ 'GET',    qr{^/api/tasks$},                      \&Wahana::Controller::TasksController::list,          { auth => 1 } ],
-    [ 'POST',   qr{^/api/tasks$},                      \&Wahana::Controller::TasksController::create,        { auth => 1, admin => 1 } ],
-    [ 'PATCH',  qr{^/api/tasks/([^/]+)/progress$},     \&Wahana::Controller::TasksController::progress,      { auth => 1 } ],
-    [ 'PATCH',  qr{^/api/tasks/([^/]+)/complete$},     \&Wahana::Controller::TasksController::complete,      { auth => 1 } ],
-    [ 'GET',    qr{^/api/scans$},                      \&Wahana::Controller::ScansController::list,          { auth => 1 } ],
-    [ 'POST',   qr{^/api/scans$},                      \&Wahana::Controller::ScansController::create,        { auth => 1 } ],
-    [ 'GET',    qr{^/api/scans/stats/([^/]+)$},        \&Wahana::Controller::ScansController::stats,         { auth => 1 } ],
-    # Paket: resi digenerate SERVER (CUSTOMER/ADMIN); petugas hanya scan & lookup
-    [ 'POST',   qr{^/api/paket/resi$},                 \&Wahana::Controller::PaketController::create_draft,  { auth => 1 } ],
-    [ 'GET',    qr{^/api/paket$},                      \&Wahana::Controller::PaketController::list,          { auth => 1 } ],
-    [ 'PATCH',  qr{^/api/paket/([^/]+)$},              \&Wahana::Controller::PaketController::update,        { auth => 1 } ],
-    [ 'GET',    qr{^/api/paket/([^/]+)$},              \&Wahana::Controller::PaketController::detail,        { auth => 1 } ],
-    [ 'GET',    qr{^/api/audit-logs$},                 \&Wahana::Controller::AuditController::list,          { auth => 1, admin => 1 } ],
-);
+# Cache route table & last modified time
+our $COMPILED_ROUTES = [];
+our $LAST_MTIME      = 0;
+our $YAML_PATH       = undef;
 
-# Titik masuk utama semua adapter (dev server HTTP & CGI produksi).
+# Cari file scanresi.yaml di beberapa kemungkinan path
+sub _find_yaml_path {
+    my @candidates = (
+        "$FindBin::Bin/etc/api/scanresi.yaml",
+        "$FindBin::Bin/../etc/api/scanresi.yaml",
+        "/app/etc/api/scanresi.yaml",
+        "/Documents/Scan-resi-magang/backend/etc/api/scanresi.yaml",
+        "/Documents/Scan-resi-magang/etc/api/scanresi.yaml",
+    );
+    for my $f (@candidates) {
+        return $f if -f $f;
+    }
+    return undef;
+}
+
+# Compile rute dari file YAML OpenAPI 3.0 (DCAF Pattern)
+sub load_api_routes {
+    my ($force) = @_;
+
+    $YAML_PATH //= _find_yaml_path();
+    unless ($YAML_PATH && -f $YAML_PATH) {
+        warn "[ROUTER ERROR] File scanresi.yaml tidak ditemukan!\n";
+        return $COMPILED_ROUTES;
+    }
+
+    my $st = stat($YAML_PATH);
+    my $mtime = $st ? $st->mtime : 0;
+
+    # Jika sudah dicompile dan file belum berubah, gunakan cache memori
+    return $COMPILED_ROUTES if !$force && @$COMPILED_ROUTES && ($mtime <= $LAST_MTIME);
+
+    warn "[ROUTER DCAF] Mem-parsing & memuat rute dari $YAML_PATH (mtime: $mtime)...\n";
+    my $spec = eval { load_yaml_file($YAML_PATH) };
+    if ($@ || !$spec || ref $spec ne 'HASH' || !$spec->{paths}) {
+        warn "[ROUTER ERROR] Gagal membaca struktur YAML: $@\n";
+        return $COMPILED_ROUTES;
+    }
+
+    my @routes;
+    my $paths = $spec->{paths};
+
+    # Urutkan paths agar rute statis diprioritaskan sebelum rute bertemplate parameter {id}
+    my @sorted_paths = sort {
+        my $has_param_a = ($a =~ /{/) ? 1 : 0;
+        my $has_param_b = ($b =~ /{/) ? 1 : 0;
+        $has_param_a <=> $has_param_b || length($b) <=> length($a)
+    } keys %$paths;
+
+    for my $p (@sorted_paths) {
+        my $methods = $paths->{$p};
+        next unless ref $methods eq 'HASH';
+
+        # Buat regex path dari template OpenAPI
+        # Contoh: /users/{id} -> ^(?:/api)?/users/([^/]+)/?$
+        my $p_regex_str = $p;
+        # Dukung variasi ekstensi dokumen openapi.yaml dan openapi.yml
+        $p_regex_str =~ s!\.yaml$!\\.ya?ml!g;
+        # Ubah parameter path {name} menjadi capture regex ([^/]+)
+        $p_regex_str =~ s!\{[^}]+\}!([^/]+)!g;
+
+        my $full_regex = qr{^(?:/api)?$p_regex_str/?$};
+
+        for my $m (sort keys %$methods) {
+            my $m_uc = uc($m);
+            next unless $m_uc =~ /^(GET|POST|PUT|DELETE|PATCH)$/;
+
+            my $info = $methods->{$m};
+            next unless ref $info eq 'HASH';
+
+            my $op_id = $info->{operationId};
+            unless (defined $op_id && $op_id =~ m{/}) {
+                warn "[ROUTER DCAF] Lewati $m_uc $p: operationId tidak valid ('$op_id')\n";
+                next;
+            }
+
+            # Pola DCAF SWB: <methodName>/<ControllerName>
+            my ($sub_name, $ctrl_name) = split '/', $op_id, 2;
+            my $full_package = "Wahana::Controller::$ctrl_name";
+
+            my $handler = $full_package->can($sub_name);
+            unless ($handler) {
+                warn "[ROUTER DCAF] Method '$sub_name' tidak ditemukan pada $full_package!\n";
+                next;
+            }
+
+            # Metadata autentikasi dari deklarasi security & x-role di YAML
+            my $is_auth  = 0;
+            my $is_admin = 0;
+
+            if (exists $info->{security} && ref $info->{security} eq 'ARRAY') {
+                $is_auth = (@{ $info->{security} } > 0) ? 1 : 0;
+            }
+
+            if (my $role = $info->{'x-role'}) {
+                $is_admin = 1 if uc($role) eq 'ADMIN';
+                $is_auth  = 1 if $is_admin;
+            }
+
+            push @routes, [
+                $m_uc,
+                $full_regex,
+                $handler,
+                {
+                    auth         => $is_auth,
+                    admin        => $is_admin,
+                    operation_id => $op_id,
+                    path         => $p
+                }
+            ];
+        }
+    }
+
+    $COMPILED_ROUTES = \@routes;
+    $LAST_MTIME      = $mtime;
+
+    warn "[ROUTER DCAF] Berhasil memuat " . scalar(@routes) . " rute API aktif dari YAML!\n";
+    return $COMPILED_ROUTES;
+}
+
+# Titik masuk utama semua adapter (dev server HTTP & uWSGI produksi).
 # %req: method, path, params, body(hashref|undef), headers(lowercase keys), ip
 sub handle_request {
     my (%req) = @_;
 
     my $method = uc($req{method} // 'GET');
     my $path   = $req{path} // '/';
-    $path =~ s{/+$}{/};
 
     # Preflight CORS
     if ($method eq 'OPTIONS') {
         return json_response(status => 204, body => '');
     }
 
-    for my $route (@ROUTES) {
+    # Muat / periksa perubahan file YAML (DCAF dynamic reload)
+    my $routes = load_api_routes();
+
+    for my $route (@$routes) {
         my ($r_method, $r_regex, $handler, $meta) = @$route;
         next unless $method eq $r_method;
         my @captures = $path =~ $r_regex or next;
@@ -117,5 +223,8 @@ sub handle_request {
         data   => { success => \0, message => "Endpoint tidak ditemukan: $method $path" }
     );
 }
+
+# Inisialisasi rute saat modul pertama kali di-load
+load_api_routes();
 
 1;

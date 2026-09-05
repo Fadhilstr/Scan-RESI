@@ -98,9 +98,10 @@ Untuk inisialisasi awal sistem (*bootstrap master account*), sistem menyediakan 
   * Pencatatan otomatis setiap aksi penting di sistem (Login, Pembuatan Resi Paket, Eksekusi Scan, Update Status User, Penyelesaian Task).
   * Menyimpan metadata lengkap: User ID, Jenis Aksi, Rincian Payload/Keterangan, Alamat IP Pengguna, dan Timestamp.
 
-### 4.5 Modul Dokumentasi OpenAPI / Swagger (FR-5)
+### 4.5 Modul Dokumentasi OpenAPI / Swagger & Routing Engine (FR-5)
 * **FR-5.1**: Endpoint `/api/openapi.yaml` menyajikan spesifikasi REST API OpenAPI 3.0.3 lengkap.
 * **FR-5.2**: Endpoint `/api/docs` menyajikan Swagger UI interaktif untuk pengujian endpoint secara langsung.
+* **FR-5.3 - Active OpenAPI DCAF Routing**: File `backend/etc/api/scanresi.yaml` bertindak sebagai jantung pengendali routing backend aktif (mengadopsi pola framework DCAF SWB), memetakan setiap rute HTTP ke method controller secara dinamis via atribut `operationId: <method>/<Controller>`.
 
 ---
 
