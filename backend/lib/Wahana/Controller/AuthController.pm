@@ -73,6 +73,15 @@ sub login {
         app_name  => 'DIJAK EXPRESS'
     );
 
+    # Pengecekan Email
+    unless ($mail_ok) {
+        warn "[EMAIL_SEND_FAILED] Failed to send OTP login to $email: $mail_msg\n";
+        return {
+            success => \0,
+            message => "Gagal mengirimkan kode OTP ke email ($mail_msg). Silakan coba lagi atau hubungi admin.",
+        };
+    }
+
     record_audit(
         user_id    => $row->{id},
         action     => 'OTP_SENT',
@@ -406,13 +415,22 @@ sub forgot_password_request {
     );
 
     # Kirim OTP Reset Password via SMTP Gmail
-    send_otp_email(
+    my ($mail_ok, $mail_msg) = send_otp_email(
         to_email  => $email,
         user_name => $row->{name},
         otp_code  => $otp_code,
         context   => 'FORGOT_PASSWORD',
         app_name  => 'DIJAK EXPRESS'
     );
+
+    # Pengecekan Email
+    unless ($mail_ok) {
+        warn "[EMAIL_SEND_FAILED] Failed to send OTP reset password to $email: $mail_msg\n";
+        return {
+            success => \0,
+            message => "Gagal mengirimkan kode verifikasi reset password ke email. Silakan coba lagi nanti.",
+        };
+    }
 
     record_audit(
         user_id    => $row->{id},
