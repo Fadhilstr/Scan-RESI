@@ -249,6 +249,15 @@ sub resend_otp {
         app_name => 'DIJAK EXPRESS'
     );
 
+    #Pengecekan Email        
+    unless($mail_ok){
+        warn "[EMAIL_SEND_FAILED] Failed to send OTP to $email: $mail_msg";
+        return {
+            success => \0,
+            message => "Gagal mengirim OTP. Silakan coba lagi atau hubungi admin."
+        };
+    }
+
     record_audit(
         user_id    => $user_id,
         action     => 'OTP_RESENT',

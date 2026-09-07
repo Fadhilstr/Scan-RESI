@@ -2,6 +2,7 @@
 .thumbs.db
 node_modules
 docs
+scripts/
 # .env files
 .env*
 

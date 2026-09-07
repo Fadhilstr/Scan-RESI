@@ -5,6 +5,7 @@ use Wahana::Db;
 use Wahana::Query;
 use Wahana::Util qw(fmt_datetime trim);
 use Wahana::Audit qw(record_audit);
+use Wahana::Controller::UsersController qw(get_user_role);
 use Exporter 'import';
 
 our @EXPORT_OK = qw(map_scan);
@@ -28,6 +29,14 @@ sub map_scan {
 # GET /api/scans?user_id=&task_id=&status_scan=
 sub list {
     my ($req) = @_;
+    my $user_id = $req->{auth_user}{uid};
+    my $role = get_user_role($user_id);
+    if($role eq 'CUSTOMER'){
+        return { 
+            success => \0, 
+            message => "Akses ditolak. Pelanggan tidak dapat melihat data scan petugas" };
+    }
+    
     my $params = $req->{params} // {};
 
     my @where;

@@ -12,6 +12,7 @@ our @EXPORT_OK = qw(verify_password issue_token verify_token authenticate_reques
 # Generate OTP 6 digit angka acak (100000 - 999999)
 sub generate_otp {
     my ($class) = @_;
+    srand(time() ^ $$ + (($$ << 15))));
     return sprintf '%06d', int(rand(900000)) + 100000;
 }
 
