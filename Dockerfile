@@ -1,18 +1,21 @@
 # ============================================================
 # Dockerfile — Frontend Quasar (Node.js Dev Server)
 # ============================================================
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
 # Copy dependency definition
 COPY package*.json ./
 
-# Install dependencies
+# Install dependencies (ignore scripts during package install)
 RUN npm install --ignore-scripts
 
 # Copy seluruh source code frontend
 COPY . .
+
+# Jalankan quasar prepare setelah seluruh file project disalin
+RUN npx quasar prepare --silent
 
 EXPOSE 9000
 

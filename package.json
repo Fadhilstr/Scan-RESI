@@ -12,9 +12,11 @@
     "dev:lan": "WAHANA_DEV_HTTPS=1 quasar dev",
     "build": "quasar build",
     "build:pwa": "quasar build -m pwa",
+    "test:api": "node tests/api_automated_tests.js",
     "postinstall": "quasar prepare --silent"
   },
   "dependencies": {
+    "@esbuild/linux-x64": "^0.28.2",
     "@quasar/extras": "^1.16.0",
     "axios": "^1.19.0",
     "html5-qrcode": "^2.3.8",

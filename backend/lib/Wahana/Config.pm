@@ -18,7 +18,7 @@ sub config {
         db_pass      => $ENV{DB_PASS}      // $ENV{WAHANA_DB_PASS}      // 'wahana_pass',
         api_port     => $ENV{WAHANA_API_PORT}     // 5000,
         token_secret   => $ENV{WAHANA_TOKEN_SECRET} // 'wahana-dev-secret-2026-ganti-di-produksi',
-        token_ttl      => $ENV{WAHANA_TOKEN_TTL}    // 86400,   # detik (24 jam)
+        token_ttl      => $ENV{WAHANA_TOKEN_TTL}    // 86400,   
         smtp_host      => $ENV{SMTP_HOST}           // 'smtp.gmail.com',
         smtp_port      => $ENV{SMTP_PORT}           // 587,
         smtp_user      => $ENV{SMTP_USER}           // '',

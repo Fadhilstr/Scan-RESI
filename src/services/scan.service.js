@@ -178,6 +178,57 @@ export async function addScan({ resi, currentUser, activeTask, lokasi = 'CIPUTAT
     return { success: false, reason: 'FINISHED', message: 'Task sudah selesai dan tidak dapat melakukan scan.' }
   }
 
+  // --- DETEKSI KONEKSI OFFLINE HARDWARE/BROWSER ---
+  const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false
+
+  if (isOffline) {
+    try {
+      const { savePendingScan, getCachedPaketByResi } = await import('../utils/offlineDb')
+
+      // Cek cache resi jika ada
+      const cachedPaket = await getCachedPaketByResi(sanitizedResi)
+      if (cachedPaket && cachedPaket.status === 'DRAFT') {
+        return {
+          success: false,
+          reason: 'DRAFT',
+          message: `[OFFLINE] Nomor resi ${sanitizedResi} masih DRAFT (data barang belum diisi).`
+        }
+      }
+
+      await savePendingScan({
+        nomor_resi: sanitizedResi,
+        user_id: currentUser.id,
+        user_name: currentUser.name,
+        task_id: activeTask.task_id,
+        lokasi,
+        device_id,
+        jenis_scan
+      })
+
+      return {
+        success: true,
+        offline: true,
+        resi: sanitizedResi,
+        status_scan: 'SUCCESS_OFFLINE',
+        message: `[⚡ OFFLINE MODE] Resi ${sanitizedResi} berhasil disimpan di HP. Akan di-sync saat online.`,
+        scan: {
+          scan_id: `LOCAL-OFFLINE`,
+          nomor_resi: sanitizedResi,
+          user_id: currentUser.id,
+          user_name: currentUser.name,
+          task_id: activeTask.task_id,
+          waktu_scan: new Date().toLocaleString(),
+          lokasi,
+          status_scan: 'SUCCESS',
+          device_id,
+          jenis_scan
+        }
+      }
+    } catch (dbErr) {
+      console.error('[OFFLINE_DB_ERROR]', dbErr)
+    }
+  }
+
   if (USE_LOCAL_DATA) {
     // --- LOCAL MODE ---
     // Validasi ketat (paritas dengan backend): hanya resi TERDAFTAR di
@@ -301,6 +352,44 @@ export async function addScan({ resi, currentUser, activeTask, lokasi = 'CIPUTAT
       scan: data.scan
     }
   } catch (err) {
+    // FALLBACK NETWORK ERROR (Koneksi putus saat request berjalan): Simpan ke IndexedDB!
+    if (!err.response || err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
+      try {
+        const { savePendingScan } = await import('../utils/offlineDb')
+        await savePendingScan({
+          nomor_resi: sanitizedResi,
+          user_id: currentUser.id,
+          user_name: currentUser.name,
+          task_id: activeTask.task_id,
+          lokasi,
+          device_id,
+          jenis_scan
+        })
+
+        return {
+          success: true,
+          offline: true,
+          resi: sanitizedResi,
+          status_scan: 'SUCCESS_OFFLINE',
+          message: `[⚡ OFFLINE MODE] Koneksi ke server terputus. Resi ${sanitizedResi} tersimpan di HP.`,
+          scan: {
+            scan_id: `LOCAL-OFFLINE`,
+            nomor_resi: sanitizedResi,
+            user_id: currentUser.id,
+            user_name: currentUser.name,
+            task_id: activeTask.task_id,
+            waktu_scan: new Date().toLocaleString(),
+            lokasi,
+            status_scan: 'SUCCESS',
+            device_id,
+            jenis_scan
+          }
+        }
+      } catch (dbErr) {
+        console.error('[OFFLINE_DB_FALLBACK_ERROR]', dbErr)
+      }
+    }
+
     return { success: false, reason: 'ERROR', message: err.message || 'Gagal mengirim scan event.' }
   }
 }

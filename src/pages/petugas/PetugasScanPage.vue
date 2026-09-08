@@ -6,6 +6,15 @@
         <div class="row items-center">
           <h4 class="page-title q-mr-sm">Scan Paket</h4>
           <StatusBadge :status="activeTask?.status || 'SELESAI'" size="md" />
+          <q-chip
+            :color="scanStore.isOnline ? 'positive' : 'warning'"
+            text-color="white"
+            size="sm"
+            class="q-ml-sm text-weight-bold"
+            :icon="scanStore.isOnline ? 'wifi' : 'wifi_off'"
+          >
+            {{ scanStore.isOnline ? 'ONLINE' : 'OFFLINE MODE' }}
+          </q-chip>
         </div>
         <div class="page-subtitle">
           Petugas <span class="text-weight-medium text-slate-800">{{ authStore.currentUser?.name }}</span> &middot;
@@ -14,8 +23,20 @@
         </div>
       </div>
 
-      <div v-if="isTaskFinished">
+      <div class="row items-center q-gutter-xs">
         <q-btn
+          v-if="scanStore.pendingCount > 0"
+          color="warning"
+          text-color="dark"
+          icon="cloud_upload"
+          :label="`Sync (${scanStore.pendingCount})`"
+          no-caps
+          unelevated
+          :loading="scanStore.isSyncing"
+          @click="scanStore.triggerOfflineSync"
+        />
+        <q-btn
+          v-if="isTaskFinished"
           color="primary"
           icon="analytics"
           label="Hasil Scan Saya"
@@ -24,6 +45,26 @@
           to="/petugas/hasil"
         />
       </div>
+    </div>
+
+    <!-- Offline Network Notification Banner -->
+    <div v-if="!scanStore.isOnline" class="q-mb-md bg-amber-1 text-amber-10 q-pa-sm rounded-borders row items-center justify-between" style="border: 1px solid #fef3c7;">
+      <div class="row items-center">
+        <q-icon name="wifi_off" size="20px" class="q-mr-sm" />
+        <div>
+          <strong class="text-weight-bold">Mode Pemindaian Offline Aktif</strong> &bull;
+          <span>{{ scanStore.pendingCount }} scan tersimpan lokal di HP. Scan tetap berjalan lancar tanpa internet.</span>
+        </div>
+      </div>
+    </div>
+    <div v-else-if="scanStore.pendingCount > 0" class="q-mb-md bg-blue-1 text-primary q-pa-sm rounded-borders row items-center justify-between" style="border: 1px solid var(--q-primary);">
+      <div class="row items-center">
+        <q-icon name="cloud_sync" size="20px" class="q-mr-sm" />
+        <div>
+          <span>Koneksi internet terhubung kembali! Ada <strong>{{ scanStore.pendingCount }}</strong> data scan offline yang belum diunggah ke server.</span>
+        </div>
+      </div>
+      <q-btn color="primary" label="Unggah Ke Server" size="sm" unelevated no-caps icon="cloud_upload" :loading="scanStore.isSyncing" @click="scanStore.triggerOfflineSync" />
     </div>
 
     <q-separator class="q-mb-lg" />
@@ -244,7 +285,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useAuthStore } from '../../stores/authStore'
@@ -262,6 +303,10 @@ const authStore = useAuthStore()
 const taskStore = useTaskStore()
 const scanStore = useScanStore()
 const paketStore = usePaketStore()
+
+onMounted(() => {
+  scanStore.initOfflineSupport()
+})
 
 const showFinishModal = ref(false)
 const showConfirmScanModal = ref(false)

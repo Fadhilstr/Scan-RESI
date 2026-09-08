@@ -10,7 +10,7 @@
 use strict;
 use warnings;
 use FindBin;
-use lib "$FindBin::Bin/lib";
+use lib "$FindBin::Bin/lib", "$FindBin::Bin/lib/perl5/lib/perl5", "$FindBin::Bin/lib/perl5";
 
 use Wahana::Router   qw(handle_request);
 use Wahana::Response qw(decode_json_body);

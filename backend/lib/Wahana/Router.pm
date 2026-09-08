@@ -4,6 +4,7 @@ use warnings;
 use Exporter 'import';
 use FindBin;
 use File::stat;
+use lib "$FindBin::Bin/lib/perl5/lib/perl5", "$FindBin::Bin/lib/perl5", "$FindBin::Bin/../lib/perl5/lib/perl5", "$FindBin::Bin/../lib/perl5";
 
 # Perl YAML Parser (Mendukung YAML::Syck sesuai standar DCAF SWB, dengan fallback ke YAML::Tiny)
 BEGIN {
@@ -20,6 +21,7 @@ use Wahana::Config qw(config);
 use Wahana::Auth ();
 use Wahana::Response qw(json_response);
 use Wahana::Controller::UsersController qw(get_user_role);
+use Wahana::RateLimit qw(check_rate_limit);
 
 # Controllers
 use Wahana::Controller::AuthController ();
@@ -167,6 +169,16 @@ sub handle_request {
     # Preflight CORS
     if ($method eq 'OPTIONS') {
         return json_response(status => 204, body => '');
+    }
+
+    # --- Middleware Rate Limiting & Anti Brute-Force ---
+    my $rate_check = check_rate_limit(\%req);
+    if (!$rate_check->{allowed}) {
+        return json_response(
+            status  => $rate_check->{status} || 429,
+            headers => { 'Retry-After' => $rate_check->{retry_after} || 60 },
+            data    => { success => \0, reason => 'RATE_LIMIT', message => $rate_check->{message} }
+        );
     }
 
     # Muat / periksa perubahan file YAML (DCAF dynamic reload)
