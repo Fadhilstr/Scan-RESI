@@ -153,11 +153,6 @@ sub update {
     my $berat            = $body->{berat_kg};
     $berat = 0 unless defined $berat && $berat =~ /^\d+(\.\d+)?$/;
 
-    for($telepon_pengirim,$telepon_penerima){
-        $_ =~ s/^\+62/0/; 
-        $_ =~ s/[^\d]//g;
-    }
-
     # Validasi field wajib (termasuk telepon)
     for my $field (['nama_barang', $nama], ['pengirim', $pengirim], ['penerima', $penerima],
                    ['telepon_pengirim', $telepon_pengirim], ['telepon_penerima', $telepon_penerima]) {
