@@ -27,8 +27,7 @@ CREATE TABLE IF NOT EXISTS paket (
   alamat_tujuan     VARCHAR(255) NULL,
   penerima_detail   TEXT         NULL,
   berat_kg          DECIMAL(6,2) NOT NULL DEFAULT 0,
-  jenis_layanan     ENUM('REGULER','EXPRESS','SAME_DAY') NOT devices
-Device 6C:47:60:A4:40:50 JBL Charge 4 NULL DEFAULT 'REGULER',
+  jenis_layanan     ENUM('REGULER','EXPRESS','SAME_DAY') NOT NULL DEFAULT 'REGULER',
   status            ENUM('DRAFT','TERDAFTAR') NOT NULL DEFAULT 'DRAFT',
   created_by        VARCHAR(32)  NULL,
   created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
