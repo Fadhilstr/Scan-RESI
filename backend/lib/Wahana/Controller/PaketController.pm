@@ -153,6 +153,11 @@ sub update {
     my $berat            = $body->{berat_kg};
     $berat = 0 unless defined $berat && $berat =~ /^\d+(\.\d+)?$/;
 
+    for($telepon_pengirim,$telepon_penerima){
+        $_ =~ s/^\+62/0/; 
+        $_ =~ s/[^\d]//g;
+    }
+
     # Validasi field wajib (termasuk telepon)
     for my $field (['nama_barang', $nama], ['pengirim', $pengirim], ['penerima', $penerima],
                    ['telepon_pengirim', $telepon_pengirim], ['telepon_penerima', $telepon_penerima]) {
@@ -221,15 +226,26 @@ sub list {
     }
 
     if (my $q = trim($params->{q} // '')) {
+        $q =~ s/([%_\\])/\\$1/g; # Escape karakter SQL wildcard
         push @where, '(UPPER(p.nomor_resi) LIKE ? OR LOWER(p.nama_barang) LIKE ?)';
         push @bind,  '%' . uc($q) . '%', '%' . lc($q) . '%';
     }
 
+    # Hitung pagination: default 100 data per halaman
+    my $limit = int($params->{limit} // 100);
+    $limit = 100 if $limit <= 0;
+    $limit = 500 if $limit > 500;
+
+    my $page = int($params->{page} // 1);
+    $page = 1 if $page <= 0;
+    my $offset = int($params->{offset} // (($page - 1) * $limit));
+    $offset = 0 if $offset < 0;
+    
     my $dbh = Wahana::Db->connect();
     my $base_sql = Wahana::Query->get('paket_list_base');
     my $sql = $base_sql
         . (@where ? ' WHERE ' . join(' AND ', @where) : '')
-        . ' ORDER BY p.created_at DESC, p.nomor_resi DESC';
+        . " ORDER BY p.created_at DESC, p.nomor_resi DESC LIMIT $limit OFFSET $offset";
 
     my $rows = $dbh->selectall_arrayref($sql, { Slice => {} }, @bind);
 

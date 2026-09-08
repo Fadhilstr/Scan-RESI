@@ -14,11 +14,18 @@ sub record_audit {
 
     eval {
         my $dbh = Wahana::Db->connect();
+        my $user_name = $event{user_name};
+        if (!defined $user_name && defined $event{user_id} && length $event{user_id}) {
+            my $u = $dbh->selectrow_hashref(Wahana::Query->get('auth_get_user_by_id'), undef, $event{user_id});
+            $user_name = $u->{name} if $u;
+        }
+
         my $sql = Wahana::Query->get('audit_insert');
         $dbh->do(
             $sql,
             undef,
             $event{user_id},
+            $user_name,
             $event{action},
             $event{details},
             $event{ip_address}

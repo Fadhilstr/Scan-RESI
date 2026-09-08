@@ -271,8 +271,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, nextTick, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, reactive, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import JsBarcode from 'jsbarcode'
 import { useAuthStore } from '../../stores/authStore'
@@ -433,6 +433,7 @@ const handleSave = async () => {
   saving.value = false
 
   if (result.success) {
+    localStorage.removeItem(`draft_paket_${paket.value.nomor_resi}`)
     paket.value = { ...payload, ...(result.paket || {}), pengirim_detail, penerima_detail, status: 'TERDAFTAR' }
     saved.value = true
     $q.notify({
@@ -464,6 +465,30 @@ const resetForm = () => {
   Object.assign(form, emptyForm())
 }
 
+const saveDraftToStorage = () => {
+  if(paket.value?.nomor_resi && !saved.value){
+    localStorage.setItem(`draft_paket_${paket.value.nomor_resi}`, JSON.stringify(form))
+  }
+}
+
+onBeforeRouteLeave((to, from, next)=>{
+  if(paket.value?.nomor_resi && !saved.value){
+    saveDraftToStorage()
+    $q.notify({
+      type: 'info',
+      icon: 'bookmark',
+      message: `Draft resi ${paket.value.nomor_resi} telah disimpan`,
+      position: 'bottom-right',
+      timeout: 2000
+    })
+  }
+  next()
+})
+
+onBeforeUnmount(()=>{
+  saveDraftToStorage()
+})
+
 // Lanjutkan draft dari halaman "Paket Saya" (?resi=XXXX)
 onMounted(async () => {
   const resi = (route.query.resi || '').toString().toUpperCase()
@@ -473,12 +498,34 @@ onMounted(async () => {
   const draft = paketStore.findPaketByResi(resi)
   if (draft && draft.status === 'DRAFT' && authStore.isCustomer) {
     paket.value = draft
+    const localDraft = localStorage.getItem(`draft_paket_${resi}`)
+    if (localDraft) {
+      try {
+        Object.assign(form, JSON.parse(localDraft))
+        $q.notify({
+          type: 'info',
+          icon: 'restore',
+          message: `Draft resi ${resi} telah dimuat`,
+          position: 'top',
+          timeout: 2000
+        })
+      }catch(err){
+        $q.notify({
+          type: 'warning',
+          icon: 'error',
+          message: 'Gagal memuat draft paket.',
+          position: 'top',
+          timeout: 2500
+        })
+      }
+    }else{
     form.nama_barang = draft.nama_barang || ''
     form.pengirim_nama = draft.pengirim || authStore.currentUser?.name || ''
     form.penerima_nama = draft.penerima || ''
     form.penerima_alamat = draft.alamat_tujuan || ''
     form.berat_kg = draft.berat_kg || 1.0
     form.jenis_layanan = draft.jenis_layanan || 'REG'
+    }
   }
 })
 </script>

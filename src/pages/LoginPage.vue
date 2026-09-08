@@ -566,6 +566,7 @@ const handleForgotRequest = async () => {
       timeout: 3000
     })
   } else {
+    cancelForgot()
     $q.notify({
       type: 'negative',
       icon: 'error',

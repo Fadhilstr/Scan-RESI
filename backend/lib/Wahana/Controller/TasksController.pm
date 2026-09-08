@@ -41,11 +41,20 @@ sub list {
         push @bind,  $status;
     }
 
+    my $limit = int($params->{limit} // 100);
+    $limit = 100 if $limit <= 0;
+    $limit = 500 if $limit > 500;
+
+    my $page   = int($params->{page} // 1);
+    $page      = 1 if $page <= 0;
+    my $offset = int($params->{offset} // (($page - 1) * $limit));
+    $offset    = 0 if $offset < 0;
+
     my $dbh = Wahana::Db->connect();
     my $base_sql = Wahana::Query->get('tasks_list_base');
     my $sql = $base_sql
         . (@where ? ' WHERE ' . join(' AND ', @where) : '')
-        . ' ORDER BY t.task_id DESC';
+        . " ORDER BY t.task_id DESC LIMIT $limit OFFSET $offset";
 
     my $rows = $dbh->selectall_arrayref($sql, { Slice => {} }, @bind);
 

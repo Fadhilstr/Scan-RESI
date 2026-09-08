@@ -63,6 +63,7 @@ api.interceptors.response.use(
     if (status === 401 && !error.config?.url?.includes('/api/auth/')) {
       const hadSession = !!localStorage.getItem('wahana_token')
       localStorage.removeItem('wahana_token')
+      localStorage.removeItem('wahana_user')
 
       if (hadSession && !location.hash.startsWith('#/login')) {
         Notify.create({

@@ -14,6 +14,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: wahana_scan
+      TZ: Asia/Jakarta
     volumes:
       - db_data:/var/lib/mysql
       # Otomatis inisialisasi schema saat container pertama kali dibuat
@@ -44,6 +45,7 @@ services:
       DB_USER: root
       DB_PASS: root
       WAHANA_API_PORT: 5000
+      TZ: Asia/Jakarta
     env_file:
       - .env
     depends_on:
@@ -68,6 +70,7 @@ services:
     environment:
       VITE_USE_LOCAL_DATA: "false"
       VITE_API_BASE_URL: ""
+      TZ: Asia/Jakarta
     volumes:
       - .:/app
       - /app/node_modules

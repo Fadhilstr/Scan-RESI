@@ -258,6 +258,13 @@ export async function forgotPasswordRequest(identity) {
 
   try {
     const data = await api.post('/api/auth/forgot-password', { identity })
+    if (!data.success) {
+      return {
+        success: false,
+        message: data.message || 'Akun tidak ditemukan.'
+      }
+    }
+
     return {
       success: true,
       reset_token: data.reset_token,
@@ -283,6 +290,12 @@ export async function verifyForgotOtp(reset_token, otp) {
 
   try {
     const data = await api.post('/api/auth/verify-forgot-otp', { reset_token, otp })
+    if (!data.success) {
+      return {
+        success: false,
+        message: data.message || 'OTP salah atau kadaluarsa.'
+      }
+    }
     return {
       success: true,
       reset_verified_token: data.reset_verified_token,
@@ -307,9 +320,15 @@ export async function resetPassword(reset_verified_token, new_password, confirm_
       new_password,
       confirm_password
     })
+    if (!data.success) {
+      return {
+        success: false,
+        message: data.message || 'Password tidak berhasil diubah.'
+      }
+    }
     return {
       success: true,
-      message: data.message
+      message: data.message || 'Password berhasil diubah.'
     }
   } catch (err) {
     return { success: false, message: err.message || 'Gagal mereset password.' }

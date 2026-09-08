@@ -202,9 +202,9 @@ UPDATE paket
 -- =====================================================================
 
 -- name: audit_insert
-INSERT INTO audit_logs (user_id, action, details, ip_address)
-VALUES (?, ?, ?, ?);
+INSERT INTO audit_logs (user_id, user_name, action, details, ip_address)
+VALUES (?, ?, ?, ?, ?);
 
 -- name: audit_list_base
-SELECT a.*, u.name AS user_name
+SELECT a.*, COALESCE(a.user_name, u.name) AS user_name
   FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id;

@@ -59,7 +59,8 @@ CREATE TABLE IF NOT EXISTS users (
     last_login DATETIME NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uq_users_username (username)
+    UNIQUE KEY uq_users_username (username),
+    UNIQUE KEY uq_users_email (email)
 ) ENGINE = InnoDB;
 
 -- ---------------------------------------------------------------------
@@ -166,6 +167,7 @@ CREATE TABLE IF NOT EXISTS scan_events (
 CREATE TABLE IF NOT EXISTS audit_logs (
     log_id BIGINT NOT NULL AUTO_INCREMENT,
     user_id VARCHAR(32) NULL,
+    user_name VARCHAR(100) NULL,
     action VARCHAR(100) NOT NULL,
     details TEXT NULL,
     ip_address VARCHAR(45) NULL,
@@ -173,7 +175,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     PRIMARY KEY (log_id),
     KEY idx_audit_user (user_id),
     KEY idx_audit_action (action),
-    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users (id)
+    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE = InnoDB;
 
 -- =====================================================================
@@ -184,3 +186,7 @@ INSERT IGNORE INTO users (id, name, username, password_hash, role, status, last_
  'admin',
  CONCAT('sha256$', '9f1c2a7e', '$', SHA2(CONCAT('9f1c2a7e', 'admin123'), 256)),
  'ADMIN', 'OFFLINE', '2026-08-24 08:00:00');
+ -- =====================================================================
+-- Alter unique key Column email pada tabel users
+-- =====================================================================
+ ALTER TABLE users ADD UNIQUE KEY IF NOT EXISTS uq_users_email (email);
