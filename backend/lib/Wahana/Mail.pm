@@ -26,8 +26,6 @@ sub send_otp_email {
     my $user = $cfg->{smtp_user} // '';
     my $pass = $cfg->{smtp_pass} // '';
 
-    # Jika SMTP credentials belum diatur (masih placeholder di dev environment),
-    # simulasikan sukses pengiriman agar aplikasi dev tetap bisa diuji dengan lancar.
     if (!$user || !$pass || $pass eq 'ganti-dengan-app-password') {
         warn "[MAIL SIMULATION] SMTP credentials belum diisi di .env ($user / $pass). Simulasi pengiriman OTP ke $to_email sukses.\n";
         return (1, "Kode OTP berhasil dikirim (mode simulasi SMTP).");
