@@ -4,12 +4,11 @@ use warnings;
 use DBI;
 use Wahana::Config qw(config);
 
-# Koneksi tunggal per proses (CGI: sekali pakai; dev server: persisten per fork).
 sub connect {
     my ($class) = @_;
 
     our $DBH;
-    if ($DBH && $DBH->ping) {
+    if ($DBH && eval { $DBH->ping }) {
         return $DBH;
     }
 
@@ -21,6 +20,7 @@ sub connect {
             PrintError => 0,
             AutoCommit => 1,
             mysql_enable_utf8mb4 => 1,
+            AutoInactiveDestroy => 1,
         }
     ) or die "Koneksi database gagal: " . DBI->errstr;
 

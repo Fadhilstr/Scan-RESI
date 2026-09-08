@@ -18,6 +18,8 @@ import {
 } from '../services/scan.service'
 import { useTaskStore } from './taskStore'
 import { USE_LOCAL_DATA } from '../services/api'
+import { countPendingScans } from '../utils/offlineDb'
+import { syncPendingScans, setupNetworkListeners } from '../services/offlineSync.service'
 
 export const useScanStore = defineStore('scan', {
   state: () => ({
@@ -26,7 +28,13 @@ export const useScanStore = defineStore('scan', {
 
     // Loading & error state
     isLoading: false,
-    error: null
+    error: null,
+
+    // Status Mode Offline & IndexedDB
+    isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+    pendingCount: 0,
+    isSyncing: false,
+    syncMessage: ''
   }),
 
   getters: {
@@ -71,6 +79,55 @@ export const useScanStore = defineStore('scan', {
 
   actions: {
     /**
+     * Inisialisasi network listener & hitung antrean offline
+     */
+    initOfflineSupport() {
+      if (typeof window === 'undefined') return
+
+      this.refreshPendingCount()
+
+      setupNetworkListeners((online) => {
+        this.isOnline = online
+        if (online) {
+          // Begitu online terdeteksi, otomatis sync antrean scan offline
+          this.triggerOfflineSync()
+        }
+      })
+    },
+
+    async refreshPendingCount() {
+      try {
+        this.pendingCount = await countPendingScans()
+      } catch (err) {
+        this.pendingCount = 0
+      }
+    },
+
+    async triggerOfflineSync() {
+      if (this.isSyncing) return
+      this.isSyncing = true
+      this.syncMessage = 'Mengunggah data scan offline ke server...'
+
+      try {
+        const res = await syncPendingScans((synced, total) => {
+          this.syncMessage = `Mengunggah... (${synced}/${total})`
+        })
+
+        await this.refreshPendingCount()
+        this.syncMessage = res.message
+
+        if (res.synced > 0) {
+          const taskStore = useTaskStore()
+          await Promise.all([this.fetchScans(), taskStore.fetchTasks()])
+        }
+      } catch (err) {
+        this.syncMessage = 'Gagal melakukan sinkronisasi offline.'
+      } finally {
+        this.isSyncing = false
+      }
+    },
+
+    /**
      * Ambil semua scan events dari service (local/API).
      */
     async fetchScans(filters = {}) {
@@ -91,7 +148,9 @@ export const useScanStore = defineStore('scan', {
     async addScanEvent({ resi, currentUser, activeTask, lokasi, device_id, jenis_scan }) {
       const result = await svcAddScan({ resi, currentUser, activeTask, lokasi, device_id, jenis_scan })
 
-      if (USE_LOCAL_DATA) {
+      if (result.offline) {
+        await this.refreshPendingCount()
+      } else if (USE_LOCAL_DATA) {
         // Sync state dari LOCAL_SCANS (sudah diupdate oleh service)
         this.scanEvents = [...LOCAL_SCANS]
 
@@ -113,3 +172,4 @@ export const useScanStore = defineStore('scan', {
     }
   }
 })
+

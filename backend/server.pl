@@ -14,7 +14,7 @@ use strict;
 use warnings;
 use IO::Socket::INET;
 use FindBin;
-use lib "$FindBin::Bin/lib";
+use lib "$FindBin::Bin/lib", "$FindBin::Bin/lib/perl5/lib/perl5", "$FindBin::Bin/lib/perl5";
 
 use Wahana::Config  qw(config);
 use Wahana::Router  qw(handle_request);
@@ -157,7 +157,8 @@ sub write_response {
     my %status_text = (
         200 => 'OK', 201 => 'Created', 204 => 'No Content',
         400 => 'Bad Request', 401 => 'Unauthorized', 403 => 'Forbidden',
-        404 => 'Not Found', 409 => 'Conflict', 500 => 'Internal Server Error',
+        404 => 'Not Found', 409 => 'Conflict', 429 => 'Too Many Requests',
+        500 => 'Internal Server Error',
     );
     my $status = int( $res->{status} || 200 );
 

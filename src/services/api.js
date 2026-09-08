@@ -58,6 +58,16 @@ api.interceptors.response.use(
     const status = error.response?.status
     const message = error.response?.data?.message || error.message || 'Terjadi kesalahan pada server.'
 
+    if (status === 429) {
+      Notify.create({
+        type: 'warning',
+        icon: 'gpp_bad',
+        message: message || 'Terlalu banyak permintaan API (Rate Limit). Silakan tunggu sejenak.',
+        position: 'top',
+        timeout: 4000
+      })
+    }
+
     // Token expired / unauthorized — akhiri sesi secara eksplisit agar
     // user tidak menemui kegagalan senyap beruntun (cth: scan ditolak terus).
     if (status === 401 && !error.config?.url?.includes('/api/auth/')) {
