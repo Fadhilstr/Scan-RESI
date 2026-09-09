@@ -27,40 +27,166 @@
           </q-badge>
         </div>
 
-        <!-- Belum generate -->
-        <div v-if="!paket" class="text-center q-pa-lg">
-          <q-icon name="qr_code_2" size="56px" color="grey-5" class="q-mb-sm" />
-          <div class="text-body2 text-grey-7 q-mb-md">
-            Nomor resi dibuat otomatis oleh server — Anda tidak perlu (dan tidak bisa) mengetikkannya sendiri.
+        <!-- Belum generate / sedang memuat dari backend -->
+        <div v-if="!paket" class="text-center q-pa-xl">
+          <q-spinner-dots size="48px" color="primary" class="q-mb-sm" />
+          <div class="text-subtitle1 text-weight-bold text-slate-800 q-mb-xs">
+            Membuat Nomor Resi Otomatis dari Server...
+          </div>
+          <div class="text-caption text-grey-6 q-mb-md">
+            Sistem sedang menghubungi backend untuk menerbitkan nomor resi unik.
           </div>
           <q-btn
+            v-if="!generating"
             color="primary"
-            size="lg"
             unelevated
-            icon="auto_awesome"
-            label="Generate Nomor Resi" no-caps
-            class="text-weight-bolder q-px-xl"
-            :loading="generating"
+            icon="refresh"
+            label="Minta Resi Baru dari Server" no-caps
+            class="text-weight-bold"
             @click="handleGenerate"
           />
         </div>
 
-        <!-- Sudah generate: tampil resi + barcode preview -->
-        <div v-else class="row items-center justify-center q-col-gutter-md">
-          <div class="col-12 col-md-5 text-center">
-            <div class="overline-label">Nomor Resi Anda</div>
-            <div class="kpi-value text-slate-900 font-mono">
-              {{ paket.nomor_resi }}
+        <!-- Sudah generate: tampil resi terkunci + format barcode + preview -->
+        <div v-else class="q-pa-sm">
+          <div class="row q-col-gutter-lg items-start">
+            <!-- Kolom Form: Nomor Resi (Terkunci), Format Barcode, Tombol Generate -->
+            <div class="col-12 col-md-5">
+              <div class="text-subtitle1 text-weight-bolder text-slate-900 q-mb-md flex items-center">
+                <q-icon name="qr_code_2" color="primary" size="22px" class="q-mr-xs" />
+                GENERATE BARCODE
+              </div>
+
+              <!-- Input Nomor Resi (Strictly Readonly & Disabled - Otomatis dari Backend) -->
+              <div class="q-mb-md">
+                <div class="row items-center justify-between q-mb-xs">
+                  <div class="text-subtitle2 text-weight-bold text-slate-700">
+                    Nomor Resi
+                  </div>
+                  <q-badge color="green-1" text-color="green-9" class="text-caption text-weight-bold q-pa-xs">
+                    <q-icon name="lock" size="12px" class="q-mr-xs" /> Otomatis dari Backend
+                  </q-badge>
+                </div>
+                <q-input
+                  :model-value="paket?.nomor_resi || ''"
+                  readonly
+                  disable
+                  outlined
+                  dense
+                  class="font-mono text-weight-bolder bg-grey-2"
+                  style="cursor: not-allowed;"
+                >
+                  <template v-slot:prepend>
+                    <q-icon name="lock" color="primary" />
+                  </template>
+                  <template v-slot:append>
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      icon="refresh"
+                      color="primary"
+                      :loading="generating"
+                      @click="handleGenerate"
+                    >
+                      <q-tooltip>Generate Resi Baru dari Backend</q-tooltip>
+                    </q-btn>
+                  </template>
+                </q-input>
+                <div class="text-caption text-grey-6 q-mt-xs">
+                  <q-icon name="info" size="13px" class="q-mr-xs" />
+                  Nomor resi dihasilkan secara otomatis oleh server backend dan tidak dapat diedit secara manual.
+                </div>
+              </div>
+
+              <!-- Dropdown Format Barcode -->
+              <div class="q-mb-lg">
+                <div class="text-subtitle2 text-weight-bold text-slate-700 q-mb-xs">
+                  Format Barcode
+                </div>
+                <q-select
+                  v-model="selectedFormat"
+                  :options="BARCODE_FORMAT_OPTIONS"
+                  emit-value
+                  map-options
+                  outlined
+                  dense
+                  bg-color="white"
+                  class="text-weight-medium"
+                  @update:model-value="renderCurrentBarcode"
+                >
+                  <template v-slot:option="scope">
+                    <q-item v-bind="scope.itemProps">
+                      <q-item-section>
+                        <q-item-label class="text-weight-medium">
+                          {{ scope.opt.value }}
+                        </q-item-label>
+                        <q-item-label caption>
+                          {{ scope.opt.category }}
+                        </q-item-label>
+                      </q-item-section>
+                    </q-item>
+                  </template>
+                </q-select>
+                <div class="text-caption text-grey-6 q-mt-xs">
+                  Pilih format barcode untuk langsung di-generate dari nomor resi server.
+                </div>
+              </div>
+
+              <!-- Tombol Generate Barcode -->
+              <div>
+                <q-btn
+                  unelevated
+                  color="primary"
+                  icon="auto_awesome"
+                  label="GENERATE BARCODE"
+                  no-caps
+                  class="full-width text-weight-bolder q-py-sm"
+                  :loading="generatingBarcode"
+                  @click="renderCurrentBarcode"
+                />
+              </div>
+
+              <div class="text-caption text-grey-6 q-mt-sm">
+                Disimpan sistem dengan status <b>{{ paket.status }}</b> — isi formulir pengiriman di Langkah 2.
+              </div>
             </div>
-            <div class="text-caption text-grey-6 q-mt-xs">
-              Disimpan sistem dengan status <b>{{ paket.status }}</b> — isi formulir pengiriman di Langkah 2.
-            </div>
-          </div>
-          <div class="col-12 col-md-7 flex flex-center">
-            <div class="bg-white q-pa-md rounded-borders shadow-2 inline-block text-center">
-              <svg ref="svgRef"></svg>
-              <div class="text-caption text-grey-6 q-mt-xs">
-                CODE 128 • dirender dari nomor resi di atas
+
+            <!-- Kolom Preview Barcode -->
+            <div class="col-12 col-md-7 flex flex-center">
+              <div class="bg-white q-pa-lg rounded-borders shadow-2 full-width text-center" style="min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #e2e8f0;">
+                
+                <!-- Pesan Error jika terjadi kegagalan sistem -->
+                <div v-if="barcodeError" class="q-pa-md bg-red-1 text-negative rounded-borders full-width text-center" style="border: 1px solid #fca5a5;">
+                  <q-icon name="error_outline" size="32px" class="q-mb-xs" />
+                  <div class="text-weight-bold text-subtitle2">{{ barcodeError }}</div>
+                </div>
+
+                <!-- Kontainer Barcode/QR/Matrix SVG -->
+                <div v-show="!barcodeError" class="barcode-preview-container flex flex-center full-width">
+                  <svg ref="svgRef" style="max-width: 100%; height: auto;"></svg>
+                </div>
+
+                <div v-if="!barcodeError" class="q-mt-sm full-width text-center">
+                  <div class="text-caption text-grey-8 text-weight-bold">
+                    {{ selectedFormat }} &bull; Tracking: {{ paket?.nomor_resi }}
+                  </div>
+                  <div v-if="currentPayload?.is_mapped" class="q-mt-xs text-caption text-blue-9 bg-blue-1 q-pa-xs rounded-borders font-mono inline-block">
+                    Barcode Encoded: <b>{{ currentPayload.barcode_value }}</b>
+                  </div>
+                  
+                  <div class="q-mt-md">
+                    <q-btn
+                      outline
+                      color="primary"
+                      icon="print"
+                      label="Print Barcode"
+                      no-caps
+                      class="text-weight-bold"
+                      @click="showLabel = true"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -266,7 +392,7 @@
     </q-card>
 
     <!-- Dialog cetak label (komponen barcode terintegrasi) -->
-    <BarcodeLabel v-model="showLabel" :resi="paket?.nomor_resi || ''" :paket-data="paket" />
+    <BarcodeLabel v-model="showLabel" :resi="paket?.nomor_resi || ''" :paket-data="paket" :initial-format="selectedFormat" />
   </q-page>
 </template>
 
@@ -274,7 +400,7 @@
 import { ref, reactive, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import JsBarcode from 'jsbarcode'
+import { BARCODE_FORMAT_OPTIONS, renderBarcode as utilRenderBarcode } from '../../utils/barcodeGenerator'
 import { useAuthStore } from '../../stores/authStore'
 import { usePaketStore } from '../../stores/paketStore'
 import { buildSingleLineAddress } from '../../utils/addressFormatter'
@@ -293,6 +419,11 @@ const paket = ref(null)
 
 const svgRef = ref(null)
 const showLabel = ref(false)
+
+const selectedFormat = ref('CODE_128')
+const generatingBarcode = ref(false)
+const barcodeError = ref('')
+const currentPayload = ref(null)
 
 const layananOptions = [
   { label: 'REG (REGULER)', value: 'REG' },
@@ -329,26 +460,48 @@ const emptyForm = () => ({
 
 const form = reactive(emptyForm())
 
-// Render ulang barcode setiap resi baru terbit
+const renderCurrentBarcode = async () => {
+  const resi = (paket.value?.nomor_resi || '').trim()
+  if (!resi) return
+  await nextTick()
+  if (!svgRef.value) return
+
+  // Simpan format barcode terpilih agar otomatis digunakan label cetak
+  localStorage.setItem(`paket_barcode_format_${resi.toUpperCase()}`, selectedFormat.value)
+  if (paket.value) {
+    paket.value.barcode_format = selectedFormat.value
+  }
+
+  barcodeError.value = ''
+
+  generatingBarcode.value = true
+  try {
+    const res = await utilRenderBarcode(svgRef.value, resi, selectedFormat.value, {
+      scale: 2,
+      height: 8,
+      qrSize: 105,
+      background: '#ffffff',
+      lineColor: '#0b2341'
+    })
+
+    if (!res.success) {
+      barcodeError.value = res.error
+      currentPayload.value = null
+    } else {
+      currentPayload.value = res.payload
+    }
+  } finally {
+    generatingBarcode.value = false
+  }
+}
+
+// Render ulang barcode setiap resi baru terbit dari backend
 watch(
   () => paket.value?.nomor_resi,
   async (resi) => {
     if (!resi) return
     await nextTick()
-    if (!svgRef.value) return
-    try {
-      JsBarcode(svgRef.value, resi, {
-        format: 'CODE128',
-        displayValue: false,
-        width: 2,
-        height: 70,
-        margin: 6,
-        background: '#ffffff',
-        lineColor: '#0b2341'
-      })
-    } catch (err) {
-      console.error('[BUAT-PAKET] Gagal render barcode:', err)
-    }
+    renderCurrentBarcode()
   }
 )
 
@@ -426,7 +579,8 @@ const handleSave = async () => {
     penerima_detail,
     hub_asal: form.pengirim_kota || 'Jakarta',
     hub_tujuan: form.penerima_kota || 'Bandung',
-    cod_amount: Number(form.cod_amount) || 0
+    cod_amount: Number(form.cod_amount) || 0,
+    barcode_format: selectedFormat.value
   }
 
   const result = await paketStore.saveData(paket.value.nomor_resi, payload, authStore.currentUser)
@@ -434,7 +588,8 @@ const handleSave = async () => {
 
   if (result.success) {
     localStorage.removeItem(`draft_paket_${paket.value.nomor_resi}`)
-    paket.value = { ...payload, ...(result.paket || {}), pengirim_detail, penerima_detail, status: 'TERDAFTAR' }
+    localStorage.setItem(`paket_barcode_format_${paket.value.nomor_resi.toUpperCase()}`, selectedFormat.value)
+    paket.value = { ...payload, ...(result.paket || {}), barcode_format: selectedFormat.value, pengirim_detail, penerima_detail, status: 'TERDAFTAR' }
     saved.value = true
     $q.notify({
       type: 'positive',
@@ -459,15 +614,20 @@ const handleSave = async () => {
   }
 }
 
-const resetForm = () => {
+const resetForm = async () => {
   paket.value = null
   saved.value = false
+  selectedFormat.value = 'CODE_128'
+  barcodeError.value = ''
+  currentPayload.value = null
   Object.assign(form, emptyForm())
+  await handleGenerate()
 }
 
 const saveDraftToStorage = () => {
   if(paket.value?.nomor_resi && !saved.value){
     localStorage.setItem(`draft_paket_${paket.value.nomor_resi}`, JSON.stringify(form))
+    localStorage.setItem(`paket_barcode_format_${paket.value.nomor_resi.toUpperCase()}`, selectedFormat.value)
   }
 }
 
@@ -489,15 +649,25 @@ onBeforeUnmount(()=>{
   saveDraftToStorage()
 })
 
-// Lanjutkan draft dari halaman "Paket Saya" (?resi=XXXX)
+// Lanjutkan draft dari halaman "Paket Saya" (?resi=XXXX) atau minta resi otomatis dari backend
 onMounted(async () => {
   const resi = (route.query.resi || '').toString().toUpperCase()
-  if (!resi) return
+  if (!resi) {
+    // Otomatis minta nomor resi dari server backend saat customer membuka halaman ini
+    await handleGenerate()
+    return
+  }
 
   await paketStore.fetchPakets()
   const draft = paketStore.findPaketByResi(resi)
   if (draft && draft.status === 'DRAFT' && authStore.isCustomer) {
     paket.value = draft
+    const savedFormat = localStorage.getItem(`paket_barcode_format_${resi}`)
+    if (savedFormat) {
+      selectedFormat.value = savedFormat
+    }
+    await nextTick()
+    renderCurrentBarcode()
     const localDraft = localStorage.getItem(`draft_paket_${resi}`)
     if (localDraft) {
       try {
@@ -536,5 +706,19 @@ onMounted(async () => {
 }
 .pointer-events-none {
   pointer-events: none;
+}
+.barcode-preview-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 70px;
+  max-height: 120px;
+  margin: 6px auto;
+}
+.barcode-preview-container :deep(svg) {
+  max-width: 250px;
+  max-height: 80px;
+  width: auto;
+  height: auto;
 }
 </style>

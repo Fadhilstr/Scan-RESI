@@ -48,7 +48,15 @@ export const usePaketStore = defineStore('paket', {
      */
     findPaketByResi: (state) => (nomorResi) => {
       const resi = (nomorResi || '').trim().toUpperCase()
-      return state.pakets.find((p) => p.nomor_resi === resi) || null
+      const direct = state.pakets.find((p) => p.nomor_resi === resi)
+      if (direct) return direct
+      if (typeof localStorage !== 'undefined') {
+        const mapped = localStorage.getItem(`barcode_mapping_${nomorResi}`) || localStorage.getItem(`barcode_mapping_${resi}`)
+        if (mapped) {
+          return state.pakets.find((p) => p.nomor_resi === mapped.toUpperCase()) || null
+        }
+      }
+      return null
     },
 
     stats: (state) => {
@@ -112,7 +120,12 @@ export const usePaketStore = defineStore('paket', {
      * agar data terbaru (dipakai petugas setelah scan).
      */
     async lookupByResi(nomorResi) {
-      return await svcGetPaketByResi(nomorResi)
+      let targetResi = (nomorResi || '').trim().toUpperCase()
+      if (typeof localStorage !== 'undefined') {
+        const mapped = localStorage.getItem(`barcode_mapping_${nomorResi}`) || localStorage.getItem(`barcode_mapping_${targetResi}`)
+        if (mapped) targetResi = mapped.toUpperCase()
+      }
+      return await svcGetPaketByResi(targetResi)
     }
   }
 })

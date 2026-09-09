@@ -12,7 +12,18 @@
 
       <q-separator class="no-print" />
 
-      <!-- Body Preview Label -->
+      <!-- Info Format Barcode yang dipilih saat buat paket (no-print, tanpa dropdown) -->
+      <q-card-section class="q-px-md q-py-sm bg-grey-1 no-print row items-center justify-between">
+        <div class="text-caption text-weight-bold text-slate-800 row items-center">
+          <q-icon name="qr_code" size="18px" color="primary" class="q-mr-xs" />
+          Format Barcode:
+        </div>
+        <q-badge color="primary" text-color="white" class="text-weight-bold font-mono q-px-sm q-py-xs">
+          {{ currentFormat }}
+        </q-badge>
+      </q-card-section>
+
+      <q-separator class="no-print" />
       <q-card-section class="q-pa-md flex flex-center bg-grey-2" style="max-height: 75vh; overflow-y: auto;">
         <div v-if="renderError" class="text-negative text-caption bg-red-1 q-pa-md rounded-borders full-width text-center">
           {{ renderError }}
@@ -99,7 +110,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
-import JsBarcode from 'jsbarcode'
+import { BARCODE_FORMAT_OPTIONS, renderBarcode as utilRenderBarcode } from '../utils/barcodeGenerator'
 import { usePaketStore } from '../stores/paketStore'
 import { useAuthStore } from '../stores/authStore'
 import { formatAddressInfo, extractCityFromAddress, maskPhone, maskAddress } from '../utils/addressFormatter'
@@ -120,6 +131,10 @@ const props = defineProps({
   masked: {
     type: Boolean,
     default: undefined
+  },
+  initialFormat: {
+    type: String,
+    default: 'CODE_128'
   }
 })
 
@@ -142,6 +157,31 @@ const show = computed({
 const svgRef = ref(null)
 const renderError = ref('')
 const currentPaket = ref(null)
+
+const resolveBarcodeFormat = () => {
+  if (currentPaket.value?.barcode_format) {
+    return currentPaket.value.barcode_format
+  }
+  const targetResi = (currentPaket.value?.nomor_resi || props.resi || '').toUpperCase()
+  if (targetResi) {
+    const saved = localStorage.getItem(`paket_barcode_format_${targetResi}`)
+    if (saved) return saved
+  }
+  if (props.initialFormat && props.initialFormat !== 'CODE_128') {
+    return props.initialFormat
+  }
+  return props.initialFormat || 'CODE_128'
+}
+
+const currentFormat = ref(props.initialFormat || 'CODE_128')
+
+watch(
+  () => [props.initialFormat, currentPaket.value],
+  () => {
+    currentFormat.value = resolveBarcodeFormat()
+    renderBarcode()
+  }
+)
 
 const displayResi = computed(() => {
   return (currentPaket.value?.nomor_resi || props.resi || '').toUpperCase()
@@ -316,30 +356,30 @@ watch(
       currentPaket.value = null
     }
 
+    currentFormat.value = resolveBarcodeFormat()
     await nextTick()
     renderBarcode()
   },
   { immediate: true }
 )
 
-const renderBarcode = () => {
+const renderBarcode = async () => {
   if (!svgRef.value) return
   const targetResi = displayResi.value
   if (!targetResi) return
+  renderError.value = ''
 
-  try {
-    JsBarcode(svgRef.value, targetResi, {
-      format: 'CODE128',
-      displayValue: false,
-      width: 2.0,
-      height: 60,
-      margin: 2,
-      background: '#ffffff',
-      lineColor: '#000000'
-    })
-  } catch (err) {
-    console.error('[LABEL] Gagal render barcode:', err)
-    renderError.value = `Karakter pada resi tidak didukung CODE 128: "${targetResi}"`
+  const res = await utilRenderBarcode(svgRef.value, targetResi, currentFormat.value, {
+    scale: 2,
+    height: 8,
+    qrSize: 100,
+    background: '#ffffff',
+    lineColor: '#000000'
+  })
+
+  if (!res.success) {
+    console.error('[LABEL] Gagal render barcode:', res.error)
+    renderError.value = res.error || `Karakter pada resi tidak didukung format ${currentFormat.value}: "${targetResi}"`
   }
 }
 
@@ -414,9 +454,12 @@ const printLabel = () => {
         margin: 3px 0;
       }
       .barcode-box svg {
-        max-width: 100%;
+        max-width: 220px;
+        max-height: 65px;
+        width: auto;
         height: auto;
         display: block;
+        margin: 0 auto;
       }
       .resi-number-sub {
         font-size: 12px;
@@ -569,11 +612,14 @@ const printLabel = () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin: 3px 0;
+  margin: 4px 0;
+  max-height: 80px;
 }
 
 .barcode-svg-container :deep(svg) {
-  max-width: 100%;
+  max-width: 220px;
+  max-height: 65px;
+  width: auto;
   height: auto;
 }
 

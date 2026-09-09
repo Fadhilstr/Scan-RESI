@@ -9,7 +9,7 @@ echo "=========================================================="
 echo "  Membangun & Menjalankan Container (DB + BE + FE + NGINX)"
 echo "=========================================================="
 
-docker compose up --build -d
+docker compose up --build -V -d
 
 echo ""
 echo "Menunggu database & backend siap..."

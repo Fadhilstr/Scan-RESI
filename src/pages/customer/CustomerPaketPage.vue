@@ -238,7 +238,12 @@ const getFormattedCreatedAt = (createdAtStr) => {
 }
 
 const openLabel = (row) => {
-  selectedPaket.value = row
+  const resi = (row?.nomor_resi || '').toUpperCase()
+  const savedFmt = localStorage.getItem(`paket_barcode_format_${resi}`)
+  selectedPaket.value = {
+    ...row,
+    barcode_format: row?.barcode_format || savedFmt || 'CODE_128'
+  }
   labelResi.value = row?.nomor_resi || ''
   showLabel.value = true
 }

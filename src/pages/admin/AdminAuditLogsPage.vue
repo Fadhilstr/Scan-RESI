@@ -24,6 +24,9 @@
       </div>
     </div>
 
+  
+
+
     <q-separator class="q-mb-lg" />
 
     <q-card class="scan-card">
