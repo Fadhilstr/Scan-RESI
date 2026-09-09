@@ -76,6 +76,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import CameraScannerDialog from './CameraScannerDialog.vue'
+import { normalizeScannedBarcode } from '../utils/barcodeGenerator'
 
 const props = defineProps({
   disabled: {
@@ -109,10 +110,10 @@ const clearInput = () => {
 
 // Satu jalur submit untuk semua sumber input (manual / scanner USB / kamera)
 const submitValue = (rawValue) => {
-  const val = (rawValue || '').trim()
-  if (props.disabled || !val) return false
+  const normalized = normalizeScannedBarcode((rawValue || '').trim())
+  if (props.disabled || !normalized) return false
 
-  emit('scan', val)
+  emit('scan', normalized)
   barcodeValue.value = ''
   focusInput()
   return true

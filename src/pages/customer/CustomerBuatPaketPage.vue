@@ -538,7 +538,7 @@ const handleFormatChange = async (newFormat) => {
   selectedFormat.value = newFormat
   const currentResi = (paket.value?.nomor_resi || '').trim()
 
-  const isNumericFormat = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'ITF', 'CODABAR', 'RSS_14'].includes(newFormat)
+  const isNumericFormat = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'ITF', 'CODABAR', 'RSS_14', 'UPC_EAN_EXTENSION'].includes(newFormat)
   const isCurrentlyNumeric = /^\d+$/.test(currentResi)
 
   let needsNewResi = false
@@ -553,6 +553,14 @@ const handleFormatChange = async (newFormat) => {
   } else if (newFormat === 'UPC_A' && currentResi.length !== 12) {
     needsNewResi = true
   } else if (newFormat === 'UPC_E' && currentResi.length !== 8) {
+    needsNewResi = true
+  } else if (newFormat === 'UPC_EAN_EXTENSION' && currentResi.length !== 5) {
+    needsNewResi = true
+  } else if (newFormat === 'ITF' && currentResi.length !== 12) {
+    needsNewResi = true
+  } else if (newFormat === 'CODABAR' && currentResi.length !== 10) {
+    needsNewResi = true
+  } else if (newFormat === 'RSS_14' && currentResi.length !== 14) {
     needsNewResi = true
   }
 

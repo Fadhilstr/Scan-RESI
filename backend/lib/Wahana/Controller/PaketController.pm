@@ -28,6 +28,7 @@ sub map_paket {
         telepon_penerima  => $r->{telepon_penerima} // '',
         berat_kg          => defined $r->{berat_kg} ? 0 + $r->{berat_kg} : 0,
         jenis_layanan     => $r->{jenis_layanan},
+        barcode_format    => $r->{barcode_format} // 'CODE_128',
         status            => $r->{status},
         created_by        => $r->{created_by},
         creator_name      => $r->{creator_name},
@@ -44,6 +45,29 @@ sub calc_mod10 {
     for my $i (0 .. $len - 1) {
         my $weight = (($len - 1 - $i) % 2 == 0) ? 3 : 1;
         $sum += $d[$i] * $weight;
+    }
+    my $rem = $sum % 10;
+    return $rem == 0 ? 0 : 10 - $rem;
+}
+
+# Hitung Check Digit UPC-E via ekspansi UPC-A standar
+sub calc_upce_check_digit {
+    my ($d6) = @_;
+    my @d = split //, $d6;
+    my @upca;
+    my $last = $d[5];
+    if ($last == 0 || $last == 1 || $last == 2) {
+        @upca = (0, $d[0], $d[1], $last, 0, 0, 0, 0, $d[2], $d[3], $d[4]);
+    } elsif ($last == 3) {
+        @upca = (0, $d[0], $d[1], $d[2], 0, 0, 0, 0, 0, $d[3], $d[4]);
+    } elsif ($last == 4) {
+        @upca = (0, $d[0], $d[1], $d[2], $d[3], 0, 0, 0, 0, 0, $d[4]);
+    } else {
+        @upca = (0, $d[0], $d[1], $d[2], $d[3], $d[4], 0, 0, 0, 0, $last);
+    }
+    my $sum = 0;
+    for my $i (0 .. 10) {
+        $sum += $upca[$i] * ($i % 2 == 0 ? 3 : 1);
     }
     my $rem = $sum % 10;
     return $rem == 0 ? 0 : 10 - $rem;
@@ -74,10 +98,13 @@ sub generate_resi {
             my $chk = calc_mod10($data);
             $resi = $data . $chk;
         } elsif ($format eq 'UPC_E') {
-            # 8 digit UPC-E standard (0 + 6 digit payload + 1 digit check)
-            my $data = '0' . join('', map { int rand(10) } 1 .. 6);
-            my $chk = calc_mod10($data);
-            $resi = $data . $chk;
+            # 8 digit UPC-E standard (0 + 6 digit payload + 1 digit valid check digit)
+            my $payload6 = join('', map { int rand(10) } 1 .. 6);
+            my $chk = calc_upce_check_digit($payload6);
+            $resi = '0' . $payload6 . $chk;
+        } elsif ($format eq 'UPC_EAN_EXTENSION') {
+            # 5 digit numerik
+            $resi = join('', map { int rand(10) } 1 .. 5);
         } elsif ($format eq 'ITF') {
             # 12 digit numerik genap untuk Interleaved 2 of 5
             $resi = join('', map { int rand(10) } 1 .. 12);
@@ -90,7 +117,7 @@ sub generate_resi {
             my $chk = calc_mod10($data);
             $resi = $data . $chk;
         } else {
-            # Alfanumerik standar (CODE_128, QR_CODE, AZTEC, CODE_39, CODE_93, DATA_MATRIX, PDF_417, MAXICODE)
+            # Alfanumerik standar (CODE_128, QR_CODE, AZTEC, CODE_39, CODE_93, DATA_MATRIX, PDF_417, MAXICODE, RSS_EXPANDED)
             $resi = join '',
                 map { substr $RESI_CHARS, int rand(length $RESI_CHARS), 1 }
                 1 .. $RESI_LEN;
@@ -141,7 +168,7 @@ sub create_draft {
 
     $dbh->do(
         Wahana::Query->get('paket_insert_draft'),
-        undef, $resi, $user_id
+        undef, $resi, $user_id, $format
     );
 
     record_audit(
@@ -196,7 +223,7 @@ sub update {
     my %valid_layanan = map { $_ => 1 } qw(REGULER EXPRESS SAME_DAY);
     my $layanan = $valid_layanan{ trim($body->{jenis_layanan} // '') }
         ? $body->{jenis_layanan} : $paket->{jenis_layanan} || 'REGULER';
-
+    
     my $nama             = trim($body->{nama_barang}      // '');
     my $pengirim         = trim($body->{pengirim}         // '');
     my $alamat_pengirim  = trim($body->{alamat_pengirim}  // '');
@@ -204,6 +231,7 @@ sub update {
     my $penerima         = trim($body->{penerima}         // '');
     my $alamat_tujuan    = trim($body->{alamat_tujuan}    // '');
     my $telepon_penerima = trim($body->{telepon_penerima} // '');
+    my $barcode_format = $body->{barcode_format} || $paket->{barcode_format} || 'CODE_128';
     my $berat            = $body->{berat_kg};
     $berat = 0 unless defined $berat && $berat =~ /^\d+(\.\d+)?$/;
 
@@ -226,7 +254,7 @@ sub update {
         Wahana::Query->get('paket_update_data'),
         undef, $nama, $pengirim, $alamat_pengirim, $telepon_pengirim,
             $penerima, $alamat_tujuan, $telepon_penerima,
-            $berat, $layanan,
+            $berat, $layanan, $barcode_format,
             $resi
     );
 
@@ -315,6 +343,25 @@ sub detail {
     my $row = $dbh->selectrow_hashref(
         Wahana::Query->get('paket_get_detail'), undef, $resi
     );
+
+    # Normalisasi otomatis jika barcode mengandung prefiks GS1, AI (10), atau Codabar
+    if (!$row) {
+        my $alt_resi = $resi;
+        if ($alt_resi =~ /\(10\)([A-Z0-9]+)/i || $alt_resi =~ /^(?:\(01\)|01)?\d{14}(?:\(10\)|10)([A-Z0-9]+)/i) {
+            $alt_resi = $1;
+        } elsif ($alt_resi =~ /^[ABCD]([0-9]+)[ABCD]$/i) {
+            $alt_resi = $1;
+        } elsif ($alt_resi =~ /^\(01\)(\d{13,14})$/i || $alt_resi =~ /^01(\d{14})$/i) {
+            $alt_resi = $1;
+        } elsif ($alt_resi =~ /^0(\d{12})$/) {
+            $alt_resi = $1;
+        }
+        if ($alt_resi ne $resi) {
+            $row = $dbh->selectrow_hashref(
+                Wahana::Query->get('paket_get_detail'), undef, $alt_resi
+            );
+        }
+    }
 
     return { success => \0, reason => 'NOT_FOUND', message => 'Paket tidak ditemukan.' }
         unless $row;

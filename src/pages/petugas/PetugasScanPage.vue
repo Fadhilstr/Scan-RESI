@@ -243,6 +243,9 @@
           <!-- Preview Paket Data jika ada -->
           <div v-if="previewPaket" class="bg-grey-1 q-pa-sm q-mb-sm rounded-borders" style="border: 1px solid var(--dj-border); font-size: 0.85rem;">
             <div class="row justify-between items-center q-mb-xs">
+              <q-badge color="primary" text-color="white" class="q-ml-sm">
+                {{ previewPaket?.barcode_format || 'CODE_128' }}
+              </q-badge>
               <span class="text-weight-bold text-slate-800">{{ previewPaket.nama_barang || '(Nama barang kosong)' }}</span>
               <StatusBadge :status="previewPaket.status" size="xs" />
             </div>
@@ -296,6 +299,7 @@ import StatusBadge from '../../components/StatusBadge.vue'
 import BarcodeInput from '../../components/BarcodeInput.vue'
 import ScanEventTable from '../../components/ScanEventTable.vue'
 import BarcodeLabel from '../../components/BarcodeLabel.vue'
+import { normalizeScannedBarcode } from '../../utils/barcodeGenerator'
 
 const $q = useQuasar()
 const router = useRouter()
@@ -335,7 +339,7 @@ const openLabel = async (row) => {
     const res = await paketStore.lookupByResi(resi)
     if (res.success) p = res.paket
   }
-  labelPaketData.value = p || null
+  labelPaketData.value = p ? { ...p, barcode_format: p.barcode_format || 'CODE_128' } : null
   showLabel.value = true
 }
 
@@ -374,7 +378,7 @@ const handleBarcodeScan = async (resiInput) => {
     return
   }
 
-  const cleanResi = (resiInput || '').trim().toUpperCase()
+  const cleanResi = normalizeScannedBarcode((resiInput || '').trim())
   if (!cleanResi) return
 
   // Lookup paket preview untuk konfirmasi

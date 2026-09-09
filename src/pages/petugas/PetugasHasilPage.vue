@@ -139,7 +139,7 @@ const openLabel = async (row) => {
     const res = await paketStore.lookupByResi(resi)
     if (res.success) p = res.paket
   }
-  labelPaketData.value = p || null
+  labelPaketData.value = p ? { ...p, barcode_format: p.barcode_format || 'CODE_128' } : null
   showLabel.value = true
 }
 

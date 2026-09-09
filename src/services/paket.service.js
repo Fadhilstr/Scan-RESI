@@ -176,6 +176,7 @@ export async function savePaketData(nomorResi, data, currentUser) {
       hub_asal: data.hub_asal || 'Jakarta',
       hub_tujuan: data.hub_tujuan || 'Bandung',
       cod_amount: Number(data.cod_amount) || 0,
+      barcode_format: data.barcode_format || 'CODE_128',
       status: 'TERDAFTAR'
     })
 
@@ -200,7 +201,8 @@ export async function savePaketData(nomorResi, data, currentUser) {
       alamat_tujuan: data.alamat_tujuan,
       telepon_penerima: data.telepon_penerima,
       berat_kg: data.berat_kg,
-      jenis_layanan: data.jenis_layanan
+      jenis_layanan: data.jenis_layanan,
+      barcode_format: data.barcode_format
     })
     return {
       success: !!res.success,

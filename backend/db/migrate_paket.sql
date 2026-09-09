@@ -28,9 +28,8 @@ CREATE TABLE IF NOT EXISTS paket (
   penerima_detail   TEXT         NULL,
   berat_kg          DECIMAL(6,2) NOT NULL DEFAULT 0,
   jenis_layanan     ENUM('REGULER','EXPRESS','SAME_DAY') NOT NULL DEFAULT 'REGULER',
-  status            ENUrss_14 hasil barcode nya ini Gagal menghasilkan barcode format RSS_14: bwipp.databaromniBadLength#11733: GS1 DataBar Omnidirectional must be 13 or 14 digits.
+  status ENUM('DRAFT', 'TERDAFTAR') NOT NULL DEFAULT 'DRAFT',
 
-M('DRAFT','TERDAFTAR') NOT NULL DEFAULT 'DRAFT',
   created_by        VARCHAR(32)  NULL,
   created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (nomor_resi),
@@ -49,11 +48,14 @@ SELECT DISTINCT se.nomor_resi, '(migrasi) resi legacy', 'Migrasi Sistem', '-', '
 
 -- 4. FK ketat: hanya resi terdaftar boleh masuk scan_events
 ALTER TABLE scan_events
+  DROP CONSTRAINT IF EXISTS fk_scans_resi;
+
+ALTER TABLE scan_events
   ADD CONSTRAINT fk_scans_resi
   FOREIGN KEY (nomor_resi) REFERENCES paket (nomor_resi);
 
 -- 5. Akun customer demo (password: cust123)
-INSERT INTO users (id, name, username, password_hash, role, supervisor_id, status)
-VALUES ('USR-CUST-001', 'Customer Demo', 'customer',
+INSERT IGNORE INTO users (id, name, username, password_hash, role, status)
+VALUES ('USR-CUST-DEMO', 'Customer Demo', 'customer',
         CONCAT('sha256$', 'a1b2c3d4', '$', SHA2(CONCAT('a1b2c3d4', 'cust123'), 256)),
-        'CUSTOMER', NULL, 'OFFLINE');
+        'CUSTOMER', 'OFFLINE');

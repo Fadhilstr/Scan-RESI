@@ -174,8 +174,8 @@ SELECT s.*, u.name AS user_name
 SELECT COUNT(*) FROM paket WHERE nomor_resi = ?;
 
 -- name: paket_insert_draft
-INSERT INTO paket (nomor_resi, status, created_by, telepon_pengirim, telepon_penerima, created_at)
-VALUES (?, 'DRAFT', ?, '', '', NOW());
+INSERT INTO paket (nomor_resi, status, created_by, barcode_format, telepon_pengirim, telepon_penerima, created_at)
+VALUES (?, 'DRAFT', ?, ?, '', '', NOW());
 
 -- name: paket_get_detail
 SELECT p.*, u.name AS creator_name
@@ -193,7 +193,7 @@ SELECT p.*, u.name AS creator_name
 UPDATE paket
    SET nama_barang = ?, pengirim = ?, alamat_pengirim = ?, telepon_pengirim = ?,
        penerima = ?, alamat_tujuan = ?, telepon_penerima = ?,
-       berat_kg = ?, jenis_layanan = ?, status = 'TERDAFTAR',
+       berat_kg = ?, jenis_layanan = ?, barcode_format = ?, status = 'TERDAFTAR',
        created_at = NOW()
  WHERE nomor_resi = ?;
 
