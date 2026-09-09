@@ -166,7 +166,20 @@ export async function getScans(filters = {}) {
  * @returns {Promise<{success, reason, message, scan}>}
  */
 export async function addScan({ resi, currentUser, activeTask, lokasi = 'CIPUTAT', device_id = 'SCAN-DEVICE-01', jenis_scan = 'INBOUND' }) {
-  const sanitizedResi = (resi || '').trim().toUpperCase()
+  let sanitizedResi = (resi || '').trim().toUpperCase()
+
+  // Normalisasi reverse mapping jika ada
+  const mapped = typeof localStorage !== 'undefined' ? (localStorage.getItem(`barcode_mapping_${sanitizedResi}`) || localStorage.getItem(`barcode_mapping_${resi}`)) : null
+  if (mapped) {
+    sanitizedResi = mapped.toUpperCase()
+  } else {
+    // Normalisasi format GS1 jika decoder menyisipkan (01)
+    if (sanitizedResi.startsWith('(01)')) {
+      sanitizedResi = sanitizedResi.replace(/^\(01\)/, '')
+    } else if (sanitizedResi.startsWith('01') && sanitizedResi.length >= 16) {
+      sanitizedResi = sanitizedResi.slice(2)
+    }
+  }
 
   // Validasi: Barcode kosong
   if (!sanitizedResi) {

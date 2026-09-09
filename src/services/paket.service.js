@@ -78,13 +78,12 @@ const makeLocalResi = () => {
  * @param {Object} currentUser - user pembuat (harus CUSTOMER/ADMIN)
  * @returns {Promise<{success, paket?, reason?, message?}>}
  */
-export async function generateResi(currentUser) {
+export async function generateResi(currentUser, format = 'CODE_128') {
   if (!currentUser) {
     return { success: false, message: 'Sesi tidak valid.' }
   }
 
   if (USE_LOCAL_DATA) {
-    // --- LOCAL MODE: tiru perilaku server ---
     if (currentUser.role !== 'CUSTOMER' && currentUser.role !== 'ADMIN') {
       return { success: false, reason: 'FORBIDDEN', message: 'Hanya CUSTOMER atau ADMIN yang dapat membuat nomor resi.' }
     }
@@ -102,6 +101,7 @@ export async function generateResi(currentUser) {
       berat_kg: 0,
       jenis_layanan: 'REG',
       status: 'DRAFT',
+      barcode_format: format,
       created_by: currentUser.id,
       creator_name: currentUser.name,
       created_at: nowString()
@@ -120,7 +120,7 @@ export async function generateResi(currentUser) {
 
   // --- API MODE: resi dibuat server-side ---
   try {
-    const data = await api.post('/api/paket/resi')
+    const data = await api.post('/api/paket/resi', { format })
     return { success: !!data.success, paket: data.paket, message: data.message }
   } catch (err) {
     return { success: false, reason: 'ERROR', message: err.message || 'Gagal membuat nomor resi.' }

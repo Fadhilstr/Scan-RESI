@@ -42,7 +42,7 @@
       "category": "ADMIN",
       "mode": "Create Task Shift Allocation (/api/tasks)",
       "name": true,
-      "passed": "Created Task ID: TASK-017",
+      "passed": "Created Task ID: TASK-021",
       "detail": ""
     },
     {
@@ -63,7 +63,7 @@
       "category": "CUSTOMER",
       "mode": "Generate Draft Resi Server-Side (/api/paket/resi)",
       "name": true,
-      "passed": "Generated Resi: 6JC3M22P",
+      "passed": "Generated Resi: SQEMGNCB",
       "detail": ""
     },
     {
@@ -77,7 +77,7 @@
       "category": "CUSTOMER",
       "mode": "Get Customer Parcel List (/api/paket)",
       "name": true,
-      "passed": "Total Customer Parcels: 63",
+      "passed": "Total Customer Parcels: 72",
       "detail": ""
     },
     {
@@ -106,21 +106,21 @@
       "mode": "ONLINE",
       "name": "Get Performance Stats (/api/scans/stats/:id)",
       "passed": true,
-      "detail": "Success: 17, Duplicate: 11"
+      "detail": "Success: 25, Duplicate: 15"
     },
     {
       "category": "PETUGAS_SCAN",
       "mode": "OFFLINE",
       "name": "Simulate Offline Scan & IndexedDB Queue Storage",
       "passed": true,
-      "detail": "Queued Resi: AERDEHKD in pending_scans"
+      "detail": "Queued Resi: 8L2J3Z4P in pending_scans"
     },
     {
       "category": "PETUGAS_SCAN",
       "mode": "OFFLINE->ONLINE",
       "name": "Auto-Sync Pending Scans to Server MariaDB",
       "passed": true,
-      "detail": "Synced Resi: AERDEHKD to Database"
+      "detail": "Synced Resi: 8L2J3Z4P to Database"
     },
     {
       "category": "SECURITY",

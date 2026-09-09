@@ -120,59 +120,138 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
       break
 
     case 'ITF': {
-      // ITF butuh angka dengan panjang genap (misal 14 digit)
-      isMapped = true
-      barcodeValue = stringToDeterministicDigits(cleanTracking, 14)
+      // ITF butuh angka dengan panjang genap (misal 12 atau 14 digit)
+      if (/^\d{4,16}$/.test(cleanTracking) && cleanTracking.length % 2 === 0) {
+        isMapped = false
+        barcodeValue = cleanTracking
+      } else {
+        isMapped = true
+        barcodeValue = stringToDeterministicDigits(cleanTracking, 14)
+      }
       break
     }
 
     case 'CODABAR': {
       // Codabar angka dengan start/stop karakter A..B
-      isMapped = true
-      const numPart = stringToDeterministicDigits(cleanTracking, 10)
-      barcodeValue = 'A' + numPart + 'B'
+      if (/^[A-D][0-9\-\$\:\/\.\+]+[A-D]$/i.test(cleanTracking)) {
+        isMapped = false
+        barcodeValue = cleanTracking.toUpperCase()
+      } else if (/^\d{6,16}$/.test(cleanTracking)) {
+        isMapped = false
+        barcodeValue = 'A' + cleanTracking + 'B'
+      } else {
+        isMapped = true
+        const numPart = stringToDeterministicDigits(cleanTracking, 10)
+        barcodeValue = 'A' + numPart + 'B'
+      }
       break
     }
 
     case 'EAN_13': {
       // EAN-13 butuh 12 digit + 1 check digit = 13 digit
-      isMapped = true
-      const d12 = stringToDeterministicDigits(cleanTracking, 12)
-      const cd = calculateMod10CheckDigit(d12)
-      barcodeValue = d12 + cd
+      if (/^\d{13}$/.test(cleanTracking)) {
+        isMapped = false
+        barcodeValue = cleanTracking
+      } else if (/^\d{12}$/.test(cleanTracking)) {
+        isMapped = false
+        const cd = calculateMod10CheckDigit(cleanTracking)
+        barcodeValue = cleanTracking + cd
+      } else {
+        isMapped = true
+        const d12 = stringToDeterministicDigits(cleanTracking, 12)
+        const cd = calculateMod10CheckDigit(d12)
+        barcodeValue = d12 + cd
+      }
       break
     }
 
     case 'EAN_8': {
       // EAN-8 butuh 7 digit + 1 check digit = 8 digit
-      isMapped = true
-      const d7 = stringToDeterministicDigits(cleanTracking, 7)
-      let sum = 0
-      for (let i = 0; i < 7; i++) {
-        sum += parseInt(d7[i], 10) * (i % 2 === 0 ? 3 : 1)
+      if (/^\d{8}$/.test(cleanTracking)) {
+        isMapped = false
+        barcodeValue = cleanTracking
+      } else if (/^\d{7}$/.test(cleanTracking)) {
+        isMapped = false
+        let sum = 0
+        for (let i = 0; i < 7; i++) {
+          sum += parseInt(cleanTracking[i], 10) * (i % 2 === 0 ? 3 : 1)
+        }
+        const cd = (10 - (sum % 10)) % 10
+        barcodeValue = cleanTracking + cd
+      } else {
+        isMapped = true
+        const d7 = stringToDeterministicDigits(cleanTracking, 7)
+        let sum = 0
+        for (let i = 0; i < 7; i++) {
+          sum += parseInt(d7[i], 10) * (i % 2 === 0 ? 3 : 1)
+        }
+        const cd = (10 - (sum % 10)) % 10
+        barcodeValue = d7 + cd
       }
-      const cd = (10 - (sum % 10)) % 10
-      barcodeValue = d7 + cd
       break
     }
 
     case 'UPC_A': {
       // UPC-A butuh 11 digit + 1 check digit = 12 digit
-      isMapped = true
-      const d11 = stringToDeterministicDigits(cleanTracking, 11)
-      let sum = 0
-      for (let i = 0; i < 11; i++) {
-        sum += parseInt(d11[i], 10) * (i % 2 === 0 ? 3 : 1)
+      if (/^\d{12}$/.test(cleanTracking)) {
+        isMapped = false
+        barcodeValue = cleanTracking
+      } else if (/^\d{11}$/.test(cleanTracking)) {
+        isMapped = false
+        let sum = 0
+        for (let i = 0; i < 11; i++) {
+          sum += parseInt(cleanTracking[i], 10) * (i % 2 === 0 ? 3 : 1)
+        }
+        const cd = (10 - (sum % 10)) % 10
+        barcodeValue = cleanTracking + cd
+      } else {
+        isMapped = true
+        const d11 = stringToDeterministicDigits(cleanTracking, 11)
+        let sum = 0
+        for (let i = 0; i < 11; i++) {
+          sum += parseInt(d11[i], 10) * (i % 2 === 0 ? 3 : 1)
+        }
+        const cd = (10 - (sum % 10)) % 10
+        barcodeValue = d11 + cd
       }
-      const cd = (10 - (sum % 10)) % 10
-      barcodeValue = d11 + cd
       break
     }
 
     case 'UPC_E': {
-      // UPC-E butuh angka dengan prefiks 0 (total 7 digit)
-      isMapped = true
-      barcodeValue = '0' + stringToDeterministicDigits(cleanTracking, 6)
+      // UPC-E butuh angka dengan prefiks 0
+      if (/^0\d{7}$/.test(cleanTracking)) {
+        isMapped = false
+        barcodeValue = cleanTracking
+      } else if (/^0\d{6}$/.test(cleanTracking)) {
+        isMapped = false
+        barcodeValue = cleanTracking
+      } else {
+        isMapped = true
+        barcodeValue = '0' + stringToDeterministicDigits(cleanTracking, 6)
+      }
+      break
+    }
+
+    case 'RSS_14': {
+      // GS1 DataBar Omnidirectional wajib diawali (01) dan 13-14 digit GTIN
+      if (/^\(01\)\d{13,14}$/.test(cleanTracking)) {
+        isMapped = false
+        barcodeValue = cleanTracking
+      } else if (/^\d{14}$/.test(cleanTracking)) {
+        isMapped = false
+        const data13 = cleanTracking.slice(0, 13)
+        const cd = calculateMod10CheckDigit(data13)
+        barcodeValue = `(01)${data13}${cd}`
+      } else if (/^\d{13}$/.test(cleanTracking)) {
+        isMapped = false
+        const cd = calculateMod10CheckDigit(cleanTracking)
+        barcodeValue = `(01)${cleanTracking}${cd}`
+      } else {
+        isMapped = true
+        const d13 = '1' + stringToDeterministicDigits(cleanTracking, 12)
+        const cd = calculateMod10CheckDigit(d13)
+        barcodeValue = `(01)${d13}${cd}`
+      }
       break
     }
 
@@ -180,15 +259,6 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
       // Extension 5 digit
       isMapped = true
       barcodeValue = stringToDeterministicDigits(cleanTracking, 5)
-      break
-    }
-
-    case 'RSS_14': {
-      // GS1 DataBar Omnidirectional (01) + 14 digit GTIN
-      isMapped = true
-      const d13 = '0' + stringToDeterministicDigits(cleanTracking, 12)
-      const cd = calculateMod10CheckDigit(d13)
-      barcodeValue = '(01)' + d13 + cd
       break
     }
 

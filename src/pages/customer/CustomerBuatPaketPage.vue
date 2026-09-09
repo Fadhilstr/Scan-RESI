@@ -113,7 +113,7 @@
                   dense
                   bg-color="white"
                   class="text-weight-medium"
-                  @update:model-value="renderCurrentBarcode"
+                  @update:model-value="handleFormatChange"
                 >
                   <template v-slot:option="scope">
                     <q-item v-bind="scope.itemProps">
@@ -170,9 +170,6 @@
                 <div v-if="!barcodeError" class="q-mt-sm full-width text-center">
                   <div class="text-caption text-grey-8 text-weight-bold">
                     {{ selectedFormat }} &bull; Tracking: {{ paket?.nomor_resi }}
-                  </div>
-                  <div v-if="currentPayload?.is_mapped" class="q-mt-xs text-caption text-blue-9 bg-blue-1 q-pa-xs rounded-borders font-mono inline-block">
-                    Barcode Encoded: <b>{{ currentPayload.barcode_value }}</b>
                   </div>
                   
                   <div class="q-mt-md">
@@ -505,18 +502,17 @@ watch(
   }
 )
 
-const handleGenerate = async () => {
+const handleGenerate = async (targetFormat = selectedFormat.value) => {
   generating.value = true
-  const result = await paketStore.createResi(authStore.currentUser)
+  const result = await paketStore.createResi(authStore.currentUser, targetFormat)
   generating.value = false
 
   if (result.success) {
-    Object.assign(form, emptyForm())
     saved.value = false
     paket.value = result.paket
 
     // Auto-fill nama pengirim jika customer login
-    if (authStore.currentUser?.name) {
+    if (authStore.currentUser?.name && !form.pengirim_nama) {
       form.pengirim_nama = authStore.currentUser.name
     }
 
@@ -535,6 +531,36 @@ const handleGenerate = async () => {
       position: 'top',
       timeout: 2500
     })
+  }
+}
+
+const handleFormatChange = async (newFormat) => {
+  selectedFormat.value = newFormat
+  const currentResi = (paket.value?.nomor_resi || '').trim()
+
+  const isNumericFormat = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'ITF', 'CODABAR', 'RSS_14'].includes(newFormat)
+  const isCurrentlyNumeric = /^\d+$/.test(currentResi)
+
+  let needsNewResi = false
+  if (isNumericFormat && !isCurrentlyNumeric) {
+    needsNewResi = true
+  } else if (!isNumericFormat && isCurrentlyNumeric) {
+    needsNewResi = true
+  } else if (newFormat === 'EAN_13' && currentResi.length !== 13) {
+    needsNewResi = true
+  } else if (newFormat === 'EAN_8' && currentResi.length !== 8) {
+    needsNewResi = true
+  } else if (newFormat === 'UPC_A' && currentResi.length !== 12) {
+    needsNewResi = true
+  } else if (newFormat === 'UPC_E' && currentResi.length !== 8) {
+    needsNewResi = true
+  }
+
+  if (needsNewResi) {
+    // Generate nomor resi yang sesuai dari backend
+    await handleGenerate(newFormat)
+  } else {
+    await renderCurrentBarcode()
   }
 }
 

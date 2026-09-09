@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS paket (
   penerima_detail   TEXT         NULL,
   berat_kg          DECIMAL(6,2) NOT NULL DEFAULT 0,
   jenis_layanan     ENUM('REGULER','EXPRESS','SAME_DAY') NOT NULL DEFAULT 'REGULER',
-  status            ENUM('DRAFT','TERDAFTAR') NOT NULL DEFAULT 'DRAFT',
+  status            ENUrss_14 hasil barcode nya ini Gagal menghasilkan barcode format RSS_14: bwipp.databaromniBadLength#11733: GS1 DataBar Omnidirectional must be 13 or 14 digits.
+
+M('DRAFT','TERDAFTAR') NOT NULL DEFAULT 'DRAFT',
   created_by        VARCHAR(32)  NULL,
   created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (nomor_resi),

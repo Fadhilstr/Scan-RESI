@@ -126,6 +126,21 @@ sub create {
         Wahana::Query->get('scans_check_paket_registered'), undef, $resi
     );
 
+    # Normalisasi otomatis jika scanner barcode membaca prefiks GS1 (01), padding leading zero, atau Codabar
+    if (!$paket) {
+        my $alt_resi = $resi;
+        $alt_resi =~ s/^\(01\)//;
+        $alt_resi =~ s/^01(?=\d{14})//;
+        $alt_resi =~ s/^0(?=\d{12})//; # UPC-A / EAN-13 padding
+        $alt_resi =~ s/^[ABCD]([0-9]+)[ABCD]$/$1/i; # Codabar A..B wrap
+        if ($alt_resi ne $resi) {
+            $paket = $dbh->selectrow_hashref(
+                Wahana::Query->get('scans_check_paket_registered'), undef, $alt_resi
+            );
+            $resi = $alt_resi if $paket;
+        }
+    }
+
     unless ($paket) {
         record_audit(
             user_id    => $user_id,

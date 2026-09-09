@@ -35,15 +35,66 @@ sub map_paket {
     };
 }
 
-# Generate nomor resi acak di SERVER (klien tidak pernah mengirim resi).
-# Loop pengecekan menjamin unik terhadap tabel paket.
-sub generate_resi {
-    my ($dbh) = @_;
+# Hitung Check Digit Modulo 10 standar internasional (GS1 / EAN / UPC / ITF)
+sub calc_mod10 {
+    my ($digits) = @_;
+    my @d = split //, $digits;
+    my $sum = 0;
+    my $len = scalar @d;
+    for my $i (0 .. $len - 1) {
+        my $weight = (($len - 1 - $i) % 2 == 0) ? 3 : 1;
+        $sum += $d[$i] * $weight;
+    }
+    my $rem = $sum % 10;
+    return $rem == 0 ? 0 : 10 - $rem;
+}
 
-    for (1 .. 20) {
-        my $resi = join '',
-            map { substr $RESI_CHARS, int rand(length $RESI_CHARS), 1 }
-            1 .. $RESI_LEN;
+# Generate nomor resi acak di SERVER (klien tidak pernah mengirim resi).
+# Format nomor resi langsung sesuai dengan format barcode yang dipilih,
+# sehingga nomor resi dan barcode 100% identik tanpa perlu nilai encoded terpisah.
+sub generate_resi {
+    my ($dbh, $format) = @_;
+    $format //= 'CODE_128';
+
+    for (1 .. 30) {
+        my $resi;
+        if ($format eq 'EAN_13') {
+            # 12 digit data (prefiks 899 standar logistik) + 1 digit mod10 check digit = 13 digit
+            my $data = '899' . join('', map { int rand(10) } 1 .. 9);
+            my $chk = calc_mod10($data);
+            $resi = $data . $chk;
+        } elsif ($format eq 'EAN_8') {
+            # 7 digit data + 1 digit mod10 check digit = 8 digit
+            my $data = join('', map { int rand(10) } 1 .. 7);
+            my $chk = calc_mod10($data);
+            $resi = $data . $chk;
+        } elsif ($format eq 'UPC_A') {
+            # 11 digit data (prefiks 0) + 1 digit mod10 check digit = 12 digit
+            my $data = '0' . join('', map { int rand(10) } 1 .. 10);
+            my $chk = calc_mod10($data);
+            $resi = $data . $chk;
+        } elsif ($format eq 'UPC_E') {
+            # 8 digit UPC-E standard (0 + 6 digit payload + 1 digit check)
+            my $data = '0' . join('', map { int rand(10) } 1 .. 6);
+            my $chk = calc_mod10($data);
+            $resi = $data . $chk;
+        } elsif ($format eq 'ITF') {
+            # 12 digit numerik genap untuk Interleaved 2 of 5
+            $resi = join('', map { int rand(10) } 1 .. 12);
+        } elsif ($format eq 'CODABAR') {
+            # 10 digit angka
+            $resi = join('', map { int rand(10) } 1 .. 10);
+        } elsif ($format eq 'RSS_14') {
+            # 13 digit data + 1 digit check digit = 14 digit
+            my $data = '1' . join('', map { int rand(10) } 1 .. 12);
+            my $chk = calc_mod10($data);
+            $resi = $data . $chk;
+        } else {
+            # Alfanumerik standar (CODE_128, QR_CODE, AZTEC, CODE_39, CODE_93, DATA_MATRIX, PDF_417, MAXICODE)
+            $resi = join '',
+                map { substr $RESI_CHARS, int rand(length $RESI_CHARS), 1 }
+                1 .. $RESI_LEN;
+        }
 
         my $exists = $dbh->selectrow_array(
             Wahana::Query->get('paket_check_resi_exists'), undef, $resi
@@ -76,9 +127,12 @@ sub create_draft {
              message => 'Hanya CUSTOMER atau ADMIN yang dapat membuat nomor resi.' }
         unless $role eq 'CUSTOMER' || $role eq 'ADMIN';
 
+    my $body   = $req->{body} // {};
+    my $format = uc(trim($body->{format} // $req->{query}{format} // 'CODE_128'));
+
     my $dbh = Wahana::Db->connect();
 
-    my $resi = eval { generate_resi($dbh) };
+    my $resi = eval { generate_resi($dbh, $format) };
     if (!$resi) {
         warn "[PAKET] Generate resi gagal: $@";
         return { success => \0, reason => 'EXHAUSTED',
