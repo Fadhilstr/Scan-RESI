@@ -110,7 +110,36 @@ export function calculateUpceCheckDigit(payload6) {
 }
 
 /**
-<<<<<<< HEAD
+ * Menghitung 2 karakter check digit C dan K standar Code 93
+ */
+export function calculateCode93CheckDigits(str) {
+  const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%abcd*'
+  const clean = (str || '').trim().toUpperCase().replace(/[^A-Z0-9\-\.\ \$\/\+\%]/g, '')
+  if (!clean) return { c: '', k: '', full: '' }
+
+  // Check character C (bobot 1..20)
+  let weight = 1
+  let total = 0
+  for (let i = clean.length - 1; i >= 0; i--) {
+    total += weight * ALPHABET.indexOf(clean.charAt(i))
+    if (++weight > 20) weight = 1
+  }
+  const c = ALPHABET[total % 47]
+
+  // Check character K (bobot 1..15 terhadap string + C)
+  const withC = clean + c
+  weight = 1
+  total = 0
+  for (let i = withC.length - 1; i >= 0; i--) {
+    total += weight * ALPHABET.indexOf(withC.charAt(i))
+    if (++weight > 15) weight = 1
+  }
+  const k = ALPHABET[total % 47]
+
+  return { c, k, full: clean + c + k }
+}
+
+/**
  * Ekspansi UPC-E (8 digit) ke UPC-A (12 digit)
  */
 export function expandUpceToUpca(upceStr) {
@@ -171,7 +200,12 @@ export function compressUpcaToUpce(upcaStr) {
  * @returns {string} - Nomor resi yang sudah ter-normalisasi ke format resi awal (tracking number)
  */
 export function normalizeScannedBarcode(raw, format = null) {
-  let s = (raw || '').trim().replace(/[\r\n\t]/g, '').toUpperCase()
+  if (!raw) return ''
+  let s = String(raw).trim()
+  // 1. Hapus karakter kontrol tak terlihat (FNC1, GS ASCII 29, RS ASCII 30, dsb)
+  s = s.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim().toUpperCase()
+  // 2. Hapus AIM Symbology Identifier jika dikirim scanner (misal ]e0, ]C1, ]A0, ]G0)
+  s = s.replace(/^\][A-Z0-9]{2}/i, '').trim()
   if (!s) return ''
 
   const checkLocalStorage = (key) => {
@@ -343,89 +377,36 @@ export function normalizeScannedBarcode(raw, format = null) {
   }
 
   // Generic GS1 AI (10) Serial/Tracking: (10)XXXXX atau 01...10XXXXX
-  const m10Gen = s.match(/\(10\)([A-Z0-9]+)/i) || s.match(/^01\d{14}10([A-Z0-9]+)/i)
-  if (m10Gen && m10Gen[1]) {
-    const extracted = m10Gen[1].toUpperCase()
+  const m10Paren = s.match(/\(10\)\s*([A-Z0-9]+)/i)
+  if (m10Paren && m10Paren[1]) {
+    const extracted = m10Paren[1].toUpperCase()
+    return checkLocalStorage(extracted) || extracted
+  }
+
+  const m10Raw = s.match(/^(?:(?:\(01\)|01)\s*\d{13,14})?\s*(?:\(10\)|10)\s*([A-Z0-9]+)/i)
+  if (m10Raw && m10Raw[1]) {
+    const extracted = m10Raw[1].toUpperCase()
+    return checkLocalStorage(extracted) || extracted
+  }
+
+  const m10Anywhere = s.match(/\d{14}10([A-Z0-9]{4,16})/i)
+  if (m10Anywhere && m10Anywhere[1]) {
+    const extracted = m10Anywhere[1].toUpperCase()
     return checkLocalStorage(extracted) || extracted
   }
 
   // Generic GS1 AI (01) 14 digit GTIN: (01)XXXXX
-  const m01Gen = s.match(/^\(01\)(\d{13,14})/i) || s.match(/^01(\d{14})/i)
+  const m01Gen = s.match(/^\(01\)\s*(\d{13,14})/i) || s.match(/^01(\d{14})/i)
   if (m01Gen && m01Gen[1]) {
     const gtin = m01Gen[1]
     return checkLocalStorage(gtin) || gtin
   }
 
   // Generic Codabar start/stop A, B, C, D wrapping
-  const mCodaGen = s.match(/^[ABCD]([0-9\-\$\:\/\.\+]+)[ABCD]$/i)
+  const mCodaGen = s.match(/^[ABCD]([0-9\-\$\:\/\.\+]+)[ABCD]$/i) || s.match(/^[ABCD]([0-9]+)[ABCD]$/i)
   if (mCodaGen && mCodaGen[1]) {
     return checkLocalStorage(mCodaGen[1]) || mCodaGen[1]
   }
-=======
- * Menghitung 2 karakter check digit C dan K standar Code 93
- */
-export function calculateCode93CheckDigits(str) {
-  const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%abcd*'
-  const clean = (str || '').trim().toUpperCase().replace(/[^A-Z0-9\-\.\ \$\/\+\%]/g, '')
-  if (!clean) return { c: '', k: '', full: '' }
-
-  // Check character C (bobot 1..20)
-  let weight = 1
-  let total = 0
-  for (let i = clean.length - 1; i >= 0; i--) {
-    total += weight * ALPHABET.indexOf(clean.charAt(i))
-    if (++weight > 20) weight = 1
-  }
-  const c = ALPHABET[total % 47]
-
-  // Check character K (bobot 1..15 terhadap string + C)
-  const withC = clean + c
-  weight = 1
-  total = 0
-  for (let i = withC.length - 1; i >= 0; i--) {
-    total += weight * ALPHABET.indexOf(withC.charAt(i))
-    if (++weight > 15) weight = 1
-  }
-  const k = ALPHABET[total % 47]
-
-  return { c, k, full: clean + c + k }
-}
-
-/**
- * Normalisasi nomor resi dari output scanner kamera/laser (GS1 AI, Codabar start/stop, dsb)
- */
-export function normalizeScannedBarcode(raw) {
-  if (!raw) return ''
-  let s = String(raw).trim()
-  // 1. Hapus karakter kontrol tak terlihat (FNC1, GS ASCII 29, RS ASCII 30, dsb)
-  s = s.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim().toUpperCase()
-  // 2. Hapus AIM Symbology Identifier jika dikirim scanner (misal ]e0, ]C1, ]A0, ]G0)
-  s = s.replace(/^\][A-Z0-9]{2}/i, '').trim()
-
-  // 3. Cek local mapping jika tersimpan saat render
-  if (typeof localStorage !== 'undefined') {
-    const localMapped = localStorage.getItem(`barcode_mapping_${s}`)
-    if (localMapped) return localMapped
-  }
-
-  // 4. GS1 AI(10) - Ekstrak nomor resi dari AI (10)
-  const m10Paren = s.match(/\(10\)\s*([A-Z0-9]+)/i)
-  if (m10Paren && m10Paren[1]) return m10Paren[1]
-
-  const m10Raw = s.match(/^(?:(?:\(01\)|01)\s*\d{13,14})?\s*(?:\(10\)|10)\s*([A-Z0-9]+)/i)
-  if (m10Raw && m10Raw[1]) return m10Raw[1]
-
-  const m10Anywhere = s.match(/\d{14}10([A-Z0-9]{4,16})/i)
-  if (m10Anywhere && m10Anywhere[1]) return m10Anywhere[1]
-
-  // 5. GS1 AI(01) 14 digit GTIN
-  const m01 = s.match(/^\(01\)\s*(\d{13,14})/i) || s.match(/^01(\d{14})/i)
-  if (m01 && m01[1]) return m01[1]
-
-  // 6. Codabar start/stop A, B, C, D
-  const mCoda = s.match(/^[ABCD]([0-9]+)[ABCD]$/i)
-  if (mCoda && mCoda[1]) return mCoda[1]
->>>>>>> origin/main
 
   return s
 }

@@ -150,8 +150,6 @@ const ALL_SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION
 ]
 
-import { normalizeScannedBarcode } from '../utils/barcodeGenerator'
-
 const props = defineProps({
   modelValue: {
     type: Boolean,

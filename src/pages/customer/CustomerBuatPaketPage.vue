@@ -541,10 +541,6 @@ const handleGenerate = async (targetFormat = selectedFormat.value) => {
 
 const handleFormatChange = async (newFormat) => {
   selectedFormat.value = newFormat
-<<<<<<< HEAD
-  if (paket.value?.nomor_resi) {
-    // Re-render barcode untuk resi yang SUDAH ada tanpa generate ulang resi baru
-=======
   if (!newFormat) {
     if (svgRef.value) svgRef.value.innerHTML = ''
     barcodeError.value = ''
