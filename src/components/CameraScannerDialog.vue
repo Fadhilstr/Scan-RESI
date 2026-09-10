@@ -103,10 +103,11 @@ const ALL_SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.PDF_417,
   Html5QrcodeSupportedFormats.RSS_14,
   Html5QrcodeSupportedFormats.RSS_EXPANDED,
-  Html5QrcodeSupportedFormats.UPC_A,
   Html5QrcodeSupportedFormats.UPC_E,
   Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION
 ]
+
+import { normalizeScannedBarcode } from '../utils/barcodeGenerator'
 
 const props = defineProps({
   modelValue: {
@@ -269,19 +270,27 @@ const closeDialog = () => {
 // ---------------------------------------------------------------------
 // Deteksi
 // ---------------------------------------------------------------------
-const onScanSuccess = (decodedText) => {
+const onScanSuccess = (decodedText, decodedResult) => {
   const now = Date.now()
   if (now - lastEmitAt < COOLDOWN_MS) return
 
   lastEmitAt = now
-  const resi = String(decodedText || '').trim()
-  if (!resi) return
+  const rawText = String(decodedText || '').trim()
+  if (!rawText) return
+
+  const formatName =
+    decodedResult?.result?.format?.formatName ||
+    decodedResult?.format?.formatName ||
+    decodedResult?.result?.formatName ||
+    null
+
+  const resi = normalizeScannedBarcode(rawText, formatName) || rawText
 
   playBeep()
   navigator.vibrate?.(80)
 
   // Hasil validasi sesungguhnya dikirim parent lewat prop `feedback`
-  emit('detected', resi)
+  emit('detected', resi, formatName)
 }
 
 // Bunyi "beep" singkat tanpa file audio (WebAudio API)

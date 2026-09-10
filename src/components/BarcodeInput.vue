@@ -109,8 +109,8 @@ const clearInput = () => {
 }
 
 // Satu jalur submit untuk semua sumber input (manual / scanner USB / kamera)
-const submitValue = (rawValue) => {
-  const normalized = normalizeScannedBarcode((rawValue || '').trim())
+const submitValue = (rawValue, format = null) => {
+  const normalized = normalizeScannedBarcode((rawValue || '').trim(), format)
   if (props.disabled || !normalized) return false
 
   emit('scan', normalized)
@@ -124,8 +124,8 @@ const handleScan = () => {
 }
 
 // Hasil deteksi kamera → alur scan yang sama dengan input manual (FR-3)
-const handleCameraDetected = (val) => {
-  submitValue(val)
+const handleCameraDetected = (val, format = null) => {
+  submitValue(val, format)
 }
 
 // ---------------------------------------------------------------------

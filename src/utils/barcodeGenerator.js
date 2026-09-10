@@ -76,7 +76,7 @@ export function stringToDeterministicDigits(str, targetLength) {
 /**
  * Menghitung check digit Modulo 10 standar GS1 / EAN / UPC
  */
-function calculateMod10CheckDigit(digits) {
+export function calculateMod10CheckDigit(digits) {
   let sum = 0
   for (let i = digits.length - 1; i >= 0; i--) {
     const n = parseInt(digits[i], 10)
@@ -88,7 +88,7 @@ function calculateMod10CheckDigit(digits) {
 /**
  * Menghitung check digit UPC-E standar via ekspansi UPC-A
  */
-function calculateUpceCheckDigit(payload6) {
+export function calculateUpceCheckDigit(payload6) {
   const d = String(payload6).padStart(6, '0').slice(-6).split('').map(Number)
   let upca = []
   const last = d[5]
@@ -110,39 +110,263 @@ function calculateUpceCheckDigit(payload6) {
 }
 
 /**
- * Normalisasi nomor resi dari output scanner kamera/laser (GS1 AI, Codabar start/stop, dsb)
+ * Ekspansi UPC-E (8 digit) ke UPC-A (12 digit)
  */
-export function normalizeScannedBarcode(raw) {
+export function expandUpceToUpca(upceStr) {
+  const clean = String(upceStr).padStart(8, '0').slice(-8)
+  const d = clean.slice(1, 7).split('').map(Number)
+  const cd = clean.slice(7, 8)
+  const last = d[5]
+  let upcaDigits = []
+
+  if (last === 0 || last === 1 || last === 2) {
+    upcaDigits = [0, d[0], d[1], last, 0, 0, 0, 0, d[2], d[3], d[4]]
+  } else if (last === 3) {
+    upcaDigits = [0, d[0], d[1], d[2], 0, 0, 0, 0, 0, d[3], d[4]]
+  } else if (last === 4) {
+    upcaDigits = [0, d[0], d[1], d[2], d[3], 0, 0, 0, 0, 0, d[4]]
+  } else {
+    upcaDigits = [0, d[0], d[1], d[2], d[3], d[4], 0, 0, 0, 0, last]
+  }
+
+  let sum = 0
+  for (let i = 0; i < 11; i++) {
+    sum += upcaDigits[i] * (i % 2 === 0 ? 3 : 1)
+  }
+  const calcCd = (10 - (sum % 10)) % 10
+  return upcaDigits.join('') + (cd || calcCd)
+}
+
+/**
+ * Kompresi UPC-A (12 digit) ke UPC-E (8 digit) jika memungkinkan
+ */
+export function compressUpcaToUpce(upcaStr) {
+  const clean = String(upcaStr).replace(/\D/g, '')
+  if (clean.length !== 12 || !clean.startsWith('0')) return null
+
+  const d = clean.split('').map(Number)
+  const cd = d[11]
+
+  if (d[3] <= 2 && d[4] === 0 && d[5] === 0 && d[6] === 0 && d[7] === 0) {
+    return `0${d[1]}${d[2]}${d[8]}${d[9]}${d[10]}${d[3]}${cd}`
+  }
+  if (d[4] === 0 && d[5] === 0 && d[6] === 0 && d[7] === 0 && d[8] === 0) {
+    return `0${d[1]}${d[2]}${d[3]}${d[9]}${d[10]}3${cd}`
+  }
+  if (d[5] === 0 && d[6] === 0 && d[7] === 0 && d[8] === 0 && d[9] === 0) {
+    return `0${d[1]}${d[2]}${d[3]}${d[4]}${d[10]}4${cd}`
+  }
+  if (d[6] === 0 && d[7] === 0 && d[8] === 0 && d[9] === 0 && d[10] >= 5) {
+    return `0${d[1]}${d[2]}${d[3]}${d[4]}${d[5]}${d[10]}${cd}`
+  }
+
+  return null
+}
+
+/**
+ * Normalisasi nomor resi dari output scanner kamera/laser (GS1 AI, Codabar start/stop, MaxiCode, UPC-E, dsb)
+ * @param {string} raw - Output mentah dari scanner
+ * @param {string|null} format - Format barcode opsional (misal: 'MAXICODE', 'CODE_93', 'UPC_E', dsb)
+ * @returns {string} - Nomor resi yang sudah ter-normalisasi ke format resi awal (tracking number)
+ */
+export function normalizeScannedBarcode(raw, format = null) {
   let s = (raw || '').trim().replace(/[\r\n\t]/g, '').toUpperCase()
   if (!s) return ''
-  // Cek local mapping jika tersimpan saat render
-  if (typeof localStorage !== 'undefined') {
-    const localMapped = localStorage.getItem(`barcode_mapping_${s}`)
-    if (localMapped) return localMapped
+
+  const checkLocalStorage = (key) => {
+    if (typeof localStorage === 'undefined' || !key) return null
+    const cleanKey = String(key).trim()
+    return (
+      localStorage.getItem(`barcode_mapping_${cleanKey}`) ||
+      localStorage.getItem(`barcode_mapping_${cleanKey.toUpperCase()}`) ||
+      null
+    )
   }
-  // 1. GS1 AI(10) Serial/Tracking: (10)XXXXX atau 01...10XXXXX
-  const m10 = s.match(/\(10\)([A-Z0-9]+)/i) || s.match(/^01\d{14}10([A-Z0-9]+)/i)
-  if (m10 && m10[1]) return m10[1]
-  // 2. GS1 AI(01) 14 digit GTIN: (01)XXXXX atau 01XXXXX
-  const m01 = s.match(/^\(01\)(\d{13,14})/i) || s.match(/^01(\d{14})/i)
-  if (m01 && m01[1]) return m01[1]
-  // 3. Codabar start/stop A, B, C, D
-  const mCoda = s.match(/^[ABCD]([0-9]+)[ABCD]$/i)
-  if (mCoda && mCoda[1]) return mCoda[1]
+
+  // 1. Direct local storage mapping check
+  let localMapped = checkLocalStorage(s)
+  if (localMapped) return localMapped
+
+  const sCleanBracket = s.replace(/[\(\)\-\s]/g, '')
+  localMapped = checkLocalStorage(sCleanBracket)
+  if (localMapped) return localMapped
+
+  const fmt = (format || '').toUpperCase()
+
+  // 2. MAXICODE: Ekstrak tracking number dari (10)XXXXX atau header MaxiCode
+  if (fmt === 'MAXICODE' || s.includes('[C3') || s.includes('ANSI ') || /\(10\)|10[A-Z0-9]{6,}/.test(s)) {
+    const m10 = s.match(/\(10\)([A-Z0-9]+)/i) || s.match(/10([A-Z0-9]{6,16})/i) || s.match(/^01\d{14}10([A-Z0-9]+)/i)
+    if (m10 && m10[1]) {
+      const extracted = m10[1].toUpperCase()
+      return checkLocalStorage(extracted) || checkLocalStorage(`(10)${extracted}`) || extracted
+    }
+    const mMaxi = s.match(/([A-Z0-9]{8,16})/i)
+    if (mMaxi && mMaxi[1]) {
+      const extracted = mMaxi[1].toUpperCase()
+      return checkLocalStorage(extracted) || extracted
+    }
+  }
+
+  // 3. CODE_93: Hapus non-alfanumerik, tetap kapital
+  if (fmt === 'CODE_93') {
+    const clean93 = s.replace(/[^A-Z0-9]/g, '')
+    if (clean93) {
+      return checkLocalStorage(clean93) || clean93
+    }
+  }
+
+  // 4. CODE_39: Hapus bintang wrapping dan karakter non-Code39
+  if (fmt === 'CODE_39' || /^\*[^*]+\*$/.test(s)) {
+    const unstar = s.replace(/^\*|\*$/g, '')
+    const clean39 = unstar.replace(/[^A-Z0-9\-\.\ \$\/\+\%]/g, '').trim()
+    if (clean39) {
+      return checkLocalStorage(clean39) || checkLocalStorage(unstar) || clean39
+    }
+  }
+
+  // 5. CODABAR: Hapus start/stop A, B, C, D wrapping
+  if (fmt === 'CODABAR' || /^[ABCD][0-9\-\$\:\/\.\+]+[ABCD]$/i.test(s)) {
+    const mCoda = s.match(/^[ABCD]([0-9\-\$\:\/\.\+]+)[ABCD]$/i)
+    if (mCoda && mCoda[1]) {
+      const inner = mCoda[1]
+      return checkLocalStorage(inner) || checkLocalStorage(s) || inner
+    }
+  }
+
+  // 6. UPC-E: Ekspansi ke UPC-A dengan check digit
+  if (fmt === 'UPC_E' || /^0\d{7}$/.test(s) || /^0\d{6}$/.test(s)) {
+    let upceStr = s.replace(/\D/g, '')
+    if (upceStr.length === 6) {
+      const cd = calculateUpceCheckDigit(upceStr)
+      upceStr = '0' + upceStr + cd
+    }
+    if (upceStr.length === 8 && upceStr.startsWith('0')) {
+      const upcaExpanded = expandUpceToUpca(upceStr)
+      return (
+        checkLocalStorage(upceStr) ||
+        checkLocalStorage(upcaExpanded) ||
+        upceStr
+      )
+    }
+  }
+
+  // 7. UPC-A: Tambahkan check digit atau tetap
+  if (fmt === 'UPC_A' || (/^\d{11,12}$/.test(s) && fmt !== 'EAN_13')) {
+    let digits = s.replace(/\D/g, '')
+    if (digits.length === 11) {
+      const cd = calculateMod10CheckDigit(digits)
+      digits = digits + cd
+    }
+    if (digits.length === 12) {
+      const upceCompressed = compressUpcaToUpce(digits)
+      return (
+        checkLocalStorage(digits) ||
+        checkLocalStorage(digits.slice(0, 11)) ||
+        (upceCompressed ? checkLocalStorage(upceCompressed) : null) ||
+        digits
+      )
+    }
+  }
+
+  // 8. EAN_13: Tambahkan / check digit
+  if (fmt === 'EAN_13' || (/^\d{12,13}$/.test(s) && fmt !== 'UPC_A')) {
+    let digits = s.replace(/\D/g, '')
+    if (digits.length === 12) {
+      const cd = calculateMod10CheckDigit(digits)
+      digits = digits + cd
+    }
+    if (digits.length === 13) {
+      return (
+        checkLocalStorage(digits) ||
+        checkLocalStorage(digits.slice(0, 12)) ||
+        digits
+      )
+    }
+  }
+
+  // 9. EAN_8: Tambahkan / check digit
+  if (fmt === 'EAN_8' || /^\d{7,8}$/.test(s)) {
+    let digits = s.replace(/\D/g, '')
+    if (digits.length === 7) {
+      let sum = 0
+      for (let i = 0; i < 7; i++) {
+        sum += parseInt(digits[i], 10) * (i % 2 === 0 ? 3 : 1)
+      }
+      const cd = (10 - (sum % 10)) % 10
+      digits = digits + cd
+    }
+    if (digits.length === 8) {
+      return (
+        checkLocalStorage(digits) ||
+        checkLocalStorage(digits.slice(0, 7)) ||
+        digits
+      )
+    }
+  }
+
+  // 10. RSS_14 & RSS_EXPANDED: Parsing format GS1 (01) GTIN / (10) Tracking No
+  if (fmt === 'RSS_14' || fmt === 'RSS_EXPANDED' || s.includes('(01)') || s.includes('(10)')) {
+    const m10 = s.match(/\(10\)([A-Z0-9]+)/i) || s.match(/10([A-Z0-9]{6,16})/i)
+    if (m10 && m10[1]) {
+      const extracted = m10[1].toUpperCase()
+      return checkLocalStorage(extracted) || checkLocalStorage(`(10)${extracted}`) || extracted
+    }
+    const m01 = s.match(/^\(01\)(\d{13,14})/i) || s.match(/^01(\d{14})/i)
+    if (m01 && m01[1]) {
+      let gtin = m01[1]
+      if (gtin.length === 13) {
+        gtin = gtin + calculateMod10CheckDigit(gtin)
+      }
+      return (
+        checkLocalStorage(gtin) ||
+        checkLocalStorage(`(01)${gtin}`) ||
+        gtin
+      )
+    }
+  }
+
+  // 11. ITF: Angka genap 4-16 digit
+  if (fmt === 'ITF' || (/^\d{4,16}$/.test(s) && s.length % 2 === 0)) {
+    const digits = s.replace(/\D/g, '')
+    if (digits.length >= 4 && digits.length <= 16) {
+      return checkLocalStorage(digits) || digits
+    }
+  }
+
+  // 12. UPC_EAN_EXTENSION: 2 atau 5 digit langsung
+  if (fmt === 'UPC_EAN_EXTENSION' || /^\d{2}$/.test(s) || /^\d{5}$/.test(s)) {
+    const digits = s.replace(/\D/g, '')
+    if (digits.length === 2 || digits.length === 5) {
+      return checkLocalStorage(digits) || digits
+    }
+  }
+
+  // Generic GS1 AI (10) Serial/Tracking: (10)XXXXX atau 01...10XXXXX
+  const m10Gen = s.match(/\(10\)([A-Z0-9]+)/i) || s.match(/^01\d{14}10([A-Z0-9]+)/i)
+  if (m10Gen && m10Gen[1]) {
+    const extracted = m10Gen[1].toUpperCase()
+    return checkLocalStorage(extracted) || extracted
+  }
+
+  // Generic GS1 AI (01) 14 digit GTIN: (01)XXXXX
+  const m01Gen = s.match(/^\(01\)(\d{13,14})/i) || s.match(/^01(\d{14})/i)
+  if (m01Gen && m01Gen[1]) {
+    const gtin = m01Gen[1]
+    return checkLocalStorage(gtin) || gtin
+  }
+
+  // Generic Codabar start/stop A, B, C, D wrapping
+  const mCodaGen = s.match(/^[ABCD]([0-9\-\$\:\/\.\+]+)[ABCD]$/i)
+  if (mCodaGen && mCodaGen[1]) {
+    return checkLocalStorage(mCodaGen[1]) || mCodaGen[1]
+  }
+
   return s
 }
 
 /**
- * Memisahkan dan menyelesaikan payload barcode:
- * {
- *   tracking_no: "DJK260909000001",
- *   barcode_format: "AZTEC",
- *   barcode_value: "DJK260909000001"
- * }
- *
- * Untuk format alfanumerik, barcode_value = tracking_no.
- * Untuk format numerik khusus, nomor resi dipetakan secara deterministik, unik,
- * dan terhubung kembali dengan tracking number tanpa collision.
+ * Memisahkan dan menyelesaikan payload barcode untuk ke-17 format:
+ * Menyimpan seluruh variasi barcode_value -> cleanTracking di localStorage.
  */
 export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
   const cleanTracking = (trackingNo || '').trim().toUpperCase()
@@ -155,19 +379,21 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
     case 'QR_CODE':
     case 'AZTEC':
     case 'DATA_MATRIX':
-    case 'MAXICODE':
     case 'PDF_417':
       barcodeValue = cleanTracking
       break
 
+    case 'MAXICODE':
+      barcodeValue = cleanTracking.startsWith('(10)') ? cleanTracking : `(10)${cleanTracking}`
+      isMapped = true
+      break
+
     case 'CODE_39':
     case 'CODE_93':
-      // Code 39 & 93 menerima alfanumerik huruf kapital
       barcodeValue = cleanTracking.replace(/[^A-Z0-9\-\.\ \$\/\+\%]/g, '') || cleanTracking
       break
 
     case 'ITF': {
-      // ITF butuh angka dengan panjang genap (misal 12 atau 14 digit)
       if (/^\d{4,16}$/.test(cleanTracking) && cleanTracking.length % 2 === 0) {
         isMapped = false
         barcodeValue = cleanTracking
@@ -179,7 +405,6 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
     }
 
     case 'CODABAR': {
-      // Codabar angka dengan start/stop karakter A..B
       if (/^[A-D][0-9\-\$\:\/\.\+]+[A-D]$/i.test(cleanTracking)) {
         isMapped = false
         barcodeValue = cleanTracking.toUpperCase()
@@ -195,7 +420,6 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
     }
 
     case 'EAN_13': {
-      // EAN-13 butuh 12 digit + 1 check digit = 13 digit
       if (/^\d{13}$/.test(cleanTracking)) {
         isMapped = false
         barcodeValue = cleanTracking
@@ -213,7 +437,6 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
     }
 
     case 'EAN_8': {
-      // EAN-8 butuh 7 digit + 1 check digit = 8 digit
       if (/^\d{8}$/.test(cleanTracking)) {
         isMapped = false
         barcodeValue = cleanTracking
@@ -239,7 +462,6 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
     }
 
     case 'UPC_A': {
-      // UPC-A butuh 11 digit + 1 check digit = 12 digit
       if (/^\d{12}$/.test(cleanTracking)) {
         isMapped = false
         barcodeValue = cleanTracking
@@ -265,7 +487,6 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
     }
 
     case 'UPC_E': {
-      // UPC-E butuh 8 digit (0 + 6 digit payload + check digit valid hasil ekspansi UPC-A)
       if (/^0\d{7}$/.test(cleanTracking)) {
         const payload6 = cleanTracking.slice(1, 7)
         const cd = calculateUpceCheckDigit(payload6)
@@ -286,7 +507,6 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
     }
 
     case 'RSS_14': {
-      // GS1 DataBar Omnidirectional wajib diawali (01) dan 13-14 digit GTIN
       if (/^\(01\)\d{13,14}$/.test(cleanTracking)) {
         isMapped = false
         barcodeValue = cleanTracking
@@ -309,7 +529,6 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
     }
 
     case 'UPC_EAN_EXTENSION': {
-      // Extension 2 atau 5 digit
       if (/^\d{5}$/.test(cleanTracking) || /^\d{2}$/.test(cleanTracking)) {
         isMapped = false
         barcodeValue = cleanTracking
@@ -321,14 +540,12 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
     }
 
     case 'RSS_EXPANDED': {
-      // GS1 DataBar Expanded butuh format GS1 valid: (01)GTIN-14 + (10)Tracking No
       if (/^\(01\)\d{14}/.test(cleanTracking)) {
         isMapped = false
         barcodeValue = cleanTracking
       } else {
         isMapped = true
         const cleanAlpha = cleanTracking.replace(/[^A-Za-z0-9]/g, '').slice(0, 16) || 'WAHANA'
-        // (01)01234567890128: GTIN-14 valid (0123456789012 + mod10 check digit 8)
         barcodeValue = `(01)01234567890128(10)${cleanAlpha}`
       }
       break
@@ -345,13 +562,44 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
     is_mapped: isMapped
   }
 
-  // Simpan keterkaitan barcode_value -> tracking_no di storage lokal
+  // Simpan seluruh pemetaan variasi ke localStorage
   if (typeof localStorage !== 'undefined' && cleanTracking) {
     try {
       localStorage.setItem(`barcode_mapping_${barcodeValue}`, cleanTracking)
+      localStorage.setItem(`barcode_mapping_${cleanTracking}`, cleanTracking)
+
+      if (format === 'UPC_E' && barcodeValue.length === 8) {
+        const upca = expandUpceToUpca(barcodeValue)
+        localStorage.setItem(`barcode_mapping_${upca}`, cleanTracking)
+      }
+      if (format === 'UPC_A' && barcodeValue.length === 12) {
+        localStorage.setItem(`barcode_mapping_${barcodeValue.slice(0, 11)}`, cleanTracking)
+        const upce = compressUpcaToUpce(barcodeValue)
+        if (upce) localStorage.setItem(`barcode_mapping_${upce}`, cleanTracking)
+      }
+      if (format === 'EAN_13' && barcodeValue.length === 13) {
+        localStorage.setItem(`barcode_mapping_${barcodeValue.slice(0, 12)}`, cleanTracking)
+      }
+      if (format === 'EAN_8' && barcodeValue.length === 8) {
+        localStorage.setItem(`barcode_mapping_${barcodeValue.slice(0, 7)}`, cleanTracking)
+      }
+      if (format === 'MAXICODE') {
+        localStorage.setItem(`barcode_mapping_(10)${cleanTracking}`, cleanTracking)
+      }
+      if (format === 'CODABAR') {
+        const inner = barcodeValue.replace(/^[ABCD]|[ABCD]$/gi, '')
+        localStorage.setItem(`barcode_mapping_${inner}`, cleanTracking)
+      }
+      if (format === 'RSS_14') {
+        localStorage.setItem(`barcode_mapping_${barcodeValue.replace('(01)', '')}`, cleanTracking)
+      }
+      if (format === 'RSS_EXPANDED') {
+        localStorage.setItem(`barcode_mapping_(10)${cleanTracking}`, cleanTracking)
+      }
+
       localStorage.setItem(`barcode_meta_${cleanTracking}_${format}`, JSON.stringify(payload))
     } catch {
-      /* ignore storage quota in private mode */
+      /* ignore quota errors */
     }
   }
 
@@ -359,16 +607,7 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
 }
 
 /**
- * Render barcode atau QR Code / 2D Matrix ke dalam elemen SVG atau mengembalikan SVG string
- * Mendukung penuh ke-17 format:
- * QR_CODE, AZTEC, CODABAR, CODE_39, CODE_93, CODE_128, DATA_MATRIX, MAXICODE,
- * ITF, EAN_13, EAN_8, PDF_417, RSS_14, RSS_EXPANDED, UPC_A, UPC_E, UPC_EAN_EXTENSION
- *
- * @param {SVGElement|HTMLElement|null} svgEl - Elemen <svg> jika render langsung ke DOM
- * @param {string} rawTrackingNo - Nomor resi
- * @param {string} format - Format yang dipilih (default: CODE_128)
- * @param {Object} options - Opsi ukuran dan styling
- * @returns {Promise<{ success: boolean, svgHtml?: string, payload?: Object, error?: string }>}
+ * Render barcode atau QR Code / 2D Matrix ke dalam elemen SVG
  */
 export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', options = {}) {
   const trackingNo = (rawTrackingNo || '').trim()
@@ -393,7 +632,6 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
     }
 
     if (!is2DMatrix && !isStacked) {
-      // Barcode 1D linear: tingkatkan tinggi dan beri padding agar mudah difokus oleh kamera
       bwipOptions.height = options.height || 12
       bwipOptions.paddingwidth = 8
       bwipOptions.paddingheight = 4

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS paket (
   berat_kg          DECIMAL(6,2) NOT NULL DEFAULT 0,
   jenis_layanan     ENUM('REGULER','EXPRESS','SAME_DAY') NOT NULL DEFAULT 'REGULER',
   status ENUM('DRAFT', 'TERDAFTAR') NOT NULL DEFAULT 'DRAFT',
+  barcode_format    VARCHAR(30)  NOT NULL DEFAULT 'CODE_128',
 
   created_by        VARCHAR(32)  NULL,
   created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -37,6 +38,10 @@ CREATE TABLE IF NOT EXISTS paket (
   CONSTRAINT fk_paket_user
     FOREIGN KEY (created_by) REFERENCES users (id)
 ) ENGINE=InnoDB;
+
+-- 2b. Tambah kolom barcode_format jika tabel paket sudah ada sebelumnya
+ALTER TABLE paket
+  ADD COLUMN IF NOT EXISTS barcode_format VARCHAR(30) NOT NULL DEFAULT 'CODE_128';
 
 -- 3. Daftarkan resi lama yang sudah pernah discan sebagai paket TERDAFTAR
 --    (agar FK bisa dibuat tanpa menghapus riwayat scan).
