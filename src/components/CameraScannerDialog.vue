@@ -47,12 +47,53 @@
           </div>
 
           <!-- Garis bantu scan -->
-          <div v-if="status === 'scanning'" class="scan-guide absolute-center"></div>
+          <div v-if="status === 'scanning' && !isHolding" class="scan-guide absolute-center"></div>
+
+          <!-- Overlay Stabilisasi / Jeda 3 Detik Pembacaan Lengkap -->
+          <div
+            v-if="isHolding"
+            class="absolute-full flex flex-center column q-pa-md text-center"
+            style="background: rgba(15, 23, 42, 0.82); backdrop-filter: blur(4px); z-index: 20;"
+          >
+            <q-circular-progress
+              :value="holdProgress"
+              size="72px"
+              :thickness="0.18"
+              color="amber-4"
+              track-color="blue-grey-8"
+              class="q-mb-xs"
+            >
+              <span class="text-weight-bolder text-white font-mono" style="font-size: 1.25rem;">
+                {{ holdCountdownSeconds }}s
+              </span>
+            </q-circular-progress>
+
+            <div class="text-weight-bold text-amber-4 text-subtitle2 q-mt-xs">
+              Menstabilkan Barcode...
+            </div>
+            <div class="text-caption text-white font-mono bg-black-60 q-px-sm q-py-xs rounded-borders q-my-xs text-weight-bold" style="max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              {{ candidateCode }}
+            </div>
+            <div class="text-caption text-grey-3" style="font-size: 11px;">
+              Tahan posisi barcode selama 3 detik agar kode terbaca lengkap
+            </div>
+
+            <q-btn
+              flat
+              dense
+              no-caps
+              color="amber-4"
+              label="Proses Sekarang"
+              icon="bolt"
+              class="q-mt-sm text-weight-bold"
+              @click="commitScan"
+            />
+          </div>
         </div>
 
         <div class="text-caption text-grey-7 text-center q-mt-sm row items-center justify-center">
           <q-icon name="info" size="16px" color="grey-6" class="q-mr-xs" />
-          <span>Arahkan barcode ke kamera — deteksi otomatis dengan jeda 1,2 detik</span>
+          <span>Arahkan barcode ke kamera — tahan posisi 3 detik untuk pembacaan stabil &amp; lengkap</span>
         </div>
 
         <!-- Hasil scan TERAKHIR sesungguhnya (tervalidasi backend) -->
@@ -87,6 +128,8 @@
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
+import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library'
+import { normalizeScannedBarcode } from '../utils/barcodeGenerator'
 
 const ALL_SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.QR_CODE,
@@ -132,8 +175,61 @@ const show = computed({
 })
 
 let scanner = null
+let zxingReader = null
 let lastEmitAt = 0
 let audioCtx = null
+
+const stopZxing = () => {
+  if (zxingReader) {
+    try {
+      zxingReader.stopContinuousDecode()
+    } catch {
+      /* ignore */
+    }
+    try {
+      zxingReader.reset()
+    } catch {
+      /* ignore */
+    }
+    zxingReader = null
+  }
+}
+
+const startZxingFallback = (videoElement) => {
+  if (!videoElement || zxingReader) return
+  try {
+    const hints = new Map()
+    hints.set(DecodeHintType.TRY_HARDER, true)
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.CODE_93,
+      BarcodeFormat.CODABAR,
+      BarcodeFormat.RSS_EXPANDED,
+      BarcodeFormat.RSS_14,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.ITF,
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.QR_CODE,
+      BarcodeFormat.DATA_MATRIX,
+      BarcodeFormat.AZTEC,
+      BarcodeFormat.PDF_417
+    ])
+    zxingReader = new BrowserMultiFormatReader(hints, 200)
+    zxingReader.decodeContinuously(videoElement, (result, err) => {
+      if (result && result.getText && result.getText()) {
+        const text = result.getText()
+        console.log('[CAMERA] Terdeteksi via ZXing auxiliary:', text, result.getBarcodeFormat())
+        onScanSuccess(text)
+      }
+    })
+    console.log('[CAMERA] ZXing auxiliary engine aktif memindai video.')
+  } catch (err) {
+    console.warn('[CAMERA] ZXing auxiliary engine could not bind:', err)
+  }
+}
 
 const status = ref('idle') // idle | starting | scanning | error
 const errorMessage = ref('')
@@ -204,20 +300,40 @@ const startCamera = async () => {
     try {
       scanner = new Html5Qrcode(REGION_ID, {
         formatsToSupport: ALL_SUPPORTED_FORMATS,
-        verbose: false
+        verbose: false,
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        }
       })
       await scanner.start(
         cameraConfig,
         {
-          fps: 10,
-          qrbox: (w) => ({
-            width: Math.floor(Math.min(w * 0.85, 420)),
-            height: Math.floor(Math.min(w * 0.4, 200))
-          })
+          fps: 15,
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            return {
+              width: Math.floor(Math.min(viewfinderWidth * 0.9, 520)),
+              height: Math.floor(Math.min(viewfinderHeight * 0.8, 340))
+            }
+          }
         },
         onScanSuccess,
         () => {} // frame tanpa barcode — abaikan
       )
+
+      // Sambungkan auxiliary engine ZXing untuk membaca Code 93 & GS1 Expanded
+      let bindAttempts = 0
+      const bindInterval = setInterval(() => {
+        bindAttempts++
+        const videoEl = document.querySelector(`#${REGION_ID} video`)
+        if (videoEl && videoEl.videoWidth > 0) {
+          clearInterval(bindInterval)
+          startZxingFallback(videoEl)
+        } else if (bindAttempts > 20) {
+          clearInterval(bindInterval)
+          if (videoEl) startZxingFallback(videoEl)
+        }
+      }, 200)
+
       status.value = 'scanning'
       return
     } catch (err) {
@@ -237,7 +353,51 @@ const startCamera = async () => {
   technicalError.value = `${errName}: ${lastError?.message || '(tanpa pesan)'}`
 }
 
+const HOLD_DURATION_MS = 3000
+const isHolding = ref(false)
+const candidateCode = ref('')
+const holdProgress = ref(0)
+const holdCountdownSeconds = ref(3)
+let holdTimer = null
+let holdStartAt = 0
+let lastCandidateSeenAt = 0
+let watchdogTimer = null
+
+const resetHold = () => {
+  if (holdTimer) {
+    clearInterval(holdTimer)
+    holdTimer = null
+  }
+  if (watchdogTimer) {
+    clearInterval(watchdogTimer)
+    watchdogTimer = null
+  }
+  isHolding.value = false
+  candidateCode.value = ''
+  holdProgress.value = 0
+  holdCountdownSeconds.value = 3
+}
+
+const commitScan = () => {
+  const raw = candidateCode.value
+  resetHold()
+
+  if (!raw) return
+  const resi = normalizeScannedBarcode(raw)
+  if (!resi) return
+
+  stopCamera()
+  show.value = false
+
+  playBeep()
+  navigator.vibrate?.(80)
+
+  emit('detected', resi)
+}
+
 const stopCamera = () => {
+  resetHold()
+  stopZxing()
   if (!scanner) return
   try {
     const s = scanner
@@ -252,6 +412,8 @@ const stopCamera = () => {
 }
 
 const cleanupScanner = () => {
+  resetHold()
+  stopZxing()
   if (scanner) {
     try {
       scanner.clear()
@@ -263,25 +425,51 @@ const cleanupScanner = () => {
 }
 
 const closeDialog = () => {
+  resetHold()
   show.value = false
 }
 
 // ---------------------------------------------------------------------
-// Deteksi
+// Deteksi dengan Jeda Stabilisasi 3 Detik
 // ---------------------------------------------------------------------
 const onScanSuccess = (decodedText) => {
+  const raw = String(decodedText || '').trim()
+  if (!raw) return
+
   const now = Date.now()
-  if (now - lastEmitAt < COOLDOWN_MS) return
+  lastCandidateSeenAt = now
 
-  lastEmitAt = now
-  const resi = String(decodedText || '').trim()
-  if (!resi) return
+  if (!isHolding.value) {
+    // Mulai jeda 3 detik untuk memastikan barcode terbaca utuh dan kamera stabil
+    isHolding.value = true
+    candidateCode.value = raw
+    holdStartAt = now
+    holdProgress.value = 0
+    holdCountdownSeconds.value = 3
 
-  playBeep()
-  navigator.vibrate?.(80)
+    holdTimer = setInterval(() => {
+      const elapsed = Date.now() - holdStartAt
+      const progress = Math.min(100, Math.floor((elapsed / HOLD_DURATION_MS) * 100))
+      holdProgress.value = progress
+      holdCountdownSeconds.value = Math.max(1, Math.ceil((HOLD_DURATION_MS - elapsed) / 1000))
 
-  // Hasil validasi sesungguhnya dikirim parent lewat prop `feedback`
-  emit('detected', resi)
+      if (elapsed >= HOLD_DURATION_MS) {
+        commitScan()
+      }
+    }, 100)
+
+    // Watchdog: jika barcode tidak terlihat lagi selama > 1500ms, batalkan proses
+    watchdogTimer = setInterval(() => {
+      if (Date.now() - lastCandidateSeenAt > 1500) {
+        resetHold()
+      }
+    }, 300)
+  } else {
+    // Sedang menstabilkan: perbarui jika frame berikutnya menangkap kode yang lebih panjang/lengkap
+    if (raw.length > candidateCode.value.length || raw.includes('(10)')) {
+      candidateCode.value = raw
+    }
+  }
 }
 
 // Bunyi "beep" singkat tanpa file audio (WebAudio API)

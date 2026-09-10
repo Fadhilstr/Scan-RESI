@@ -46,6 +46,9 @@
               <svg ref="svgRef"></svg>
             </div>
             <div class="resi-number-sub">{{ displayResi }}</div>
+            <div v-if="currentFormat === 'CODE_93' && code93Ck" class="resi-number-ck" style="font-size: 10px; font-weight: 700; color: #475569; margin-top: 1px; font-family: monospace;">
+              Check Digits C &amp; K: [ {{ code93Ck.c }} ] [ {{ code93Ck.k }} ]
+            </div>
           </div>
 
           <div class="label-divider"></div>
@@ -110,7 +113,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
-import { BARCODE_FORMAT_OPTIONS, renderBarcode as utilRenderBarcode } from '../utils/barcodeGenerator'
+import { BARCODE_FORMAT_OPTIONS, renderBarcode as utilRenderBarcode, calculateCode93CheckDigits } from '../utils/barcodeGenerator'
 import { usePaketStore } from '../stores/paketStore'
 import { useAuthStore } from '../stores/authStore'
 import { formatAddressInfo, extractCityFromAddress, maskPhone, maskAddress } from '../utils/addressFormatter'
@@ -185,6 +188,11 @@ watch(
 
 const displayResi = computed(() => {
   return (currentPaket.value?.nomor_resi || props.resi || '').toUpperCase()
+})
+
+const code93Ck = computed(() => {
+  if (currentFormat.value !== 'CODE_93') return null
+  return calculateCode93CheckDigits(displayResi.value)
 })
 
 const pengirimFormatted = computed(() => {
@@ -369,10 +377,14 @@ const renderBarcode = async () => {
   if (!targetResi) return
   renderError.value = ''
 
+  const isExpanded = currentFormat.value === 'RSS_EXPANDED'
+  const isMaxi = currentFormat.value === 'MAXICODE'
+  const is2D = ['QR_CODE', 'AZTEC', 'DATA_MATRIX'].includes(currentFormat.value)
+
   const res = await utilRenderBarcode(svgRef.value, targetResi, currentFormat.value, {
-    scale: 2,
-    height: 8,
-    qrSize: 100,
+    scale: 3,
+    height: isExpanded ? 20 : 16,
+    qrSize: isMaxi ? 190 : (is2D ? 135 : 120),
     background: '#ffffff',
     lineColor: '#000000'
   })
@@ -451,11 +463,11 @@ const printLabel = () => {
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        margin: 3px 0;
+        margin: 4px 0;
       }
       .barcode-box svg {
-        max-width: 220px;
-        max-height: 65px;
+        max-width: 320px;
+        max-height: 140px;
         width: auto;
         height: auto;
         display: block;
@@ -520,6 +532,7 @@ const printLabel = () => {
         <div class="barcode-box">
           ${svgHtml}
           <div class="resi-number-sub">${displayResi.value}</div>
+          ${currentFormat.value === 'CODE_93' && code93Ck.value ? `<div style="font-size: 10px; font-weight: 700; color: #475569; margin-top: 2px; font-family: monospace;">Check Digits C &amp; K: [ ${code93Ck.value.c} ] [ ${code93Ck.value.k} ]</div>` : ''}
         </div>
       </div>
 
@@ -612,13 +625,13 @@ const printLabel = () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin: 4px 0;
-  max-height: 80px;
+  margin: 6px 0;
+  min-height: 70px;
 }
 
 .barcode-svg-container :deep(svg) {
-  max-width: 220px;
-  max-height: 65px;
+  max-width: 320px;
+  max-height: 140px;
   width: auto;
   height: auto;
 }

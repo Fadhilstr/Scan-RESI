@@ -113,6 +113,8 @@
                   dense
                   bg-color="white"
                   class="text-weight-medium"
+                  placeholder="Pilih format barcode..."
+                  clearable
                   @update:model-value="handleFormatChange"
                 >
                   <template v-slot:option="scope">
@@ -156,32 +158,48 @@
             <div class="col-12 col-md-7 flex flex-center">
               <div class="bg-white q-pa-lg rounded-borders shadow-2 full-width text-center" style="min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #e2e8f0;">
                 
+                <!-- State Belum Memilih Format Barcode -->
+                <div v-if="!selectedFormat" class="q-pa-md text-grey-6 full-width text-center">
+                  <q-icon name="qr_code_2" size="48px" class="q-mb-xs text-grey-4" />
+                  <div class="text-weight-bold text-slate-700">Format Barcode Belum Dipilih</div>
+                  <div class="text-caption text-grey-6 q-mt-xs">
+                    Silakan pilih format barcode di samping untuk melihat preview dan mencetak label barcode.
+                  </div>
+                </div>
+
                 <!-- Pesan Error jika terjadi kegagalan sistem -->
-                <div v-if="barcodeError" class="q-pa-md bg-red-1 text-negative rounded-borders full-width text-center" style="border: 1px solid #fca5a5;">
+                <div v-else-if="barcodeError" class="q-pa-md bg-red-1 text-negative rounded-borders full-width text-center" style="border: 1px solid #fca5a5;">
                   <q-icon name="error_outline" size="32px" class="q-mb-xs" />
                   <div class="text-weight-bold text-subtitle2">{{ barcodeError }}</div>
                 </div>
 
                 <!-- Kontainer Barcode/QR/Matrix SVG -->
-                <div v-show="!barcodeError" class="barcode-preview-container flex flex-center full-width">
-                  <svg ref="svgRef" style="max-width: 100%; height: auto;"></svg>
-                </div>
-
-                <div v-if="!barcodeError" class="q-mt-sm full-width text-center">
-                  <div class="text-caption text-grey-8 text-weight-bold">
-                    {{ selectedFormat }} &bull; Tracking: {{ paket?.nomor_resi }}
+                <div v-else class="full-width flex flex-center column">
+                  <div class="barcode-preview-container flex flex-center full-width">
+                    <svg ref="svgRef" style="max-width: 100%; height: auto;"></svg>
                   </div>
-                  
-                  <div class="q-mt-md">
-                    <q-btn
-                      outline
-                      color="primary"
-                      icon="print"
-                      label="Print Barcode"
-                      no-caps
-                      class="text-weight-bold"
-                      @click="showLabel = true"
-                    />
+
+                  <div class="q-mt-sm full-width text-center">
+                    <div class="text-caption text-grey-8 text-weight-bold font-mono">
+                      {{ selectedFormat }} &bull; Tracking: {{ paket?.nomor_resi }}
+                    </div>
+
+                    <!-- Keterangan Check Digits C & K khusus Code 93 -->
+                    <div v-if="code93Info" class="q-mt-xs bg-blue-1 text-primary q-px-sm q-py-xs rounded-borders font-mono text-caption text-weight-bold" style="display: inline-block;">
+                      Check Digits (C &amp; K): [ {{ code93Info.c }} ] [ {{ code93Info.k }} ] &bull; Disematkan otomatis di akhir bilah barcode
+                    </div>
+                    
+                    <div class="q-mt-md">
+                      <q-btn
+                        outline
+                        color="primary"
+                        icon="print"
+                        label="Print Barcode"
+                        no-caps
+                        class="text-weight-bold"
+                        @click="showLabel = true"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -389,15 +407,15 @@
     </q-card>
 
     <!-- Dialog cetak label (komponen barcode terintegrasi) -->
-    <BarcodeLabel v-model="showLabel" :resi="paket?.nomor_resi || ''" :paket-data="paket" :initial-format="selectedFormat" />
+    <BarcodeLabel v-model="showLabel" :resi="paket?.nomor_resi || ''" :paket-data="paket" :initial-format="selectedFormat || 'CODE_128'" />
   </q-page>
 </template>
 
 <script setup>
-import { ref, reactive, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { BARCODE_FORMAT_OPTIONS, renderBarcode as utilRenderBarcode } from '../../utils/barcodeGenerator'
+import { BARCODE_FORMAT_OPTIONS, renderBarcode as utilRenderBarcode, calculateCode93CheckDigits } from '../../utils/barcodeGenerator'
 import { useAuthStore } from '../../stores/authStore'
 import { usePaketStore } from '../../stores/paketStore'
 import { buildSingleLineAddress } from '../../utils/addressFormatter'
@@ -417,10 +435,15 @@ const paket = ref(null)
 const svgRef = ref(null)
 const showLabel = ref(false)
 
-const selectedFormat = ref('CODE_128')
+const selectedFormat = ref(null)
 const generatingBarcode = ref(false)
 const barcodeError = ref('')
 const currentPayload = ref(null)
+
+const code93Info = computed(() => {
+  if (selectedFormat.value !== 'CODE_93' || !paket.value?.nomor_resi) return null
+  return calculateCode93CheckDigits(paket.value.nomor_resi)
+})
 
 const layananOptions = [
   { label: 'REG (REGULER)', value: 'REG' },
@@ -460,6 +483,14 @@ const form = reactive(emptyForm())
 const renderCurrentBarcode = async () => {
   const resi = (paket.value?.nomor_resi || '').trim()
   if (!resi) return
+
+  if (!selectedFormat.value) {
+    if (svgRef.value) svgRef.value.innerHTML = ''
+    barcodeError.value = ''
+    currentPayload.value = null
+    return
+  }
+
   await nextTick()
   if (!svgRef.value) return
 
@@ -473,12 +504,16 @@ const renderCurrentBarcode = async () => {
 
   generatingBarcode.value = true
   try {
+    const isExpanded = selectedFormat.value === 'RSS_EXPANDED'
+    const isMaxi = selectedFormat.value === 'MAXICODE'
+    const is2D = ['QR_CODE', 'AZTEC', 'DATA_MATRIX'].includes(selectedFormat.value)
+
     const res = await utilRenderBarcode(svgRef.value, resi, selectedFormat.value, {
-      scale: 2,
-      height: 8,
-      qrSize: 105,
+      scale: 3,
+      height: isExpanded ? 20 : 16,
+      qrSize: isMaxi ? 190 : (is2D ? 135 : 120),
       background: '#ffffff',
-      lineColor: '#0b2341'
+      lineColor: '#000000'
     })
 
     if (!res.success) {
@@ -504,7 +539,7 @@ watch(
 
 const handleGenerate = async (targetFormat = selectedFormat.value) => {
   generating.value = true
-  const result = await paketStore.createResi(authStore.currentUser, targetFormat)
+  const result = await paketStore.createResi(authStore.currentUser, targetFormat || 'CODE_128')
   generating.value = false
 
   if (result.success) {
@@ -536,6 +571,13 @@ const handleGenerate = async (targetFormat = selectedFormat.value) => {
 
 const handleFormatChange = async (newFormat) => {
   selectedFormat.value = newFormat
+  if (!newFormat) {
+    if (svgRef.value) svgRef.value.innerHTML = ''
+    barcodeError.value = ''
+    currentPayload.value = null
+    return
+  }
+
   const currentResi = (paket.value?.nomor_resi || '').trim()
 
   const isNumericFormat = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'ITF', 'CODABAR', 'RSS_14', 'UPC_EAN_EXTENSION'].includes(newFormat)
@@ -573,6 +615,17 @@ const handleFormatChange = async (newFormat) => {
 }
 
 const handleSave = async () => {
+  if (!selectedFormat.value) {
+    $q.notify({
+      type: 'warning',
+      icon: 'warning',
+      message: 'Silakan pilih format barcode terlebih dahulu di Langkah 1.',
+      position: 'top',
+      timeout: 2500
+    })
+    return
+  }
+
   saving.value = true
 
   const pengirim_detail = {
@@ -651,7 +704,7 @@ const handleSave = async () => {
 const resetForm = async () => {
   paket.value = null
   saved.value = false
-  selectedFormat.value = 'CODE_128'
+  selectedFormat.value = null
   barcodeError.value = ''
   currentPayload.value = null
   Object.assign(form, emptyForm())
@@ -659,9 +712,11 @@ const resetForm = async () => {
 }
 
 const saveDraftToStorage = () => {
-  if(paket.value?.nomor_resi && !saved.value){
+  if (paket.value?.nomor_resi && !saved.value) {
     localStorage.setItem(`draft_paket_${paket.value.nomor_resi}`, JSON.stringify(form))
-    localStorage.setItem(`paket_barcode_format_${paket.value.nomor_resi.toUpperCase()}`, selectedFormat.value)
+    if (selectedFormat.value) {
+      localStorage.setItem(`paket_barcode_format_${paket.value.nomor_resi.toUpperCase()}`, selectedFormat.value)
+    }
   }
 }
 
@@ -746,12 +801,12 @@ onMounted(async () => {
   justify-content: center;
   align-items: center;
   min-height: 70px;
-  max-height: 120px;
+  max-height: 150px;
   margin: 6px auto;
 }
 .barcode-preview-container :deep(svg) {
-  max-width: 250px;
-  max-height: 80px;
+  max-width: 320px;
+  max-height: 140px;
   width: auto;
   height: auto;
 }
