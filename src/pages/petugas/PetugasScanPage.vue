@@ -381,6 +381,11 @@ const handleBarcodeScan = async (resiInput) => {
   const cleanResi = normalizeScannedBarcode((resiInput || '').trim())
   if (!cleanResi) return
 
+  // Cegah trigger ganda / loop saat modal konfirmasi sedang terbuka atau sedang diproses
+  if (showConfirmScanModal.value || isProcessingScan.value) {
+    return
+  }
+
   // Lookup paket preview untuk konfirmasi
   pendingResi.value = cleanResi
   const lookup = await paketStore.lookupByResi(cleanResi)

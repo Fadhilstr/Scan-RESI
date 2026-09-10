@@ -7,7 +7,7 @@ import bwipjs from 'bwip-js'
  * RSS_14 = 12, RSS_EXPANDED = 13, UPC_A = 14, UPC_E = 15, UPC_EAN_EXTENSION = 16
  */
 export const BARCODE_FORMAT_OPTIONS = [
-  { label: 'CODE_128 (Default)', value: 'CODE_128', supported: true, category: '1D' },
+  { label: 'CODE_128', value: 'CODE_128', supported: true, category: '1D' },
   { label: 'QR_CODE', value: 'QR_CODE', supported: true, category: '2D Matrix' },
   { label: 'AZTEC', value: 'AZTEC', supported: true, category: '2D Matrix' },
   { label: 'DATA_MATRIX', value: 'DATA_MATRIX', supported: true, category: '2D Matrix' },
@@ -110,6 +110,7 @@ export function calculateUpceCheckDigit(payload6) {
 }
 
 /**
+<<<<<<< HEAD
  * Ekspansi UPC-E (8 digit) ke UPC-A (12 digit)
  */
 export function expandUpceToUpca(upceStr) {
@@ -360,6 +361,71 @@ export function normalizeScannedBarcode(raw, format = null) {
   if (mCodaGen && mCodaGen[1]) {
     return checkLocalStorage(mCodaGen[1]) || mCodaGen[1]
   }
+=======
+ * Menghitung 2 karakter check digit C dan K standar Code 93
+ */
+export function calculateCode93CheckDigits(str) {
+  const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%abcd*'
+  const clean = (str || '').trim().toUpperCase().replace(/[^A-Z0-9\-\.\ \$\/\+\%]/g, '')
+  if (!clean) return { c: '', k: '', full: '' }
+
+  // Check character C (bobot 1..20)
+  let weight = 1
+  let total = 0
+  for (let i = clean.length - 1; i >= 0; i--) {
+    total += weight * ALPHABET.indexOf(clean.charAt(i))
+    if (++weight > 20) weight = 1
+  }
+  const c = ALPHABET[total % 47]
+
+  // Check character K (bobot 1..15 terhadap string + C)
+  const withC = clean + c
+  weight = 1
+  total = 0
+  for (let i = withC.length - 1; i >= 0; i--) {
+    total += weight * ALPHABET.indexOf(withC.charAt(i))
+    if (++weight > 15) weight = 1
+  }
+  const k = ALPHABET[total % 47]
+
+  return { c, k, full: clean + c + k }
+}
+
+/**
+ * Normalisasi nomor resi dari output scanner kamera/laser (GS1 AI, Codabar start/stop, dsb)
+ */
+export function normalizeScannedBarcode(raw) {
+  if (!raw) return ''
+  let s = String(raw).trim()
+  // 1. Hapus karakter kontrol tak terlihat (FNC1, GS ASCII 29, RS ASCII 30, dsb)
+  s = s.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim().toUpperCase()
+  // 2. Hapus AIM Symbology Identifier jika dikirim scanner (misal ]e0, ]C1, ]A0, ]G0)
+  s = s.replace(/^\][A-Z0-9]{2}/i, '').trim()
+
+  // 3. Cek local mapping jika tersimpan saat render
+  if (typeof localStorage !== 'undefined') {
+    const localMapped = localStorage.getItem(`barcode_mapping_${s}`)
+    if (localMapped) return localMapped
+  }
+
+  // 4. GS1 AI(10) - Ekstrak nomor resi dari AI (10)
+  const m10Paren = s.match(/\(10\)\s*([A-Z0-9]+)/i)
+  if (m10Paren && m10Paren[1]) return m10Paren[1]
+
+  const m10Raw = s.match(/^(?:(?:\(01\)|01)\s*\d{13,14})?\s*(?:\(10\)|10)\s*([A-Z0-9]+)/i)
+  if (m10Raw && m10Raw[1]) return m10Raw[1]
+
+  const m10Anywhere = s.match(/\d{14}10([A-Z0-9]{4,16})/i)
+  if (m10Anywhere && m10Anywhere[1]) return m10Anywhere[1]
+
+  // 5. GS1 AI(01) 14 digit GTIN
+  const m01 = s.match(/^\(01\)\s*(\d{13,14})/i) || s.match(/^01(\d{14})/i)
+  if (m01 && m01[1]) return m01[1]
+
+  // 6. Codabar start/stop A, B, C, D
+  const mCoda = s.match(/^[ABCD]([0-9]+)[ABCD]$/i)
+  if (mCoda && mCoda[1]) return mCoda[1]
+>>>>>>> origin/main
 
   return s
 }
@@ -373,6 +439,7 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
 
   let barcodeValue = cleanTracking
   let isMapped = false
+  let checkDigits = null
 
   switch (format) {
     case 'CODE_128':
@@ -389,9 +456,14 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
       break
 
     case 'CODE_39':
-    case 'CODE_93':
       barcodeValue = cleanTracking.replace(/[^A-Z0-9\-\.\ \$\/\+\%]/g, '') || cleanTracking
       break
+
+    case 'CODE_93': {
+      barcodeValue = cleanTracking.replace(/[^A-Z0-9\-\.\ \$\/\+\%]/g, '') || cleanTracking
+      checkDigits = calculateCode93CheckDigits(barcodeValue)
+      break
+    }
 
     case 'ITF': {
       if (/^\d{4,16}$/.test(cleanTracking) && cleanTracking.length % 2 === 0) {
@@ -559,7 +631,8 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
     tracking_no: cleanTracking,
     barcode_format: format,
     barcode_value: barcodeValue,
-    is_mapped: isMapped
+    is_mapped: isMapped,
+    check_digits: checkDigits
   }
 
   // Simpan seluruh pemetaan variasi ke localStorage
@@ -631,10 +704,16 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
       backgroundcolor: 'ffffff'
     }
 
+    if (format === 'CODE_93') {
+      // Code 93 memerlukan 2 digit check characters C & K sesuai standar spesifikasi internasional
+      bwipOptions.includecheck = true
+    }
+
     if (!is2DMatrix && !isStacked) {
-      bwipOptions.height = options.height || 12
-      bwipOptions.paddingwidth = 8
-      bwipOptions.paddingheight = 4
+      // Barcode 1D linear: tingkatkan tinggi dan beri quiet zone padding agar mudah dideteksi kamera
+      bwipOptions.height = options.height || (format === 'RSS_EXPANDED' ? 20 : 16)
+      bwipOptions.paddingwidth = 15
+      bwipOptions.paddingheight = 8
     }
 
     const svgString = bwipjs.toSVG(bwipOptions)
@@ -658,24 +737,31 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
         svgEl.style.width = 'auto'
         svgEl.style.height = 'auto'
       } else if (is2DMatrix) {
-        const size = String(options.qrSize || 115)
+        const size = String(options.qrSize || 120)
         svgEl.setAttribute('width', size)
         svgEl.setAttribute('height', size)
-        svgEl.style.maxWidth = '125px'
-        svgEl.style.maxHeight = '125px'
+        svgEl.style.maxWidth = '135px'
+        svgEl.style.maxHeight = '135px'
         svgEl.style.width = 'auto'
         svgEl.style.height = 'auto'
       } else if (isStacked) {
-        svgEl.setAttribute('width', '220')
-        svgEl.style.maxWidth = '220px'
-        svgEl.style.maxHeight = '65px'
+        svgEl.setAttribute('width', '240')
+        svgEl.style.maxWidth = '240px'
+        svgEl.style.maxHeight = '80px'
         svgEl.style.width = 'auto'
+        svgEl.style.height = 'auto'
+      } else if (format === 'RSS_EXPANDED') {
+        svgEl.removeAttribute('width')
+        svgEl.removeAttribute('height')
+        svgEl.style.maxWidth = '320px'
+        svgEl.style.maxHeight = '95px'
+        svgEl.style.width = '100%'
         svgEl.style.height = 'auto'
       } else {
         svgEl.removeAttribute('width')
         svgEl.removeAttribute('height')
-        svgEl.style.maxWidth = '260px'
-        svgEl.style.maxHeight = '65px'
+        svgEl.style.maxWidth = '280px'
+        svgEl.style.maxHeight = '85px'
         svgEl.style.width = '100%'
         svgEl.style.height = 'auto'
       }

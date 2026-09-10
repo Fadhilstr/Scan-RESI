@@ -347,11 +347,13 @@ sub detail {
     # Normalisasi otomatis jika barcode mengandung prefiks GS1, AI (10), atau Codabar
     if (!$row) {
         my $alt_resi = $resi;
-        if ($alt_resi =~ /\(10\)([A-Z0-9]+)/i || $alt_resi =~ /^(?:\(01\)|01)?\d{14}(?:\(10\)|10)([A-Z0-9]+)/i) {
+        $alt_resi =~ s/[\x00-\x1F\x7F-\x9F]//g;
+        $alt_resi =~ s/^\][A-Z0-9]{2}//i;
+        if ($alt_resi =~ /\(10\)\s*([A-Z0-9]+)/i || $alt_resi =~ /^(?:\(01\)|01)?\s*\d{13,14}\s*(?:\(10\)|10)\s*([A-Z0-9]+)/i || $alt_resi =~ /\d{14}10([A-Z0-9]{4,16})/i) {
             $alt_resi = $1;
         } elsif ($alt_resi =~ /^[ABCD]([0-9]+)[ABCD]$/i) {
             $alt_resi = $1;
-        } elsif ($alt_resi =~ /^\(01\)(\d{13,14})$/i || $alt_resi =~ /^01(\d{14})$/i) {
+        } elsif ($alt_resi =~ /^\(01\)\s*(\d{13,14})$/i || $alt_resi =~ /^01(\d{14})$/i) {
             $alt_resi = $1;
         } elsif ($alt_resi =~ /^0(\d{12})$/) {
             $alt_resi = $1;
@@ -360,6 +362,29 @@ sub detail {
             $row = $dbh->selectrow_hashref(
                 Wahana::Query->get('paket_get_detail'), undef, $alt_resi
             );
+        }
+
+        # Toleransi pembacaan optik kamera pada UPC-E (misal digit 2/8 tertukar akibat noise sensor)
+        if (!$row && $resi =~ /^0\d{7}$/) {
+            my $upce_rows = $dbh->selectall_arrayref(
+                "SELECT nomor_resi FROM paket WHERE barcode_format = 'UPC_E' AND status = 'TERDAFTAR'",
+                { Slice => {} }
+            );
+            for my $item (@$upce_rows) {
+                my $target = $item->{nomor_resi};
+                if (length($target) == 8) {
+                    my $diff = 0;
+                    for my $i (0 .. 7) {
+                        $diff++ if substr($resi, $i, 1) ne substr($target, $i, 1);
+                    }
+                    if ($diff == 1) {
+                        $row = $dbh->selectrow_hashref(
+                            Wahana::Query->get('paket_get_detail'), undef, $target
+                        );
+                        last if $row;
+                    }
+                }
+            }
         }
     }
 
