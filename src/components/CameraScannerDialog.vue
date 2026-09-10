@@ -47,53 +47,12 @@
           </div>
 
           <!-- Garis bantu scan -->
-          <div v-if="status === 'scanning' && !isHolding" class="scan-guide absolute-center"></div>
-
-          <!-- Overlay Stabilisasi / Jeda 3 Detik Pembacaan Lengkap -->
-          <div
-            v-if="isHolding"
-            class="absolute-full flex flex-center column q-pa-md text-center"
-            style="background: rgba(15, 23, 42, 0.82); backdrop-filter: blur(4px); z-index: 20;"
-          >
-            <q-circular-progress
-              :value="holdProgress"
-              size="72px"
-              :thickness="0.18"
-              color="amber-4"
-              track-color="blue-grey-8"
-              class="q-mb-xs"
-            >
-              <span class="text-weight-bolder text-white font-mono" style="font-size: 1.25rem;">
-                {{ holdCountdownSeconds }}s
-              </span>
-            </q-circular-progress>
-
-            <div class="text-weight-bold text-amber-4 text-subtitle2 q-mt-xs">
-              Menstabilkan Barcode...
-            </div>
-            <div class="text-caption text-white font-mono bg-black-60 q-px-sm q-py-xs rounded-borders q-my-xs text-weight-bold" style="max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-              {{ candidateCode }}
-            </div>
-            <div class="text-caption text-grey-3" style="font-size: 11px;">
-              Tahan posisi barcode selama 3 detik agar kode terbaca lengkap
-            </div>
-
-            <q-btn
-              flat
-              dense
-              no-caps
-              color="amber-4"
-              label="Proses Sekarang"
-              icon="bolt"
-              class="q-mt-sm text-weight-bold"
-              @click="commitScan"
-            />
-          </div>
+          <div v-if="status === 'scanning'" class="scan-guide absolute-center"></div>
         </div>
 
         <div class="text-caption text-grey-7 text-center q-mt-sm row items-center justify-center">
           <q-icon name="info" size="16px" color="grey-6" class="q-mr-xs" />
-          <span>Arahkan barcode ke kamera — tahan posisi 3 detik untuk pembacaan stabil &amp; lengkap</span>
+          <span>Arahkan barcode ke kamera — deteksi otomatis dengan jeda 1,2 detik</span>
         </div>
 
         <!-- Hasil scan TERAKHIR sesungguhnya (tervalidasi backend) -->
@@ -127,9 +86,12 @@
 
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { useQuasar } from 'quasar'
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library'
 import { normalizeScannedBarcode } from '../utils/barcodeGenerator'
+
+const $q = useQuasar()
 
 const ALL_SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.QR_CODE,
@@ -352,50 +314,7 @@ const startCamera = async () => {
   technicalError.value = `${errName}: ${lastError?.message || '(tanpa pesan)'}`
 }
 
-const HOLD_DURATION_MS = 3000
-const isHolding = ref(false)
-const candidateCode = ref('')
-const holdProgress = ref(0)
-const holdCountdownSeconds = ref(3)
-let holdTimer = null
-let holdStartAt = 0
-let lastCandidateSeenAt = 0
-let watchdogTimer = null
-
-const resetHold = () => {
-  if (holdTimer) {
-    clearInterval(holdTimer)
-    holdTimer = null
-  }
-  if (watchdogTimer) {
-    clearInterval(watchdogTimer)
-    watchdogTimer = null
-  }
-  isHolding.value = false
-  candidateCode.value = ''
-  holdProgress.value = 0
-  holdCountdownSeconds.value = 3
-}
-
-const commitScan = () => {
-  const raw = candidateCode.value
-  resetHold()
-
-  if (!raw) return
-  const resi = normalizeScannedBarcode(raw)
-  if (!resi) return
-
-  stopCamera()
-  show.value = false
-
-  playBeep()
-  navigator.vibrate?.(80)
-
-  emit('detected', resi)
-}
-
 const stopCamera = () => {
-  resetHold()
   stopZxing()
   if (!scanner) return
   try {
@@ -411,7 +330,6 @@ const stopCamera = () => {
 }
 
 const cleanupScanner = () => {
-  resetHold()
   stopZxing()
   if (scanner) {
     try {
@@ -424,14 +342,16 @@ const cleanupScanner = () => {
 }
 
 const closeDialog = () => {
-  resetHold()
   show.value = false
 }
 
 // ---------------------------------------------------------------------
-// Deteksi dengan Jeda Stabilisasi 3 Detik
+// Deteksi Otomatis Cepat dengan Cooldown 1.2 Detik
 // ---------------------------------------------------------------------
 const onScanSuccess = (decodedText, decodedResult) => {
+  const now = Date.now()
+  if (now - lastEmitAt < COOLDOWN_MS) return
+
   const raw = String(decodedText || '').trim()
   if (!raw) return
 
@@ -442,41 +362,26 @@ const onScanSuccess = (decodedText, decodedResult) => {
     null
 
   const resi = normalizeScannedBarcode(raw, formatName) || raw
+  if (!resi) return
 
-  const now = Date.now()
-  lastCandidateSeenAt = now
+  lastEmitAt = now
 
-  if (!isHolding.value) {
-    // Mulai jeda 3 detik untuk memastikan barcode terbaca utuh dan kamera stabil
-    isHolding.value = true
-    candidateCode.value = resi
-    holdStartAt = now
-    holdProgress.value = 0
-    holdCountdownSeconds.value = 3
+  playBeep()
+  navigator.vibrate?.(80)
 
-    holdTimer = setInterval(() => {
-      const elapsed = Date.now() - holdStartAt
-      const progress = Math.min(100, Math.floor((elapsed / HOLD_DURATION_MS) * 100))
-      holdProgress.value = progress
-      holdCountdownSeconds.value = Math.max(1, Math.ceil((HOLD_DURATION_MS - elapsed) / 1000))
+  // Notifikasi submit bahwa barcode berhasil dipindai
+  $q.notify({
+    type: 'positive',
+    icon: 'check_circle',
+    message: `Barcode ${resi} berhasil dipindai & disubmit`,
+    position: 'top',
+    timeout: 1800
+  })
 
-      if (elapsed >= HOLD_DURATION_MS) {
-        commitScan()
-      }
-    }, 100)
-
-    // Watchdog: jika barcode tidak terlihat lagi selama > 1500ms, batalkan proses
-    watchdogTimer = setInterval(() => {
-      if (Date.now() - lastCandidateSeenAt > 1500) {
-        resetHold()
-      }
-    }, 300)
-  } else {
-    // Sedang menstabilkan: perbarui jika frame berikutnya menangkap kode yang lebih panjang/lengkap
-    if (resi.length > candidateCode.value.length || resi.includes('(10)')) {
-      candidateCode.value = resi
-    }
-  }
+  // Tutup kamera & dialog, teruskan ke parent
+  stopCamera()
+  show.value = false
+  emit('detected', resi, formatName)
 }
 
 // Bunyi "beep" singkat tanpa file audio (WebAudio API)
