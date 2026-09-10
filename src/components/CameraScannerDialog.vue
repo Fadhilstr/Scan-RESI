@@ -478,7 +478,6 @@ const onScanSuccess = (decodedText, decodedResult) => {
     }
   }
 }
-}
 
 // Bunyi "beep" singkat tanpa file audio (WebAudio API)
 const playBeep = () => {
