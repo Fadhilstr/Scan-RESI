@@ -104,9 +104,6 @@ sub generate_resi {
             my $payload6 = join('', map { int rand(10) } 1 .. 6);
             my $chk = calc_upce_check_digit($payload6);
             $resi = '0' . $payload6 . $chk;
-        } elsif ($format eq 'UPC_EAN_EXTENSION') {
-            # 5 digit numerik
-            $resi = join('', map { int rand(10) } 1 .. 5);
         } elsif ($format eq 'ITF') {
             # 12 digit numerik genap untuk Interleaved 2 of 5
             $resi = join('', map { int rand(10) } 1 .. 12);

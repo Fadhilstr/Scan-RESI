@@ -380,11 +380,16 @@ const renderBarcode = async () => {
   const isExpanded = currentFormat.value === 'RSS_EXPANDED'
   const isMaxi = currentFormat.value === 'MAXICODE'
   const is2D = ['QR_CODE', 'AZTEC', 'DATA_MATRIX'].includes(currentFormat.value)
+  const isStacked = currentFormat.value === 'PDF_417'
 
+  // Perbesar sedikit (~10-15%) untuk label cetak agar tetap presisi dalam batas 10x14/15cm
   const res = await utilRenderBarcode(svgRef.value, targetResi, currentFormat.value, {
     scale: 3,
-    height: isExpanded ? 20 : 16,
-    qrSize: isMaxi ? 190 : (is2D ? 135 : 120),
+    height: isExpanded ? 23 : 18.5,
+    qrSize: isMaxi ? 210 : (is2D ? 152 : 135),
+    width: isStacked ? 260 : undefined,
+    maxWidth: isExpanded ? '345px' : (is2D ? '152px' : (isMaxi ? '210px' : (isStacked ? '260px' : '315px'))),
+    maxHeight: isMaxi ? '210px' : (is2D ? '152px' : (isExpanded ? '108px' : (isStacked ? '90px' : '95px'))),
     background: '#ffffff',
     lineColor: '#000000'
   })
@@ -466,8 +471,8 @@ const printLabel = () => {
         margin: 4px 0;
       }
       .barcode-box svg {
-        max-width: 320px;
-        max-height: 140px;
+        max-width: 350px;
+        max-height: 155px;
         width: auto;
         height: auto;
         display: block;
@@ -626,12 +631,12 @@ const printLabel = () => {
   justify-content: center;
   align-items: center;
   margin: 6px 0;
-  min-height: 70px;
+  min-height: 75px;
 }
 
 .barcode-svg-container :deep(svg) {
-  max-width: 320px;
-  max-height: 140px;
+  max-width: 350px;
+  max-height: 155px;
   width: auto;
   height: auto;
 }

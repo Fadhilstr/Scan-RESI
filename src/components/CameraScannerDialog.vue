@@ -101,7 +101,6 @@ const ALL_SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.CODE_93,
   Html5QrcodeSupportedFormats.CODE_128,
   Html5QrcodeSupportedFormats.DATA_MATRIX,
-  Html5QrcodeSupportedFormats.MAXICODE,
   Html5QrcodeSupportedFormats.ITF,
   Html5QrcodeSupportedFormats.EAN_13,
   Html5QrcodeSupportedFormats.EAN_8,
@@ -173,18 +172,38 @@ const startZxingFallback = (videoElement) => {
       BarcodeFormat.EAN_8,
       BarcodeFormat.UPC_A,
       BarcodeFormat.UPC_E,
-      BarcodeFormat.MAXICODE,
       BarcodeFormat.QR_CODE,
       BarcodeFormat.DATA_MATRIX,
       BarcodeFormat.AZTEC,
       BarcodeFormat.PDF_417
     ])
+
+    const ZXING_FORMAT_NAME_MAP = {
+      [BarcodeFormat.AZTEC]: 'AZTEC',
+      [BarcodeFormat.CODABAR]: 'CODABAR',
+      [BarcodeFormat.CODE_39]: 'CODE_39',
+      [BarcodeFormat.CODE_93]: 'CODE_93',
+      [BarcodeFormat.CODE_128]: 'CODE_128',
+      [BarcodeFormat.DATA_MATRIX]: 'DATA_MATRIX',
+      [BarcodeFormat.EAN_8]: 'EAN_8',
+      [BarcodeFormat.EAN_13]: 'EAN_13',
+      [BarcodeFormat.ITF]: 'ITF',
+      [BarcodeFormat.PDF_417]: 'PDF_417',
+      [BarcodeFormat.QR_CODE]: 'QR_CODE',
+      [BarcodeFormat.RSS_14]: 'RSS_14',
+      [BarcodeFormat.RSS_EXPANDED]: 'RSS_EXPANDED',
+      [BarcodeFormat.UPC_A]: 'UPC_A',
+      [BarcodeFormat.UPC_E]: 'UPC_E'
+    }
+
     zxingReader = new BrowserMultiFormatReader(hints, 200)
     zxingReader.decodeContinuously(videoElement, (result, err) => {
       if (result && result.getText && result.getText()) {
         const text = result.getText()
-        console.log('[CAMERA] Terdeteksi via ZXing auxiliary:', text, result.getBarcodeFormat())
-        onScanSuccess(text)
+        const fmtEnum = result.getBarcodeFormat()
+        const formatName = ZXING_FORMAT_NAME_MAP[fmtEnum] || null
+        console.log('[CAMERA] Terdeteksi via ZXing auxiliary:', text, formatName)
+        onScanSuccess(text, { result: { format: { format: fmtEnum, formatName } } })
       }
     })
     console.log('[CAMERA] ZXing auxiliary engine aktif memindai video.')
@@ -354,7 +373,7 @@ const onScanSuccess = (decodedText, decodedResult) => {
   if (now - lastEmitAt < COOLDOWN_MS) return
 
   const raw = String(decodedText || '').trim()
-  if (!raw) return
+  if (!raw || raw.length < 4) return // Abaikan noise parsial 1-3 karakter (misal glitch '1' atau '-')
 
   const formatName =
     decodedResult?.result?.format?.formatName ||
@@ -363,7 +382,7 @@ const onScanSuccess = (decodedText, decodedResult) => {
     null
 
   const resi = normalizeScannedBarcode(raw, formatName) || raw
-  if (!resi) return
+  if (!resi || resi.length < 4) return // Pastikan hasil normalisasi memiliki panjang nomor resi yang valid
 
   lastEmitAt = now
 

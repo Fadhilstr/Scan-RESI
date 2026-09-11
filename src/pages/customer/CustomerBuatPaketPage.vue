@@ -477,11 +477,16 @@ const renderCurrentBarcode = async () => {
     const isExpanded = fmt === 'RSS_EXPANDED'
     const isMaxi = fmt === 'MAXICODE'
     const is2D = ['QR_CODE', 'AZTEC', 'DATA_MATRIX'].includes(fmt)
+    const isStacked = fmt === 'PDF_417'
 
+    // Perbesar 45-60% untuk kenyamanan tampilan dan pemindaian di layar customer
     const res = await utilRenderBarcode(svgRef.value, resi, fmt, {
-      scale: 3,
-      height: isExpanded ? 20 : 16,
-      qrSize: isMaxi ? 190 : (is2D ? 135 : 120),
+      scale: 4,
+      height: isExpanded ? 31 : 25,
+      qrSize: isMaxi ? 290 : (is2D ? 210 : 185),
+      width: isStacked ? 370 : undefined,
+      maxWidth: isExpanded ? '490px' : (is2D ? '210px' : (isMaxi ? '290px' : (isStacked ? '370px' : '430px'))),
+      maxHeight: isMaxi ? '290px' : (is2D ? '210px' : (isExpanded ? '148px' : (isStacked ? '125px' : '132px'))),
       background: '#ffffff',
       lineColor: '#000000'
     })
@@ -599,18 +604,6 @@ const handleGenerate = async () => {
  * Nomor resi lama tetap berada di state sampai user menekan tombol "Generate Barcode".
  */
 const handleFormatChange = (newFormat) => {
-  if (newFormat === 'UPC_EAN_EXTENSION') {
-    $q.notify({
-      type: 'warning',
-      icon: 'warning',
-      message: 'Format UPC_EAN_EXTENSION adalah suplemen dan tidak dapat digunakan sebagai resi mandiri.',
-      position: 'top',
-      timeout: 3000
-    })
-    selectedFormat.value = 'CODE_128'
-    newFormat = 'CODE_128'
-  }
-
   selectedFormat.value = newFormat
   // TIDAK memanggil backend sampai tombol "Generate Barcode" ditekan.
 }
@@ -848,13 +841,13 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 70px;
-  max-height: 150px;
-  margin: 6px auto;
+  min-height: 110px;
+  max-height: 250px;
+  margin: 10px auto;
 }
 .barcode-preview-container :deep(svg) {
-  max-width: 320px;
-  max-height: 140px;
+  max-width: 500px;
+  max-height: 230px;
   width: auto;
   height: auto;
 }

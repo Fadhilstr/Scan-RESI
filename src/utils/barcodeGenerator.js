@@ -11,7 +11,14 @@ export const BARCODE_FORMAT_OPTIONS = [
   { label: 'QR_CODE', value: 'QR_CODE', supported: true, category: '2D Matrix' },
   { label: 'AZTEC', value: 'AZTEC', supported: true, category: '2D Matrix' },
   { label: 'DATA_MATRIX', value: 'DATA_MATRIX', supported: true, category: '2D Matrix' },
-  { label: 'MAXICODE', value: 'MAXICODE', supported: true, category: '2D Matrix' },
+  {
+    label: 'MAXICODE',
+    value: 'MAXICODE',
+    supported: false,
+    disable: true,
+    warning: 'Memerlukan scanner hardware/laser industri 2D (tidak didukung kamera webcam)',
+    category: '2D Matrix'
+  },
   { label: 'PDF_417', value: 'PDF_417', supported: true, category: '2D Stacked' },
   { label: 'CODE_39', value: 'CODE_39', supported: true, category: '1D' },
   { label: 'CODE_93', value: 'CODE_93', supported: true, category: '1D' },
@@ -49,25 +56,20 @@ const BWIP_FORMAT_MAP = {
 
 /**
  * Menghasilkan digit angka deterministik dan unik dari sebuah string (tracking number)
- * Menggunakan algoritma hash FNV-1a 64-bit ganda tanpa random agar bebas collision.
+ * Menggunakan algoritma hash FNV-1a 32-bit standar yang 100% identik dengan implementasi Perl backend.
  */
 export function stringToDeterministicDigits(str, targetLength) {
   const cleanStr = (str || '').trim().toUpperCase()
-  let h1 = 0x811c9dc5n
-  let h2 = 0xcbf29ce484222325n
-
+  let h = 2166136261 >>> 0
   for (let i = 0; i < cleanStr.length; i++) {
-    const c = BigInt(cleanStr.charCodeAt(i))
-    h1 = (h1 ^ c) * 0x01000193n
-    h2 = (h2 ^ c) * 0x100000001b3n
+    h = Math.imul(h ^ cleanStr.charCodeAt(i), 16777619) >>> 0
   }
-
-  let digits = ((h1 << 32n) | (h2 & 0xffffffffn)).toString().replace('-', '')
-  let counter = 1n
+  let digits = String(h)
+  let h2 = h
   while (digits.length < targetLength) {
-    digits += ((h2 * counter++) & 0xffffffffn).toString()
+    h2 = Math.imul(h2 ^ 0x12345678, 16777619) >>> 0
+    digits += String(h2)
   }
-
   return digits.slice(0, targetLength)
 }
 
@@ -204,7 +206,8 @@ export function normalizeScannedBarcode(raw, format = null) {
   s = s.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim().toUpperCase()
   // 2. Hapus AIM Symbology Identifier jika dikirim scanner (misal ]e0, ]C1, ]A0, ]G0)
   s = s.replace(/^\][A-Z0-9]{2}/i, '').trim()
-  if (!s) return ''
+  // Tolak noise / artefak terlalu pendek
+  if (s.length < 3) return ''
 
   const checkLocalStorage = (key) => {
     if (typeof localStorage === 'undefined' || !key) return null
@@ -229,60 +232,92 @@ export function normalizeScannedBarcode(raw, format = null) {
     fmt = format.toUpperCase()
   } else if (typeof format === 'number') {
     const FORMAT_ENUM_MAP = {
-      0: 'QR_CODE', 1: 'AZTEC', 2: 'CODABAR', 3: 'CODE_39', 4: 'CODE_93', 5: 'CODE_128',
-      6: 'DATA_MATRIX', 7: 'MAXICODE', 8: 'ITF', 9: 'EAN_13', 10: 'EAN_8', 11: 'PDF_417',
-      12: 'RSS_14', 13: 'RSS_EXPANDED', 14: 'UPC_A', 15: 'UPC_E', 18: 'CODABAR', 29: 'RSS_14'
+      0: 'AZTEC', 1: 'CODABAR', 2: 'CODE_39', 3: 'CODE_93', 4: 'CODE_128',
+      5: 'DATA_MATRIX', 6: 'EAN_8', 7: 'EAN_13', 8: 'ITF', 9: 'MAXICODE', 10: 'PDF_417',
+      11: 'QR_CODE', 12: 'RSS_14', 13: 'RSS_EXPANDED', 14: 'UPC_A', 15: 'UPC_E', 18: 'CODABAR', 29: 'RSS_14'
     }
     fmt = FORMAT_ENUM_MAP[format] || ''
   } else if (format && typeof format === 'object') {
     fmt = String(format.formatName || format.name || '').toUpperCase()
   }
 
-  // 2. MAXICODE: Ekstrak tracking number dari (10)XXXXX atau header MaxiCode
-  if (fmt === 'MAXICODE' || s.includes('[C3') || s.includes('ANSI ') || /\(10\)|10[A-Z0-9]{4,}/.test(s)) {
-    const m10 = s.match(/\(10\)\s*([A-Z0-9]+)/i) || s.match(/10([A-Z0-9]{1,32})/i) || s.match(/^01\d{14}10([A-Z0-9]+)/i)
+  // 2. RSS_EXPANDED: Parsing format GS1 DataBar Expanded (01)GTIN-14(10)TrackingNo
+  if (fmt === 'RSS_EXPANDED' || /\(01\).+\(10\)/i.test(s) || /^01\d{14}10/i.test(s) || s.includes('(10)')) {
+    const mGs1 = s.match(/^(?:\(01\)|01)\s*\d{14}\s*(?:\(10\)|10)\s*([A-Z0-9]+)$/i)
+    if (mGs1 && mGs1[1]) {
+      const extracted = mGs1[1].toUpperCase()
+      return checkLocalStorage(extracted) || checkLocalStorage(s) || extracted
+    }
+    const m10Paren = s.match(/\(10\)\s*([A-Z0-9]+)$/i)
+    if (m10Paren && m10Paren[1]) {
+      const extracted = m10Paren[1].toUpperCase()
+      return checkLocalStorage(extracted) || checkLocalStorage(s) || extracted
+    }
+  }
+
+  // 3. RSS_14: Parsing format GS1 DataBar Omni (01)GTIN-14 (14 digit angka murni)
+  if (fmt === 'RSS_14' || /^(?:\(01\)|01)\d{14}$/i.test(s)) {
+    const m01 = s.match(/^(?:\(01\)|01)?(\d{14})$/i)
+    if (m01 && m01[1]) {
+      const gtin = m01[1]
+      return (
+        checkLocalStorage(gtin) ||
+        checkLocalStorage(`(01)${gtin}`) ||
+        checkLocalStorage(`01${gtin}`) ||
+        gtin
+      )
+    }
+  }
+
+  // 4. MAXICODE: Ekstrak tracking number jika scanner mendukung
+  if (fmt === 'MAXICODE' || s.includes('[C3') || s.includes('ANSI ') || s.includes('[)>')) {
+    const m10 = s.match(/\(10\)\s*([A-Z0-9]+)/i)
     if (m10 && m10[1]) {
       const extracted = m10[1].toUpperCase()
       return checkLocalStorage(extracted) || checkLocalStorage(`(10)${extracted}`) || extracted
     }
-    const mMaxi = s.match(/([A-Z0-9]{4,32})/i)
+    const mMaxi = s.match(/([A-Z0-9]{6,32})/i)
     if (mMaxi && mMaxi[1]) {
       const extracted = mMaxi[1].toUpperCase()
       return checkLocalStorage(extracted) || extracted
     }
   }
 
-  // 3. CODE_93: Hapus non-alfanumerik, tetap kapital
-  if (fmt === 'CODE_93') {
-    const clean93 = s.replace(/[^A-Z0-9]/g, '')
-    if (clean93) {
-      return checkLocalStorage(clean93) || clean93
-    }
-  }
-
-  // 4. CODE_39: Hapus bintang wrapping dan karakter non-Code39
-  if (fmt === 'CODE_39' || /^\*[^*]+\*$/.test(s)) {
-    const unstar = s.replace(/^\*|\*$/g, '')
-    const clean39 = unstar.replace(/[^A-Z0-9\-\.\ \$\/\+\%]/g, '').trim()
-    if (clean39) {
-      return checkLocalStorage(clean39) || checkLocalStorage(unstar) || clean39
-    }
-  }
-
   // 5. CODABAR: Hapus start/stop A, B, C, D wrapping
+  // CATATAN: Codabar resi logistik valid minimal 6 karakter.
+  // Garis scan parsial sependek 1-2 digit (misal A1B -> '1' atau A-B -> '-') harus ditolak (return '')
   if (fmt === 'CODABAR' || /^[ABCD][0-9\-\$\:\/\.\+]+[ABCD]$/i.test(s)) {
     const mCoda = s.match(/^[ABCD]([0-9\-\$\:\/\.\+]+)[ABCD]$/i)
     if (mCoda && mCoda[1]) {
       const inner = mCoda[1]
+      if (inner.length < 6) return '' // Tolak glitch parsial 1 digit
       return checkLocalStorage(inner) || checkLocalStorage(s) || inner
     }
     const digitsOnly = s.replace(/\D/g, '')
-    if (digitsOnly) {
+    if (digitsOnly && digitsOnly.length >= 6) {
       return checkLocalStorage(digitsOnly) || checkLocalStorage(`A${digitsOnly}B`) || digitsOnly
+    }
+    return ''
+  }
+
+  // 6. CODE_93: Hapus non-alfanumerik, tetap kapital
+  if (fmt === 'CODE_93') {
+    const clean93 = s.replace(/[^A-Z0-9]/g, '')
+    if (clean93 && clean93.length >= 4) {
+      return checkLocalStorage(clean93) || clean93
     }
   }
 
-  // 6. UPC-E: Ekspansi ke UPC-A dengan check digit
+  // 7. CODE_39: Hapus bintang wrapping dan karakter non-Code39
+  if (fmt === 'CODE_39' || /^\*[^*]+\*$/.test(s)) {
+    const unstar = s.replace(/^\*|\*$/g, '')
+    const clean39 = unstar.replace(/[^A-Z0-9\-\.\ \$\/\+\%]/g, '').trim()
+    if (clean39 && clean39.length >= 4) {
+      return checkLocalStorage(clean39) || checkLocalStorage(unstar) || clean39
+    }
+  }
+
+  // 8. UPC-E: Ekspansi ke UPC-A dengan check digit
   if (fmt === 'UPC_E' || /^0\d{7}$/.test(s) || /^0\d{6}$/.test(s)) {
     let upceStr = s.replace(/\D/g, '')
     if (upceStr.length === 6) {
@@ -299,7 +334,7 @@ export function normalizeScannedBarcode(raw, format = null) {
     }
   }
 
-  // 7. UPC-A: Tambahkan check digit atau tetap
+  // 9. UPC_A: Tambahkan check digit atau tetap
   if (fmt === 'UPC_A' || (/^\d{11,12}$/.test(s) && fmt !== 'EAN_13')) {
     let digits = s.replace(/\D/g, '')
     if (digits.length === 11) {
@@ -317,7 +352,7 @@ export function normalizeScannedBarcode(raw, format = null) {
     }
   }
 
-  // 8. EAN_13: Tambahkan / check digit
+  // 10. EAN_13: Tambahkan / check digit
   if (fmt === 'EAN_13' || (/^\d{12,13}$/.test(s) && fmt !== 'UPC_A')) {
     let digits = s.replace(/\D/g, '')
     if (digits.length === 12) {
@@ -333,7 +368,7 @@ export function normalizeScannedBarcode(raw, format = null) {
     }
   }
 
-  // 9. EAN_8: Tambahkan / check digit
+  // 11. EAN_8: Tambahkan / check digit
   if (fmt === 'EAN_8' || /^\d{7,8}$/.test(s)) {
     let digits = s.replace(/\D/g, '')
     if (digits.length === 7) {
@@ -353,67 +388,29 @@ export function normalizeScannedBarcode(raw, format = null) {
     }
   }
 
-  // 10. RSS_EXPANDED: Parsing format GS1 (10) Tracking No
-  if (fmt === 'RSS_EXPANDED' || s.includes('(10)')) {
-    const m10 = s.match(/\(10\)\s*([A-Z0-9]+)/i) || s.match(/10([A-Z0-9]{1,32})/i)
-    if (m10 && m10[1]) {
-      const extracted = m10[1].toUpperCase()
-      const mapped = checkLocalStorage(extracted) || checkLocalStorage(`(10)${extracted}`) || checkLocalStorage(s)
-      if (mapped) return mapped
-      return extracted
-    }
-  }
-
-  // 11. RSS_14: Parsing format GS1 (01) GTIN-14
-  if (fmt === 'RSS_14' || s.includes('(01)') || /^01\d{13,14}/.test(s) || /^\d{14}$/.test(s)) {
-    const m01 = s.match(/^\(01\)(\d{13,14})/i) || s.match(/^01(\d{13,14})/i) || s.match(/^(\d{13,14})/i)
-    if (m01 && m01[1]) {
-      let gtin = m01[1]
-      if (gtin.length === 13) {
-        gtin = gtin + calculateMod10CheckDigit(gtin)
-      }
-      return (
-        checkLocalStorage(gtin) ||
-        checkLocalStorage(`(01)${gtin}`) ||
-        checkLocalStorage(`01${gtin}`) ||
-        gtin
-      )
-    }
-  }
-
-  // 11. ITF: Angka genap 4-16 digit
-  if (fmt === 'ITF' || (/^\d{4,16}$/.test(s) && s.length % 2 === 0)) {
+  // 12. ITF: Angka genap 4-16 digit (kecuali jika dikenali sebagai format lain)
+  if (fmt === 'ITF' || (fmt !== 'RSS_14' && /^\d{4,16}$/.test(s) && s.length % 2 === 0)) {
     const digits = s.replace(/\D/g, '')
     if (digits.length >= 4 && digits.length <= 16) {
       return checkLocalStorage(digits) || digits
     }
   }
 
-  // Generic GS1 AI (10) Serial/Tracking: (10)XXXXX atau 01<14-digit GTIN>10XXXXX
-  const m10Paren = s.match(/\(10\)\s*([A-Z0-9]+)/i)
-  if (m10Paren && m10Paren[1]) {
-    const extracted = m10Paren[1].toUpperCase()
-    return checkLocalStorage(extracted) || extracted
-  }
-
-  const m10Gs1 = s.match(/^(?:\(01\)|01)\s*\d{14}\s*(?:\(10\)|10)\s*([A-Z0-9]{1,32})/i) || s.match(/\d{14}10([A-Z0-9]{1,32})/i)
-  if (m10Gs1 && m10Gs1[1]) {
-    const extracted = m10Gs1[1].toUpperCase()
-    return checkLocalStorage(extracted) || extracted
-  }
-
   // Generic GS1 AI (01) 14 digit GTIN: (01)XXXXX
-  const m01Gen = s.match(/^\(01\)\s*(\d{13,14})/i) || s.match(/^01(\d{13,14})/i)
+  const m01Gen = s.match(/^(?:\(01\)|01)\s*(\d{14})/i)
   if (m01Gen && m01Gen[1]) {
     const gtin = m01Gen[1]
     return checkLocalStorage(gtin) || gtin
   }
 
   // Generic Codabar start/stop A, B, C, D wrapping
-  const mCodaGen = s.match(/^[ABCD]([0-9\-\$\:\/\.\+]+)[ABCD]$/i) || s.match(/^[ABCD]([0-9]+)[ABCD]$/i)
+  const mCodaGen = s.match(/^[ABCD]([0-9\-\$\:\/\.\+]{6,})[ABCD]$/i)
   if (mCodaGen && mCodaGen[1]) {
     return checkLocalStorage(mCodaGen[1]) || mCodaGen[1]
   }
+
+  // Tolak teks artefak pendek (misal '-' atau '1')
+  if (s.length < 4) return ''
 
   return s
 }
@@ -588,17 +585,6 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
       break
     }
 
-    case 'UPC_EAN_EXTENSION': {
-      if (/^\d{5}$/.test(cleanTracking) || /^\d{2}$/.test(cleanTracking)) {
-        isMapped = false
-        barcodeValue = cleanTracking
-      } else {
-        isMapped = true
-        barcodeValue = stringToDeterministicDigits(cleanTracking, 5)
-      }
-      break
-    }
-
     case 'RSS_EXPANDED': {
       if (/^\(01\)\d{14}/.test(cleanTracking)) {
         isMapped = false
@@ -725,36 +711,37 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
         const size = String(options.qrSize || 180)
         svgEl.setAttribute('width', size)
         svgEl.setAttribute('height', size)
-        svgEl.style.maxWidth = '200px'
-        svgEl.style.maxHeight = '200px'
+        svgEl.style.maxWidth = options.maxWidth || `${size}px`
+        svgEl.style.maxHeight = options.maxHeight || `${size}px`
         svgEl.style.width = 'auto'
         svgEl.style.height = 'auto'
       } else if (is2DMatrix) {
         const size = String(options.qrSize || 120)
         svgEl.setAttribute('width', size)
         svgEl.setAttribute('height', size)
-        svgEl.style.maxWidth = '135px'
-        svgEl.style.maxHeight = '135px'
+        svgEl.style.maxWidth = options.maxWidth || `${size}px`
+        svgEl.style.maxHeight = options.maxHeight || `${size}px`
         svgEl.style.width = 'auto'
         svgEl.style.height = 'auto'
       } else if (isStacked) {
-        svgEl.setAttribute('width', '240')
-        svgEl.style.maxWidth = '240px'
-        svgEl.style.maxHeight = '80px'
+        const w = options.width ? String(options.width) : '240'
+        svgEl.setAttribute('width', w)
+        svgEl.style.maxWidth = options.maxWidth || `${w}px`
+        svgEl.style.maxHeight = options.maxHeight || '80px'
         svgEl.style.width = 'auto'
         svgEl.style.height = 'auto'
       } else if (format === 'RSS_EXPANDED') {
         svgEl.removeAttribute('width')
         svgEl.removeAttribute('height')
-        svgEl.style.maxWidth = '320px'
-        svgEl.style.maxHeight = '95px'
+        svgEl.style.maxWidth = options.maxWidth || '320px'
+        svgEl.style.maxHeight = options.maxHeight || '95px'
         svgEl.style.width = '100%'
         svgEl.style.height = 'auto'
       } else {
         svgEl.removeAttribute('width')
         svgEl.removeAttribute('height')
-        svgEl.style.maxWidth = '280px'
-        svgEl.style.maxHeight = '85px'
+        svgEl.style.maxWidth = options.maxWidth || '280px'
+        svgEl.style.maxHeight = options.maxHeight || '85px'
         svgEl.style.width = '100%'
         svgEl.style.height = 'auto'
       }
