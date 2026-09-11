@@ -27,7 +27,7 @@ UPDATE user_otps SET used = 1 WHERE user_id = ? AND used = 0;
 INSERT INTO user_otps (user_id, email, otp_hash, expires_at) VALUES (?, ?, ?, ?);
 
 -- name: otp_get_latest
-SELECT * FROM user_otps WHERE user_id = ? AND used = 0 ORDER BY id DESC LIMIT 1;
+SELECT * FROM user_otps WHERE user_id = ? AND used = 0 AND expires_at > NOW() ORDER BY id DESC LIMIT 1;
 
 -- name: otp_increment_attempt
 UPDATE user_otps SET attempt_count = attempt_count + 1 WHERE id = ?;
@@ -193,8 +193,7 @@ SELECT p.*, u.name AS creator_name
 UPDATE paket
    SET nama_barang = ?, pengirim = ?, alamat_pengirim = ?, telepon_pengirim = ?,
        penerima = ?, alamat_tujuan = ?, telepon_penerima = ?,
-       berat_kg = ?, jenis_layanan = ?, barcode_format = ?, status = 'TERDAFTAR',
-       created_at = NOW()
+       berat_kg = ?, jenis_layanan = ?, barcode_format = ?, status = 'TERDAFTAR'
  WHERE nomor_resi = ?;
 
 -- =====================================================================

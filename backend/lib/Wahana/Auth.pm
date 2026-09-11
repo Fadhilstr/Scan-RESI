@@ -12,8 +12,19 @@ our @EXPORT_OK = qw(verify_password issue_token verify_token authenticate_reques
 # Generate OTP 6 digit angka acak (100000 - 999999)
 sub generate_otp {
     my ($class) = @_;
-    srand(time() ^ ($$ + ($$ << 15)));
-    return sprintf '%06d', int(rand(900000)) + 100000;
+    # Gunakan /dev/urandom sebagai CSPRNG — lebih aman dari srand(time())
+    my $num;
+    if (open my $fh, '<:raw', '/dev/urandom') {
+        my $bytes = '';
+        read($fh, $bytes, 4);
+        close $fh;
+        $num = unpack('N', $bytes);
+    } else {
+        # Fallback jika /dev/urandom tidak tersedia (non-Unix)
+        srand(time() ^ ($$ << 15) ^ $$);
+        $num = int(rand(0xFFFFFFFF));
+    }
+    return sprintf '%06d', ($num % 900000) + 100000;
 }
 
 # Hash OTP dengan SHA-256 (bukan plaintext)

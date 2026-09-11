@@ -21,7 +21,14 @@ export const BARCODE_FORMAT_OPTIONS = [
   { label: 'EAN_8', value: 'EAN_8', supported: true, category: '1D Numerik' },
   { label: 'UPC_A', value: 'UPC_A', supported: true, category: '1D Numerik' },
   { label: 'UPC_E', value: 'UPC_E', supported: true, category: '1D Numerik' },
-  { label: 'UPC_EAN_EXTENSION', value: 'UPC_EAN_EXTENSION', supported: true, category: '1D Numerik' },
+  {
+    label: 'UPC_EAN_EXTENSION (Hanya Suplemen / Non-Mandiri)',
+    value: 'UPC_EAN_EXTENSION',
+    supported: false,
+    disable: true,
+    category: '1D Numerik (Suplemen)',
+    warning: 'Format add-on suplemen 2/5 digit, bukan format resi mandiri.'
+  },
   { label: 'RSS_14 (GS1 DataBar)', value: 'RSS_14', supported: true, category: '1D GS1' },
   { label: 'RSS_EXPANDED (GS1 Expanded)', value: 'RSS_EXPANDED', supported: true, category: '1D GS1' }
 ]
@@ -598,8 +605,13 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
         barcodeValue = cleanTracking
       } else {
         isMapped = true
+        // Generate GTIN-14 unik & deterministik dari cleanTracking (BUG-005)
+        // 1 digit prefix '1' + 12 digit hash unik + 1 digit mod10 check digit
+        const d13 = '1' + stringToDeterministicDigits(cleanTracking, 12)
+        const cd = calculateMod10CheckDigit(d13)
+        const uniqueGtin = d13 + cd
         const cleanAlpha = cleanTracking.replace(/[^A-Za-z0-9]/g, '').slice(0, 16) || 'WAHANA'
-        barcodeValue = `(01)01234567890128(10)${cleanAlpha}`
+        barcodeValue = `(01)${uniqueGtin}(10)${cleanAlpha}`
       }
       break
     }

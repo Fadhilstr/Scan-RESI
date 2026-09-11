@@ -9,28 +9,20 @@
 
 -- ---------------------------------------------------------------------
 -- Database & User Aplikasi
+-- CATATAN KEAMANAN:
+-- Jangan menyimpan password nyata di file skema yang ter-commit ke VCS!
+-- Ganti 'CHANGE_ME_DB_PASSWORD' dengan password aman dari environment
+-- (misalnya nilai DB_PASS di file .env) saat menjalankan inisialisasi DB.
 -- ---------------------------------------------------------------------
 CREATE DATABASE IF NOT EXISTS wahana_scan CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-CREATE USER IF NOT EXISTS 'wahana_app' @'localhost' IDENTIFIED BY 'wahana_pass';
+CREATE USER IF NOT EXISTS 'wahana_app'@'localhost' IDENTIFIED BY 'CHANGE_ME_DB_PASSWORD';
+CREATE USER IF NOT EXISTS 'wahana_app'@'127.0.0.1' IDENTIFIED BY 'CHANGE_ME_DB_PASSWORD';
+CREATE USER IF NOT EXISTS 'wahana_app'@'%' IDENTIFIED BY 'CHANGE_ME_DB_PASSWORD';
 
-CREATE USER IF NOT EXISTS 'wahana_app' @'127.0.0.1' IDENTIFIED BY 'wahana_pass';
-
-CREATE USER IF NOT EXISTS 'wahana_app' @'%' IDENTIFIED BY 'wahana_pass';
-
-GRANT
-SELECT,
-INSERT
-,
-UPDATE ON wahana_scan.* TO 'wahana_app' @'localhost';
-
-GRANT
-SELECT,
-INSERT
-,
-UPDATE ON wahana_scan.* TO 'wahana_app' @'127.0.0.1';
-
-GRANT SELECT, INSERT , UPDATE ON wahana_scan.* TO 'wahana_app' @'%';
+GRANT SELECT, INSERT, UPDATE ON wahana_scan.* TO 'wahana_app'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON wahana_scan.* TO 'wahana_app'@'127.0.0.1';
+GRANT SELECT, INSERT, UPDATE ON wahana_scan.* TO 'wahana_app'@'%';
 
 FLUSH PRIVILEGES;
 
@@ -180,12 +172,18 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 ) ENGINE = InnoDB;
 
 -- =====================================================================
--- SEED DATA — Akun Demo (PRD bagian 3)
+-- SEED DATA — Akun Demo / Template Inisial
+-- CATATAN KEAMANAN:
+-- Hindari menyimpan password plaintext (seperti fungsi SHA2(..., 'password'))
+-- di dalam file SQL repository. Nilai password_hash di bawah ini menggunakan
+-- pre-calculated hash (format: sha256$<salt>$<hash>).
+-- Di lingkungan produksi, ganti hash ini atau generate akun admin baru
+-- dengan password unik melalui backend.
 -- =====================================================================
 INSERT IGNORE INTO users (id, name, username, password_hash, role, status, last_login) VALUES
 ('USR-ADMIN-001', 'Admin System',
  'admin',
- CONCAT('sha256$', '9f1c2a7e', '$', SHA2(CONCAT('9f1c2a7e', 'admin123'), 256)),
+ 'sha256$9f1c2a7e$d4962ce5d466cb5e8fcc6b8a21afa3641453401080977d25b5bf377016f36be4',
  'ADMIN', 'OFFLINE', '2026-08-24 08:00:00');
  -- =====================================================================
 -- Alter unique key Column email pada tabel users

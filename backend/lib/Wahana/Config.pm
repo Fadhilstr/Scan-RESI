@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Exporter 'import';
 
-our @EXPORT_OK = qw(config);
+our @EXPORT_OK = qw(config validate_config);
 
 # Konfigurasi terpusat — dapat dioverride lewat environment variable.
 sub config {
@@ -26,6 +26,27 @@ sub config {
         smtp_secure    => $ENV{SMTP_SECURE}         // 'false',
         smtp_from_name => $ENV{SMTP_FROM_NAME}      // 'DIJAK EXPRESS',
     };
+}
+
+# Validasi konfigurasi saat startup (BUG-009)
+# Menolak startup jika secret default dipakai pada lingkungan produksi
+sub validate_config {
+    my $cfg = config();
+    my $env = lc($ENV{APP_ENV} // $ENV{ENVIRONMENT} // $ENV{NODE_ENV} // $ENV{WAHANA_ENV} // 'development');
+
+    if ($env eq 'production' || $env eq 'prod') {
+        my $secret = $cfg->{token_secret} // '';
+        if ($secret eq '' || $secret eq 'wahana-dev-secret-2026-ganti-di-produksi') {
+            die "\n" . ("!" x 70) . "\n"
+              . "[FATAL KEAMANAN] Startup backend dibatalkan!\n"
+              . "Aplikasi berjalan dalam mode PRODUCTION ($env),\n"
+              . "tetapi WAHANA_TOKEN_SECRET menggunakan secret default atau kosong.\n"
+              . "Silakan tentukan nilai rahasia acak yang kuat melalui environment variable:\n"
+              . "  export WAHANA_TOKEN_SECRET='<rahasia-acak-panjang>'\n"
+              . ("!" x 70) . "\n\n";
+        }
+    }
+    return 1;
 }
 
 1;

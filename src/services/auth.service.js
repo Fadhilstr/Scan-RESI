@@ -199,7 +199,57 @@ export async function quickLogin(userId) {
  */
 export async function verifyOtp(preauth_token, otp) {
   if (USE_LOCAL_DATA) {
-    const user = LOCAL_USERS[0]
+    let matchedUser = null
+    if (preauth_token) {
+      const tokenStr = String(preauth_token).trim()
+
+      // 1. Coba decode jika format JSON
+      if (tokenStr.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(tokenStr)
+          const uid = parsed.user_id || parsed.id || parsed.username
+          if (uid) {
+            matchedUser = LOCAL_USERS.find(
+              (u) => u.id === uid || u.username.toLowerCase() === String(uid).toLowerCase()
+            )
+          }
+        } catch (_) {}
+      }
+
+      // 2. Coba decode jika format JWT (header.payload.signature)
+      if (!matchedUser && tokenStr.split('.').length === 3) {
+        try {
+          const payloadBase64 = tokenStr.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+          const payloadStr = atob(payloadBase64)
+          const payload = JSON.parse(payloadStr)
+          const uid = payload.user_id || payload.sub || payload.username
+          if (uid) {
+            matchedUser = LOCAL_USERS.find(
+              (u) => u.id === uid || u.username.toLowerCase() === String(uid).toLowerCase()
+            )
+          }
+        } catch (_) {}
+      }
+
+      // 3. Coba cocokkan langsung sebagai id atau username
+      if (!matchedUser) {
+        matchedUser = LOCAL_USERS.find(
+          (u) => u.id === tokenStr || u.username.toLowerCase() === tokenStr.toLowerCase()
+        )
+      }
+    }
+
+    const user = matchedUser || LOCAL_USERS[0]
+    user.status = 'ONLINE'
+    user.lastLogin = nowString()
+
+    await addAuditLog({
+      user_id: user.id,
+      user_name: user.name,
+      action: 'LOGIN_SUCCESS',
+      details: 'Verifikasi OTP berhasil (mode simulasi).'
+    })
+
     return {
       success: true,
       user: { ...user },

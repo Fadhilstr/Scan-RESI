@@ -12,8 +12,12 @@ use warnings;
 use FindBin;
 use lib "$FindBin::Bin/lib", "$FindBin::Bin/lib/perl5/lib/perl5", "$FindBin::Bin/lib/perl5";
 
+use Wahana::Config   qw(validate_config);
 use Wahana::Router   qw(handle_request);
 use Wahana::Response qw(decode_json_body);
+
+# Validasi keamanan environment saat startup
+validate_config();
 
 my $app = sub {
     my ($env) = @_;

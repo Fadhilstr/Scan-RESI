@@ -10,6 +10,10 @@ import {
 import routes from './routes.js'
 import { useAuthStore } from '../stores/authStore'
 
+let appRouter = null
+
+export const getAppRouter = () => appRouter
+
 export default route((/* { store, ssrContext } */) => {
   const createHistory = import.meta.env.QUASAR_SERVER
     ? createMemoryHistory
@@ -20,6 +24,8 @@ export default route((/* { store, ssrContext } */) => {
     routes,
     history: createHistory(import.meta.env.QUASAR_VUE_ROUTER_BASE)
   })
+
+  appRouter = Router
 
   // Role Protection Guard (Strict Multi-Layer RBAC)
   Router.beforeEach((to, from, next) => {

@@ -57,11 +57,18 @@
                   <template v-slot:option="scope">
                     <q-item v-bind="scope.itemProps">
                       <q-item-section>
-                        <q-item-label class="text-weight-medium">
-                          {{ scope.opt.value }}
+                        <q-item-label class="text-weight-medium row items-center no-wrap">
+                          <span>{{ scope.opt.value }}</span>
+                          <q-badge
+                            v-if="scope.opt.disable"
+                            color="warning"
+                            text-color="dark"
+                            label="Non-Mandiri"
+                            class="q-ml-sm text-caption text-weight-bold"
+                          />
                         </q-item-label>
-                        <q-item-label caption>
-                          {{ scope.opt.category }}
+                        <q-item-label caption :class="scope.opt.disable ? 'text-negative text-weight-medium' : ''">
+                          {{ scope.opt.warning || scope.opt.category }}
                         </q-item-label>
                       </q-item-section>
                     </q-item>
@@ -540,6 +547,18 @@ const handleGenerate = async (targetFormat = selectedFormat.value) => {
 }
 
 const handleFormatChange = async (newFormat) => {
+  if (newFormat === 'UPC_EAN_EXTENSION') {
+    $q.notify({
+      type: 'warning',
+      icon: 'warning',
+      message: 'Format UPC_EAN_EXTENSION adalah suplemen dan tidak dapat digunakan sebagai resi mandiri.',
+      position: 'top',
+      timeout: 3000
+    })
+    selectedFormat.value = 'CODE_128'
+    newFormat = 'CODE_128'
+  }
+
   selectedFormat.value = newFormat
   if (!newFormat) {
     if (svgRef.value) svgRef.value.innerHTML = ''

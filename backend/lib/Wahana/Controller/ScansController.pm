@@ -221,9 +221,10 @@ sub create {
             undef, $resi, $task_id
         );
 
-        # Generate scan_id berurutan: SCN-00008, SCN-00009, ...
-        my $max_num = $dbh->selectrow_array(Wahana::Query->get('scans_get_max_id'));
-        my $scan_id = sprintf 'SCN-%05d', $max_num + 1;
+        # Generate scan_id unik via UUID untuk mencegah race condition (BUG-004)
+        # Format: SCN-<uuid_hex_28> (total 32 karakter, muat di VARCHAR(32))
+        my $scan_id = $dbh->selectrow_array("SELECT CONCAT('SCN-', SUBSTRING(REPLACE(UUID(), '-', ''), 1, 28))");
+        $scan_id ||= sprintf('SCN-%s', substr(join('', map { sprintf("%02x", rand(256)) } 1..14), 0, 28));
 
         my $status = $dup ? 'DUPLICATE' : 'SUCCESS';
 
