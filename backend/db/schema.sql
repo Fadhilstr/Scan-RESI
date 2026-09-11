@@ -129,10 +129,12 @@ CREATE TABLE IF NOT EXISTS paket (
     ) NOT NULL DEFAULT 'REGULER',
     status ENUM('DRAFT', 'TERDAFTAR') NOT NULL DEFAULT 'DRAFT',
     barcode_format VARCHAR(30) NOT NULL DEFAULT 'CODE_128',
+    barcode_value VARCHAR(100) NULL,
     created_by VARCHAR(32) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (nomor_resi),
     KEY idx_paket_created_by (created_by),
+    KEY idx_paket_barcode_value (barcode_value),
     CONSTRAINT fk_paket_user FOREIGN KEY (created_by) REFERENCES users (id)
 ) ENGINE = InnoDB;
 

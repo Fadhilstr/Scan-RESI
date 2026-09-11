@@ -246,7 +246,10 @@ export async function addScan({ resi, currentUser, activeTask, lokasi = 'CIPUTAT
     // --- LOCAL MODE ---
     // Validasi ketat (paritas dengan backend): hanya resi TERDAFTAR di
     // tabel paket yang boleh discan — resi asing / DRAFT ditolak & tidak dicatat.
-    const paketTerdaftar = LOCAL_PAKETS.find((p) => p.nomor_resi.toUpperCase() === sanitizedResi)
+    const paketTerdaftar = LOCAL_PAKETS.find((p) => p.nomor_resi.toUpperCase() === sanitizedResi || (p.barcode_value && p.barcode_value.toUpperCase() === sanitizedResi))
+    if (paketTerdaftar) {
+      sanitizedResi = paketTerdaftar.nomor_resi.toUpperCase()
+    }
     if (!paketTerdaftar) {
       await addAuditLog({
         user_id: currentUser.id,

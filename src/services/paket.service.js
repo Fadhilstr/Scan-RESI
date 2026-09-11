@@ -177,6 +177,7 @@ export async function savePaketData(nomorResi, data, currentUser) {
       hub_tujuan: data.hub_tujuan || 'Bandung',
       cod_amount: Number(data.cod_amount) || 0,
       barcode_format: data.barcode_format || 'CODE_128',
+      barcode_value: data.barcode_value || data.nomor_resi || resi,
       status: 'TERDAFTAR'
     })
 
@@ -202,7 +203,8 @@ export async function savePaketData(nomorResi, data, currentUser) {
       telepon_penerima: data.telepon_penerima,
       berat_kg: data.berat_kg,
       jenis_layanan: data.jenis_layanan,
-      barcode_format: data.barcode_format
+      barcode_format: data.barcode_format,
+      barcode_value: data.barcode_value
     })
     return {
       success: !!res.success,
@@ -276,7 +278,7 @@ export async function getPaketByResi(nomorResi) {
 
   if (USE_LOCAL_DATA) {
     // --- LOCAL MODE ---
-    const paket = LOCAL_PAKETS.find((p) => p.nomor_resi === resi)
+    const paket = LOCAL_PAKETS.find((p) => p.nomor_resi === resi || (p.barcode_value && p.barcode_value.toUpperCase() === resi))
     if (!paket) {
       return { success: false, reason: 'NOT_FOUND', message: `Paket dengan resi ${resi} tidak ditemukan.` }
     }

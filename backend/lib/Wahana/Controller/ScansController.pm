@@ -123,8 +123,9 @@ sub create {
     # --- Validasi ketat: hanya resi TERDAFTAR di tabel paket yang boleh discan ---
     # Resi tidak dikenal maupun masih DRAFT TIDAK dicatat sebagai scan event.
     my $paket = $dbh->selectrow_hashref(
-        Wahana::Query->get('scans_check_paket_registered'), undef, $resi
+        Wahana::Query->get('scans_check_paket_registered'), undef, $resi, $resi
     );
+    $resi = $paket->{nomor_resi} if $paket;
 
     # Normalisasi otomatis jika scanner barcode membaca prefiks GS1 (01), padding leading zero, Codabar, atau GS1 AI(10)
     if (!$paket) {
@@ -142,7 +143,7 @@ sub create {
         }
         if ($alt_resi ne $resi) {
             $paket = $dbh->selectrow_hashref(
-                Wahana::Query->get('scans_check_paket_registered'), undef, $alt_resi
+                Wahana::Query->get('scans_check_paket_registered'), undef, $alt_resi, $alt_resi
             );
             $resi = $alt_resi if $paket;
         }
@@ -162,7 +163,7 @@ sub create {
                     }
                     if ($diff == 1) {
                         $paket = $dbh->selectrow_hashref(
-                            Wahana::Query->get('scans_check_paket_registered'), undef, $target
+                            Wahana::Query->get('scans_check_paket_registered'), undef, $target, $target
                         );
                         if ($paket) {
                             $resi = $target;

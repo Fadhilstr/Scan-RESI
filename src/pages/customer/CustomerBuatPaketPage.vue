@@ -637,7 +637,8 @@ const handleSave = async () => {
     hub_asal: form.pengirim_kota || 'Jakarta',
     hub_tujuan: form.penerima_kota || 'Bandung',
     cod_amount: Number(form.cod_amount) || 0,
-    barcode_format: selectedFormat.value
+    barcode_format: selectedFormat.value,
+    barcode_value: currentPayload.value?.barcode_value || paket.value?.nomor_resi
   }
 
   const result = await paketStore.saveData(paket.value.nomor_resi, payload, authStore.currentUser)
@@ -646,7 +647,7 @@ const handleSave = async () => {
   if (result.success) {
     localStorage.removeItem(`draft_paket_${paket.value.nomor_resi}`)
     localStorage.setItem(`paket_barcode_format_${paket.value.nomor_resi.toUpperCase()}`, selectedFormat.value)
-    paket.value = { ...payload, ...(result.paket || {}), barcode_format: selectedFormat.value, pengirim_detail, penerima_detail, status: 'TERDAFTAR' }
+    paket.value = { ...payload, ...(result.paket || {}), barcode_format: selectedFormat.value, barcode_value: currentPayload.value?.barcode_value || paket.value.nomor_resi, pengirim_detail, penerima_detail, status: 'TERDAFTAR' }
     saved.value = true
     $q.notify({
       type: 'positive',

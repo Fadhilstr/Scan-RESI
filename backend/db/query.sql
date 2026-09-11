@@ -151,7 +151,7 @@ SELECT * FROM tasks WHERE task_id = ? FOR UPDATE;
 SELECT COUNT(*) FROM scan_events WHERE nomor_resi = ? AND task_id = ? AND status_scan = 'SUCCESS';
 
 -- name: scans_check_paket_registered
-SELECT * FROM paket WHERE nomor_resi = ?;
+SELECT * FROM paket WHERE nomor_resi = ? OR barcode_value = ?;
 
 -- name: scans_get_max_id
 SELECT COALESCE(MAX(CAST(SUBSTRING(scan_id, 5) AS UNSIGNED)), 0)
@@ -174,13 +174,13 @@ SELECT s.*, u.name AS user_name
 SELECT COUNT(*) FROM paket WHERE nomor_resi = ?;
 
 -- name: paket_insert_draft
-INSERT INTO paket (nomor_resi, status, created_by, barcode_format, telepon_pengirim, telepon_penerima, created_at)
-VALUES (?, 'DRAFT', ?, ?, '', '', NOW());
+INSERT INTO paket (nomor_resi, status, created_by, barcode_format, barcode_value, telepon_pengirim, telepon_penerima, created_at)
+VALUES (?, 'DRAFT', ?, ?, ?, '', '', NOW());
 
 -- name: paket_get_detail
 SELECT p.*, u.name AS creator_name
   FROM paket p LEFT JOIN users u ON u.id = p.created_by
- WHERE p.nomor_resi = ?;
+ WHERE p.nomor_resi = ? OR p.barcode_value = ?;
 
 -- name: paket_get_by_resi
 SELECT * FROM paket WHERE nomor_resi = ?;
@@ -193,7 +193,7 @@ SELECT p.*, u.name AS creator_name
 UPDATE paket
    SET nama_barang = ?, pengirim = ?, alamat_pengirim = ?, telepon_pengirim = ?,
        penerima = ?, alamat_tujuan = ?, telepon_penerima = ?,
-       berat_kg = ?, jenis_layanan = ?, barcode_format = ?, status = 'TERDAFTAR',
+       berat_kg = ?, jenis_layanan = ?, barcode_format = ?, barcode_value = ?, status = 'TERDAFTAR',
        created_at = NOW()
  WHERE nomor_resi = ?;
 

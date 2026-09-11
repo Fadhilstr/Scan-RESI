@@ -59,6 +59,17 @@ ALTER TABLE scan_events
   ADD CONSTRAINT fk_scans_resi
   FOREIGN KEY (nomor_resi) REFERENCES paket (nomor_resi);
 
+-- Tambah kolom barcode_value jika belum ada
+ALTER TABLE paket 
+  ADD COLUMN IF NOT EXISTS barcode_value VARCHAR(100) NULL AFTER barcode_format;
+
+-- Tambah index agar pencarian instan
+ALTER TABLE paket 
+  ADD KEY IF NOT EXISTS idx_paket_barcode_value (barcode_value);
+
+-- Isi default data lama yang sudah ada agar tidak NULL
+UPDATE paket SET barcode_value = nomor_resi WHERE barcode_value IS NULL;
+
 -- 5. Akun customer demo (password: cust123)
 INSERT IGNORE INTO users (id, name, username, password_hash, role, status)
 VALUES ('USR-CUST-DEMO', 'Customer Demo', 'customer',

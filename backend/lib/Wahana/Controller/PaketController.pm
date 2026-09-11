@@ -29,6 +29,7 @@ sub map_paket {
         berat_kg          => defined $r->{berat_kg} ? 0 + $r->{berat_kg} : 0,
         jenis_layanan     => $r->{jenis_layanan},
         barcode_format    => $r->{barcode_format} // 'CODE_128',
+        barcode_value     => $r->{barcode_value} // $r->{nomor_resi},
         status            => $r->{status},
         created_by        => $r->{created_by},
         creator_name      => $r->{creator_name},
@@ -166,9 +167,11 @@ sub create_draft {
                  message => 'Gagal membuat nomor resi unik. Coba lagi.' };
     }
 
+    my $barcode_val = $body->{barcode_value} // $resi;
+
     $dbh->do(
         Wahana::Query->get('paket_insert_draft'),
-        undef, $resi, $user_id, $format
+        undef, $resi, $user_id, $format, $barcode_val
     );
 
     record_audit(
@@ -179,7 +182,7 @@ sub create_draft {
     );
 
     my $row = $dbh->selectrow_hashref(
-        Wahana::Query->get('paket_get_detail'), undef, $resi
+        Wahana::Query->get('paket_get_detail'), undef, $resi, $resi
     );
 
     return { success => \0, message => 'Gagal menyimpan draft paket ke database.' }
@@ -232,6 +235,7 @@ sub update {
     my $alamat_tujuan    = trim($body->{alamat_tujuan}    // '');
     my $telepon_penerima = trim($body->{telepon_penerima} // '');
     my $barcode_format = $body->{barcode_format} || $paket->{barcode_format} || 'CODE_128';
+    my $barcode_value  = trim($body->{barcode_value} // '') || $paket->{barcode_value} || $resi;
     my $berat            = $body->{berat_kg};
     $berat = 0 unless defined $berat && $berat =~ /^\d+(\.\d+)?$/;
 
@@ -254,7 +258,7 @@ sub update {
         Wahana::Query->get('paket_update_data'),
         undef, $nama, $pengirim, $alamat_pengirim, $telepon_pengirim,
             $penerima, $alamat_tujuan, $telepon_penerima,
-            $berat, $layanan, $barcode_format,
+            $berat, $layanan, $barcode_format, $barcode_value,
             $resi
     );
 
@@ -341,7 +345,7 @@ sub detail {
 
     my $dbh = Wahana::Db->connect();
     my $row = $dbh->selectrow_hashref(
-        Wahana::Query->get('paket_get_detail'), undef, $resi
+        Wahana::Query->get('paket_get_detail'), undef, $resi, $resi
     );
 
     # Normalisasi otomatis jika barcode mengandung prefiks GS1, AI (10), atau Codabar
@@ -360,7 +364,7 @@ sub detail {
         }
         if ($alt_resi ne $resi) {
             $row = $dbh->selectrow_hashref(
-                Wahana::Query->get('paket_get_detail'), undef, $alt_resi
+                Wahana::Query->get('paket_get_detail'), undef, $alt_resi, $alt_resi
             );
         }
 
@@ -379,7 +383,7 @@ sub detail {
                     }
                     if ($diff == 1) {
                         $row = $dbh->selectrow_hashref(
-                            Wahana::Query->get('paket_get_detail'), undef, $target
+                            Wahana::Query->get('paket_get_detail'), undef, $target, $target
                         );
                         last if $row;
                     }
