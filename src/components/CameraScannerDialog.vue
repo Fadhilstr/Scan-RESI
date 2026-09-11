@@ -249,8 +249,19 @@ const startCamera = async () => {
   errorMessage.value = ''
   technicalError.value = ''
 
-  // 2. Rantai percobaan: kamera belakang/default → kamera mana pun
+  // 2. Rantai percobaan: Kamera belakang resolusi tinggi (HD/FHD) -> kamera standar -> fallback kamera apa saja
   const attempts = [
+    {
+      facingMode: 'environment',
+      width: { ideal: 1920, min: 1280 },
+      height: { ideal: 1080, min: 720 },
+      advanced: [{ focusMode: 'continuous' }]
+    },
+    {
+      facingMode: 'environment',
+      width: { ideal: 1280, min: 640 },
+      height: { ideal: 720, min: 480 }
+    },
     { facingMode: 'environment' },
     true
   ]
@@ -269,13 +280,15 @@ const startCamera = async () => {
       await scanner.start(
         cameraConfig,
         {
-          fps: 15,
+          fps: 20,
           qrbox: (viewfinderWidth, viewfinderHeight) => {
+            // Lebarkan area scan agar barcode 1D yang panjang tidak terpotong ujungnya
             return {
-              width: Math.floor(Math.min(viewfinderWidth * 0.9, 520)),
-              height: Math.floor(Math.min(viewfinderHeight * 0.8, 340))
+              width: Math.floor(Math.min(viewfinderWidth * 0.95, 600)),
+              height: Math.floor(Math.min(viewfinderHeight * 0.85, 380))
             }
-          }
+          },
+          aspectRatio: 1.777778
         },
         onScanSuccess,
         () => {} // frame tanpa barcode — abaikan
