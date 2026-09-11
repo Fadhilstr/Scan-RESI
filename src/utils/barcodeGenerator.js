@@ -21,14 +21,7 @@ export const BARCODE_FORMAT_OPTIONS = [
   { label: 'EAN_8', value: 'EAN_8', supported: true, category: '1D Numerik' },
   { label: 'UPC_A', value: 'UPC_A', supported: true, category: '1D Numerik' },
   { label: 'UPC_E', value: 'UPC_E', supported: true, category: '1D Numerik' },
-  {
-    label: 'UPC_EAN_EXTENSION (Hanya Suplemen / Non-Mandiri)',
-    value: 'UPC_EAN_EXTENSION',
-    supported: false,
-    disable: true,
-    category: '1D Numerik (Suplemen)',
-    warning: 'Format add-on suplemen 2/5 digit, bukan format resi mandiri.'
-  },
+  { label: 'UPC_EAN_EXTENSION (EAN-5 Extension)', value: 'UPC_EAN_EXTENSION', supported: true, category: '1D Numerik' },
   { label: 'RSS_14 (GS1 DataBar)', value: 'RSS_14', supported: true, category: '1D GS1' },
   { label: 'RSS_EXPANDED (GS1 Expanded)', value: 'RSS_EXPANDED', supported: true, category: '1D GS1' }
 ]

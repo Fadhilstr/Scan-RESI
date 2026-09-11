@@ -174,6 +174,8 @@ const startZxingFallback = (videoElement) => {
       BarcodeFormat.EAN_8,
       BarcodeFormat.UPC_A,
       BarcodeFormat.UPC_E,
+      BarcodeFormat.MAXICODE,
+      BarcodeFormat.UPC_EAN_EXTENSION,
       BarcodeFormat.QR_CODE,
       BarcodeFormat.DATA_MATRIX,
       BarcodeFormat.AZTEC,
