@@ -30,6 +30,7 @@ sub map_paket {
         jenis_layanan     => $r->{jenis_layanan},
         barcode_format    => $r->{barcode_format} // 'CODE_128',
         status            => $r->{status},
+        draft_id          => $r->{draft_id},
         created_by        => $r->{created_by},
         creator_name      => $r->{creator_name},
         created_at        => fmt_datetime($r->{created_at}),
@@ -156,8 +157,24 @@ sub create_draft {
 
     my $body   = $req->{body} // {};
     my $format = uc(trim($body->{format} // $req->{query}{format} // 'CODE_128'));
+    my $draft_id      = trim($body->{draft_id} // '');
+    my $previous_resi = uc(trim($body->{previous_resi} // ''));
+    my $pkg_data      = $body->{package_data} // {};
+
+    # Generate draft_id jika belum ada (sesi pembuatan baru)
+    if (!length($draft_id)) {
+        $draft_id = 'DRF-' . sprintf("%04X%04X", int rand(0xFFFF), int rand(0xFFFF));
+    }
 
     my $dbh = Wahana::Db->connect();
+
+    # Jika previous_resi atau draft_id ada, batalkan draft sebelumnya (ubah jadi REPLACED)
+    if (length($draft_id) || length($previous_resi)) {
+        $dbh->do(
+            Wahana::Query->get('paket_supersede_draft'),
+            undef, $draft_id, $previous_resi
+        );
+    }
 
     my $resi = eval { generate_resi($dbh, $format) };
     if (!$resi) {
@@ -166,15 +183,36 @@ sub create_draft {
                  message => 'Gagal membuat nomor resi unik. Coba lagi.' };
     }
 
+    # Ambil nilai data form awal jika sudah diisi customer
+    my $nama             = trim($pkg_data->{nama_barang} // '');
+    my $pengirim         = trim($pkg_data->{pengirim} // '');
+    my $alamat_pengirim  = trim($pkg_data->{alamat_pengirim} // '');
+    my $telepon_pengirim = trim($pkg_data->{telepon_pengirim} // '');
+    my $penerima         = trim($pkg_data->{penerima} // '');
+    my $alamat_tujuan    = trim($pkg_data->{alamat_tujuan} // '');
+    my $telepon_penerima = trim($pkg_data->{telepon_penerima} // '');
+    my $berat            = $pkg_data->{berat_kg} // 0;
+    $berat = 0 unless defined $berat && $berat =~ /^\d+(\.\d+)?$/;
+    my $layanan          = trim($pkg_data->{jenis_layanan} // 'REGULER');
+    $layanan = 'REGULER' unless $layanan =~ /^(REGULER|EXPRESS|SAME_DAY)$/;
+
     $dbh->do(
         Wahana::Query->get('paket_insert_draft'),
-        undef, $resi, $user_id, $format
+        undef, $resi, $user_id, $draft_id, $format,
+        (length($nama) ? $nama : undef),
+        (length($pengirim) ? $pengirim : undef),
+        (length($alamat_pengirim) ? $alamat_pengirim : undef),
+        $telepon_pengirim,
+        (length($penerima) ? $penerima : undef),
+        (length($alamat_tujuan) ? $alamat_tujuan : undef),
+        $telepon_penerima,
+        $berat, $layanan
     );
 
     record_audit(
         user_id    => $user_id,
         action     => 'PAKET_RESI_GENERATED',
-        details    => "Nomor resi $resi digenerate (DRAFT).",
+        details    => "Nomor resi $resi digenerate (DRAFT, Format: $format, Draft ID: $draft_id).",
         ip_address => $req->{ip},
     );
 
@@ -185,7 +223,7 @@ sub create_draft {
     return { success => \0, message => 'Gagal menyimpan draft paket ke database.' }
         unless $row;
 
-    return { success => \1, paket => map_paket($row) };
+    return { success => \1, draft_id => $draft_id, paket => map_paket($row) };
 }
 
 # ---------------------------------------------------------------------
@@ -265,6 +303,13 @@ sub update {
         ip_address => $req->{ip},
     );
 
+    if ($paket->{draft_id}) {
+        $dbh->do(
+            Wahana::Query->get('paket_void_replaced_drafts'),
+            undef, $paket->{draft_id}
+        );
+    }
+
     my $row = $dbh->selectrow_hashref(
         Wahana::Query->get('paket_get_detail'), undef, $resi
     );
@@ -300,6 +345,9 @@ sub list {
     if (my $status = trim($params->{status} // '')) {
         push @where, 'p.status = ?';
         push @bind,  $status;
+    } else {
+        # Hanya tampilkan paket aktif (DRAFT atau TERDAFTAR), abaikan REPLACED dan VOID
+        push @where, "p.status IN ('DRAFT', 'TERDAFTAR')";
     }
 
     if (my $q = trim($params->{q} // '')) {

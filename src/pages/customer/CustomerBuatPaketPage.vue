@@ -158,7 +158,7 @@
 
                   <div class="q-mt-sm full-width text-center">
                     <div class="text-caption text-grey-8 text-weight-bold font-mono">
-                      {{ selectedFormat }} &bull; Tracking: {{ paket?.nomor_resi }}
+                      {{ paket?.barcode_format || selectedFormat }} &bull; Tracking: {{ paket?.nomor_resi }}
                     </div>
 
                     <!-- Keterangan Check Digits C & K khusus Code 93 -->
@@ -379,7 +379,7 @@
     </q-card>
 
     <!-- Dialog cetak label (komponen barcode terintegrasi) -->
-    <BarcodeLabel v-model="showLabel" :resi="paket?.nomor_resi || ''" :paket-data="paket" :initial-format="selectedFormat || 'CODE_128'" />
+    <BarcodeLabel v-model="showLabel" :resi="paket?.nomor_resi || ''" :paket-data="paket" :initial-format="paket?.barcode_format || selectedFormat || 'CODE_128'" />
   </q-page>
 </template>
 
@@ -403,6 +403,7 @@ const generating = ref(false)
 const saving = ref(false)
 const saved = ref(false)
 const paket = ref(null)
+const draftId = ref(null)
 
 const svgRef = ref(null)
 const showLabel = ref(false)
@@ -456,7 +457,8 @@ const renderCurrentBarcode = async () => {
   const resi = (paket.value?.nomor_resi || '').trim()
   if (!resi) return
 
-  if (!selectedFormat.value) {
+  const fmt = paket.value?.barcode_format || selectedFormat.value
+  if (!fmt) {
     if (svgRef.value) svgRef.value.innerHTML = ''
     barcodeError.value = ''
     currentPayload.value = null
@@ -466,20 +468,17 @@ const renderCurrentBarcode = async () => {
   await nextTick()
   if (!svgRef.value) return
 
-  localStorage.setItem(`paket_barcode_format_${resi.toUpperCase()}`, selectedFormat.value)
-  if (paket.value) {
-    paket.value.barcode_format = selectedFormat.value
-  }
+  localStorage.setItem(`paket_barcode_format_${resi.toUpperCase()}`, fmt)
 
   barcodeError.value = ''
 
   generatingBarcode.value = true
   try {
-    const isExpanded = selectedFormat.value === 'RSS_EXPANDED'
-    const isMaxi = selectedFormat.value === 'MAXICODE'
-    const is2D = ['QR_CODE', 'AZTEC', 'DATA_MATRIX'].includes(selectedFormat.value)
+    const isExpanded = fmt === 'RSS_EXPANDED'
+    const isMaxi = fmt === 'MAXICODE'
+    const is2D = ['QR_CODE', 'AZTEC', 'DATA_MATRIX'].includes(fmt)
 
-    const res = await utilRenderBarcode(svgRef.value, resi, selectedFormat.value, {
+    const res = await utilRenderBarcode(svgRef.value, resi, fmt, {
       scale: 3,
       height: isExpanded ? 20 : 16,
       qrSize: isMaxi ? 190 : (is2D ? 135 : 120),
@@ -512,8 +511,12 @@ const UNASSIGNED_DRAFT_KEY = 'draft_paket_unassigned_form'
 /**
  * Handle penekanan tombol "GENERATE BARCODE"
  * BARU PADA EVENT INI nomor resi diminta ke backend.
+ * Jika format diganti lalu ditekan lagi: backend menerbitkan resi baru dan
+ * menandai resi sebelumnya sebagai REPLACED pada sesi draft yang sama.
  */
 const handleGenerate = async () => {
+  if (generating.value) return
+
   if (!selectedFormat.value) {
     $q.notify({
       type: 'warning',
@@ -525,25 +528,34 @@ const handleGenerate = async () => {
     return
   }
 
-  // Idempotensi: Jika nomor resi sudah ada untuk paket saat ini, jangan generate resi baru ke backend!
-  if (paket.value?.nomor_resi) {
-    await renderCurrentBarcode()
-    $q.notify({
-      type: 'info',
-      icon: 'refresh',
-      message: `Barcode diperbarui untuk nomor resi ${paket.value.nomor_resi} (Format: ${selectedFormat.value}).`,
-      position: 'top',
-      timeout: 2000
-    })
-    return
-  }
-
+  // Double-click protection
   generating.value = true
   try {
-    const result = await paketStore.createResi(authStore.currentUser, selectedFormat.value)
+    const previousResi = paket.value?.nomor_resi || null
+    const result = await paketStore.createResi(
+      authStore.currentUser,
+      selectedFormat.value,
+      draftId.value,
+      previousResi,
+      {
+        nama_barang: form.nama_barang,
+        pengirim: form.pengirim_nama,
+        alamat_pengirim: form.pengirim_alamat,
+        telepon_pengirim: form.pengirim_telepon,
+        penerima: form.penerima_nama,
+        alamat_tujuan: form.penerima_alamat,
+        telepon_penerima: form.penerima_telepon,
+        berat_kg: form.berat_kg,
+        jenis_layanan: form.jenis_layanan
+      }
+    )
+
     if (result.success && result.paket) {
       saved.value = false
       paket.value = result.paket
+      if (result.draft_id) {
+        draftId.value = result.draft_id
+      }
 
       if (authStore.currentUser?.name && !form.pengirim_nama) {
         form.pengirim_nama = authStore.currentUser.name
@@ -552,7 +564,7 @@ const handleGenerate = async () => {
       $q.notify({
         type: 'positive',
         icon: 'verified',
-        message: `Nomor resi ${result.paket.nomor_resi} berhasil dibuat!`,
+        message: `Nomor resi ${result.paket.nomor_resi} berhasil dibuat (Format: ${selectedFormat.value})!`,
         position: 'top',
         timeout: 2200
       })
@@ -584,8 +596,9 @@ const handleGenerate = async () => {
 /**
  * Handle perubahan format barcode di dropdown.
  * PENTING: Perubahan format barcode TIDAK PERNAH membuat nomor resi ataupun draft baru di backend!
+ * Nomor resi lama tetap berada di state sampai user menekan tombol "Generate Barcode".
  */
-const handleFormatChange = async (newFormat) => {
+const handleFormatChange = (newFormat) => {
   if (newFormat === 'UPC_EAN_EXTENSION') {
     $q.notify({
       type: 'warning',
@@ -599,18 +612,7 @@ const handleFormatChange = async (newFormat) => {
   }
 
   selectedFormat.value = newFormat
-  if (!newFormat) {
-    if (svgRef.value) svgRef.value.innerHTML = ''
-    barcodeError.value = ''
-    currentPayload.value = null
-    return
-  }
-
-  // Jika nomor resi SUDAH ada, cukup re-render barcode dengan nomor resi yang sama menggunakan format baru
-  if (paket.value?.nomor_resi) {
-    await nextTick()
-    await renderCurrentBarcode()
-  }
+  // TIDAK memanggil backend sampai tombol "Generate Barcode" ditekan.
 }
 
 const handleSave = async () => {
@@ -625,24 +627,16 @@ const handleSave = async () => {
     return
   }
 
-  // Jika user langsung simpan sebelum menekan tombol Generate Barcode, terbitkan nomor resi otomatis
+  // Wajib generate barcode terlebih dahulu agar nomor resi berasal dari backend
   if (!paket.value?.nomor_resi) {
-    generating.value = true
-    const genRes = await paketStore.createResi(authStore.currentUser, selectedFormat.value)
-    generating.value = false
-    if (!genRes.success || !genRes.paket) {
-      $q.notify({
-        type: 'negative',
-        icon: 'error',
-        message: genRes.message || 'Gagal menerbitkan nomor resi untuk paket ini.',
-        position: 'top',
-        timeout: 2500
-      })
-      return
-    }
-    paket.value = genRes.paket
-    await nextTick()
-    await renderCurrentBarcode()
+    $q.notify({
+      type: 'warning',
+      icon: 'warning',
+      message: 'Silakan klik tombol "GENERATE BARCODE" terlebih dahulu untuk menerbitkan nomor resi sebelum menyimpan paket.',
+      position: 'top',
+      timeout: 3000
+    })
+    return
   }
 
   saving.value = true
@@ -722,6 +716,7 @@ const handleSave = async () => {
 
 const resetForm = () => {
   paket.value = null
+  draftId.value = null
   saved.value = false
   selectedFormat.value = null
   barcodeError.value = ''
@@ -735,7 +730,18 @@ const saveDraftToStorage = () => {
   if (saved.value) return
 
   if (paket.value?.nomor_resi) {
-    localStorage.setItem(`draft_paket_${paket.value.nomor_resi}`, JSON.stringify(form))
+    localStorage.setItem(`draft_paket_${paket.value.nomor_resi}`, JSON.stringify({
+      form,
+      draftId: draftId.value,
+      format: selectedFormat.value
+    }))
+    if (draftId.value) {
+      localStorage.setItem(`draft_session_${draftId.value}`, JSON.stringify({
+        resi: paket.value.nomor_resi,
+        format: selectedFormat.value,
+        form
+      }))
+    }
     if (selectedFormat.value) {
       localStorage.setItem(`paket_barcode_format_${paket.value.nomor_resi.toUpperCase()}`, selectedFormat.value)
     }
@@ -785,43 +791,48 @@ onMounted(async () => {
   }
 
   await paketStore.fetchPakets()
-  const draft = paketStore.findPaketByResi(resi)
+  let draft = paketStore.findPaketByResi(resi)
+  if (!draft) {
+    const res = await paketStore.lookupByResi(resi)
+    if (res.success) draft = res.paket
+  }
+
   if (draft && draft.status === 'DRAFT' && authStore.isCustomer) {
     paket.value = draft
-    const savedFormat = localStorage.getItem(`paket_barcode_format_${resi}`)
-    if (savedFormat) {
-      selectedFormat.value = savedFormat
-    }
-    await nextTick()
-    renderCurrentBarcode()
+    draftId.value = draft.draft_id || null
+    selectedFormat.value = draft.barcode_format || 'CODE_128'
+
     const localDraft = localStorage.getItem(`draft_paket_${resi}`)
     if (localDraft) {
       try {
-        Object.assign(form, JSON.parse(localDraft))
-        $q.notify({
-          type: 'info',
-          icon: 'restore',
-          message: `Draft resi ${resi} telah dimuat`,
-          position: 'top',
-          timeout: 2000
-        })
-      } catch (err) {
-        $q.notify({
-          type: 'warning',
-          icon: 'error',
-          message: 'Gagal memuat draft paket.',
-          position: 'top',
-          timeout: 2500
-        })
-      }
+        const parsed = JSON.parse(localDraft)
+        if (parsed.form) Object.assign(form, parsed.form)
+        else Object.assign(form, parsed)
+        if (parsed.format) selectedFormat.value = parsed.format
+        if (parsed.draftId) draftId.value = parsed.draftId
+      } catch (_) {}
     } else {
       form.nama_barang = draft.nama_barang || ''
       form.pengirim_nama = draft.pengirim || authStore.currentUser?.name || ''
+      form.pengirim_telepon = draft.telepon_pengirim || ''
+      form.pengirim_alamat = draft.alamat_pengirim || ''
       form.penerima_nama = draft.penerima || ''
+      form.penerima_telepon = draft.telepon_penerima || ''
       form.penerima_alamat = draft.alamat_tujuan || ''
       form.berat_kg = draft.berat_kg || 1.0
       form.jenis_layanan = draft.jenis_layanan || 'REG'
     }
+
+    await nextTick()
+    renderCurrentBarcode()
+
+    $q.notify({
+      type: 'info',
+      icon: 'restore',
+      message: `Draft resi ${resi} telah dimuat (Format: ${selectedFormat.value})`,
+      position: 'top',
+      timeout: 2000
+    })
   }
 })
 </script>

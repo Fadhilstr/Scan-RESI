@@ -189,18 +189,22 @@ sub create {
         };
     }
 
-    if ($paket->{status} eq 'DRAFT') {
+    if ($paket->{status} ne 'TERDAFTAR') {
+        my $st = $paket->{status} // 'NON_ACTIVE';
         record_audit(
             user_id    => $user_id,
             action     => 'SCAN_REJECTED',
-            details    => "Resi: $resi, Status: DRAFT",
+            details    => "Resi: $resi, Status: $st",
             ip_address => $req->{ip},
         );
+        my $msg = ($st eq 'DRAFT')
+            ? "Nomor resi $resi masih DRAFT — data barang belum disimpan customer."
+            : "Nomor resi $resi tidak aktif (Status: $st).";
         return {
             success => \0,
-            reason  => 'DRAFT',
+            reason  => $st,
             status_scan => 'REJECTED',
-            message     => "Nomor resi $resi masih DRAFT — data barang belum disimpan customer.",
+            message     => $msg,
         };
     }
 

@@ -173,9 +173,15 @@ SELECT s.*, u.name AS user_name
 -- name: paket_check_resi_exists
 SELECT COUNT(*) FROM paket WHERE nomor_resi = ?;
 
+-- name: paket_supersede_draft
+UPDATE paket SET status = 'REPLACED' WHERE (draft_id = ? OR nomor_resi = ?) AND status = 'DRAFT';
+
+-- name: paket_void_replaced_drafts
+UPDATE paket SET status = 'VOID' WHERE draft_id = ? AND status = 'REPLACED';
+
 -- name: paket_insert_draft
-INSERT INTO paket (nomor_resi, status, created_by, barcode_format, telepon_pengirim, telepon_penerima, created_at)
-VALUES (?, 'DRAFT', ?, ?, '', '', NOW());
+INSERT INTO paket (nomor_resi, status, created_by, draft_id, barcode_format, nama_barang, pengirim, alamat_pengirim, telepon_pengirim, penerima, alamat_tujuan, telepon_penerima, berat_kg, jenis_layanan, created_at)
+VALUES (?, 'DRAFT', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW());
 
 -- name: paket_get_detail
 SELECT p.*, u.name AS creator_name

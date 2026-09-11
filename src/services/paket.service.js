@@ -78,7 +78,7 @@ const makeLocalResi = () => {
  * @param {Object} currentUser - user pembuat (harus CUSTOMER/ADMIN)
  * @returns {Promise<{success, paket?, reason?, message?}>}
  */
-export async function generateResi(currentUser, format = 'CODE_128') {
+export async function generateResi(currentUser, format = 'CODE_128', draftId = null, previousResi = null, packageData = null) {
   if (!currentUser) {
     return { success: false, message: 'Sesi tidak valid.' }
   }
@@ -88,19 +88,26 @@ export async function generateResi(currentUser, format = 'CODE_128') {
       return { success: false, reason: 'FORBIDDEN', message: 'Hanya CUSTOMER atau ADMIN yang dapat membuat nomor resi.' }
     }
 
+    if (previousResi) {
+      const prev = LOCAL_PAKETS.find((p) => p.nomor_resi === previousResi && p.status === 'DRAFT')
+      if (prev) prev.status = 'REPLACED'
+    }
+
+    const assignedDraftId = draftId || `DRF-${Date.now().toString(16).toUpperCase()}`
     const resi = makeLocalResi()
     const paket = {
       nomor_resi: resi,
-      nama_barang: null,
-      pengirim: null,
-      alamat_pengirim: null,
-      telepon_pengirim: '',
-      penerima: null,
-      alamat_tujuan: null,
-      telepon_penerima: '',
-      berat_kg: 0,
-      jenis_layanan: 'REG',
+      nama_barang: packageData?.nama_barang || null,
+      pengirim: packageData?.pengirim || null,
+      alamat_pengirim: packageData?.alamat_pengirim || null,
+      telepon_pengirim: packageData?.telepon_pengirim || '',
+      penerima: packageData?.penerima || null,
+      alamat_tujuan: packageData?.alamat_tujuan || null,
+      telepon_penerima: packageData?.telepon_penerima || '',
+      berat_kg: packageData?.berat_kg || 0,
+      jenis_layanan: packageData?.jenis_layanan || 'REGULER',
       status: 'DRAFT',
+      draft_id: assignedDraftId,
       barcode_format: format,
       created_by: currentUser.id,
       creator_name: currentUser.name,
@@ -112,16 +119,21 @@ export async function generateResi(currentUser, format = 'CODE_128') {
       user_id: currentUser.id,
       user_name: currentUser.name,
       action: 'PAKET_RESI_GENERATED',
-      details: `Nomor resi ${resi} digenerate (DRAFT).`
+      details: `Nomor resi ${resi} digenerate (DRAFT, Format: ${format}, Draft ID: ${assignedDraftId}).`
     })
 
-    return { success: true, paket: { ...paket } }
+    return { success: true, draft_id: assignedDraftId, paket: { ...paket } }
   }
 
   // --- API MODE: resi dibuat server-side ---
   try {
-    const data = await api.post('/api/paket/resi', { format })
-    return { success: !!data.success, paket: data.paket, message: data.message }
+    const data = await api.post('/api/paket/resi', {
+      format,
+      draft_id: draftId,
+      previous_resi: previousResi,
+      package_data: packageData
+    })
+    return { success: !!data.success, draft_id: data.draft_id, paket: data.paket, message: data.message }
   } catch (err) {
     return { success: false, reason: 'ERROR', message: err.message || 'Gagal membuat nomor resi.' }
   }

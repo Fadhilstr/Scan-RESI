@@ -85,8 +85,8 @@ export const usePaketStore = defineStore('paket', {
      * Generate nomor resi baru via backend → baris DRAFT.
      * @returns {{success, paket?, reason?, message?}}
      */
-    async createResi(currentUser, format = 'CODE_128') {
-      const result = await svcGenerateResi(currentUser, format)
+    async createResi(currentUser, format = 'CODE_128', draftId = null, previousResi = null, packageData = null) {
+      const result = await svcGenerateResi(currentUser, format, draftId, previousResi, packageData)
 
       if (USE_LOCAL_DATA) {
         if (result.success) {
