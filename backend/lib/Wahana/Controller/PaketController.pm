@@ -207,10 +207,6 @@ sub generate_barcode_value {
         return "(01)${resi_up}";
     }
 
-    if ($format eq 'UPC_EAN_EXTENSION') {
-        return $resi_up;
-    }
-
     return $resi_up;
 }
 

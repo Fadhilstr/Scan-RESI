@@ -21,7 +21,6 @@ export const BARCODE_FORMAT_OPTIONS = [
   { label: 'EAN_8', value: 'EAN_8', supported: true, category: '1D Numerik' },
   { label: 'UPC_A', value: 'UPC_A', supported: true, category: '1D Numerik' },
   { label: 'UPC_E', value: 'UPC_E', supported: true, category: '1D Numerik' },
-  { label: 'UPC_EAN_EXTENSION (EAN-5 Extension)', value: 'UPC_EAN_EXTENSION', supported: true, category: '1D Numerik' },
   { label: 'RSS_14 (GS1 DataBar)', value: 'RSS_14', supported: true, category: '1D GS1' },
   { label: 'RSS_EXPANDED (GS1 Expanded)', value: 'RSS_EXPANDED', supported: true, category: '1D GS1' }
 ]
@@ -44,7 +43,6 @@ const BWIP_FORMAT_MAP = {
   EAN_8: 'ean8',
   UPC_A: 'upca',
   UPC_E: 'upce',
-  UPC_EAN_EXTENSION: 'ean5',
   RSS_14: 'databaromni',
   RSS_EXPANDED: 'databarexpanded'
 }
@@ -226,16 +224,28 @@ export function normalizeScannedBarcode(raw, format = null) {
   localMapped = checkLocalStorage(sCleanBracket)
   if (localMapped) return localMapped
 
-  const fmt = (format || '').toUpperCase()
+  let fmt = ''
+  if (typeof format === 'string') {
+    fmt = format.toUpperCase()
+  } else if (typeof format === 'number') {
+    const FORMAT_ENUM_MAP = {
+      0: 'QR_CODE', 1: 'AZTEC', 2: 'CODABAR', 3: 'CODE_39', 4: 'CODE_93', 5: 'CODE_128',
+      6: 'DATA_MATRIX', 7: 'MAXICODE', 8: 'ITF', 9: 'EAN_13', 10: 'EAN_8', 11: 'PDF_417',
+      12: 'RSS_14', 13: 'RSS_EXPANDED', 14: 'UPC_A', 15: 'UPC_E', 18: 'CODABAR', 29: 'RSS_14'
+    }
+    fmt = FORMAT_ENUM_MAP[format] || ''
+  } else if (format && typeof format === 'object') {
+    fmt = String(format.formatName || format.name || '').toUpperCase()
+  }
 
   // 2. MAXICODE: Ekstrak tracking number dari (10)XXXXX atau header MaxiCode
-  if (fmt === 'MAXICODE' || s.includes('[C3') || s.includes('ANSI ') || /\(10\)|10[A-Z0-9]{6,}/.test(s)) {
-    const m10 = s.match(/\(10\)([A-Z0-9]+)/i) || s.match(/10([A-Z0-9]{6,16})/i) || s.match(/^01\d{14}10([A-Z0-9]+)/i)
+  if (fmt === 'MAXICODE' || s.includes('[C3') || s.includes('ANSI ') || /\(10\)|10[A-Z0-9]{4,}/.test(s)) {
+    const m10 = s.match(/\(10\)\s*([A-Z0-9]+)/i) || s.match(/10([A-Z0-9]{1,32})/i) || s.match(/^01\d{14}10([A-Z0-9]+)/i)
     if (m10 && m10[1]) {
       const extracted = m10[1].toUpperCase()
       return checkLocalStorage(extracted) || checkLocalStorage(`(10)${extracted}`) || extracted
     }
-    const mMaxi = s.match(/([A-Z0-9]{8,16})/i)
+    const mMaxi = s.match(/([A-Z0-9]{4,32})/i)
     if (mMaxi && mMaxi[1]) {
       const extracted = mMaxi[1].toUpperCase()
       return checkLocalStorage(extracted) || extracted
@@ -265,6 +275,10 @@ export function normalizeScannedBarcode(raw, format = null) {
     if (mCoda && mCoda[1]) {
       const inner = mCoda[1]
       return checkLocalStorage(inner) || checkLocalStorage(s) || inner
+    }
+    const digitsOnly = s.replace(/\D/g, '')
+    if (digitsOnly) {
+      return checkLocalStorage(digitsOnly) || checkLocalStorage(`A${digitsOnly}B`) || digitsOnly
     }
   }
 
@@ -339,14 +353,20 @@ export function normalizeScannedBarcode(raw, format = null) {
     }
   }
 
-  // 10. RSS_14 & RSS_EXPANDED: Parsing format GS1 (01) GTIN / (10) Tracking No
-  if (fmt === 'RSS_14' || fmt === 'RSS_EXPANDED' || s.includes('(01)') || s.includes('(10)')) {
-    const m10 = s.match(/\(10\)([A-Z0-9]+)/i) || s.match(/10([A-Z0-9]{6,16})/i)
+  // 10. RSS_EXPANDED: Parsing format GS1 (10) Tracking No
+  if (fmt === 'RSS_EXPANDED' || s.includes('(10)')) {
+    const m10 = s.match(/\(10\)\s*([A-Z0-9]+)/i) || s.match(/10([A-Z0-9]{1,32})/i)
     if (m10 && m10[1]) {
       const extracted = m10[1].toUpperCase()
-      return checkLocalStorage(extracted) || checkLocalStorage(`(10)${extracted}`) || extracted
+      const mapped = checkLocalStorage(extracted) || checkLocalStorage(`(10)${extracted}`) || checkLocalStorage(s)
+      if (mapped) return mapped
+      return extracted
     }
-    const m01 = s.match(/^\(01\)(\d{13,14})/i) || s.match(/^01(\d{14})/i)
+  }
+
+  // 11. RSS_14: Parsing format GS1 (01) GTIN-14
+  if (fmt === 'RSS_14' || s.includes('(01)') || /^01\d{13,14}/.test(s) || /^\d{14}$/.test(s)) {
+    const m01 = s.match(/^\(01\)(\d{13,14})/i) || s.match(/^01(\d{13,14})/i) || s.match(/^(\d{13,14})/i)
     if (m01 && m01[1]) {
       let gtin = m01[1]
       if (gtin.length === 13) {
@@ -355,6 +375,7 @@ export function normalizeScannedBarcode(raw, format = null) {
       return (
         checkLocalStorage(gtin) ||
         checkLocalStorage(`(01)${gtin}`) ||
+        checkLocalStorage(`01${gtin}`) ||
         gtin
       )
     }
@@ -368,35 +389,21 @@ export function normalizeScannedBarcode(raw, format = null) {
     }
   }
 
-  // 12. UPC_EAN_EXTENSION: 2 atau 5 digit langsung
-  if (fmt === 'UPC_EAN_EXTENSION' || /^\d{2}$/.test(s) || /^\d{5}$/.test(s)) {
-    const digits = s.replace(/\D/g, '')
-    if (digits.length === 2 || digits.length === 5) {
-      return checkLocalStorage(digits) || digits
-    }
-  }
-
-  // Generic GS1 AI (10) Serial/Tracking: (10)XXXXX atau 01...10XXXXX
+  // Generic GS1 AI (10) Serial/Tracking: (10)XXXXX atau 01<14-digit GTIN>10XXXXX
   const m10Paren = s.match(/\(10\)\s*([A-Z0-9]+)/i)
   if (m10Paren && m10Paren[1]) {
     const extracted = m10Paren[1].toUpperCase()
     return checkLocalStorage(extracted) || extracted
   }
 
-  const m10Raw = s.match(/^(?:(?:\(01\)|01)\s*\d{13,14})?\s*(?:\(10\)|10)\s*([A-Z0-9]+)/i)
-  if (m10Raw && m10Raw[1]) {
-    const extracted = m10Raw[1].toUpperCase()
-    return checkLocalStorage(extracted) || extracted
-  }
-
-  const m10Anywhere = s.match(/\d{14}10([A-Z0-9]{4,16})/i)
-  if (m10Anywhere && m10Anywhere[1]) {
-    const extracted = m10Anywhere[1].toUpperCase()
+  const m10Gs1 = s.match(/^(?:\(01\)|01)\s*\d{14}\s*(?:\(10\)|10)\s*([A-Z0-9]{1,32})/i) || s.match(/\d{14}10([A-Z0-9]{1,32})/i)
+  if (m10Gs1 && m10Gs1[1]) {
+    const extracted = m10Gs1[1].toUpperCase()
     return checkLocalStorage(extracted) || extracted
   }
 
   // Generic GS1 AI (01) 14 digit GTIN: (01)XXXXX
-  const m01Gen = s.match(/^\(01\)\s*(\d{13,14})/i) || s.match(/^01(\d{14})/i)
+  const m01Gen = s.match(/^\(01\)\s*(\d{13,14})/i) || s.match(/^01(\d{13,14})/i)
   if (m01Gen && m01Gen[1]) {
     const gtin = m01Gen[1]
     return checkLocalStorage(gtin) || gtin
