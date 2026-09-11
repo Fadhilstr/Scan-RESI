@@ -188,21 +188,16 @@
 
     <!-- LANGKAH 2: INPUT DATA PAKET, PENGIRIM & PENERIMA -->
     <q-card class="scan-card q-pa-md">
-      <q-card-section :class="{ 'opacity-40 pointer-events-none': !paket || saved }">
+      <q-card-section>
         <div class="text-subtitle1 text-weight-bold text-slate-800 row items-center q-mb-sm">
           <q-icon name="inventory_2" color="primary" size="22px" class="q-mr-sm" />
           LANGKAH 2 — DATA BARANG & ALAMAT TERSTRUKTUR
         </div>
 
-        <div v-if="!paket" class="text-caption text-grey-6 q-pa-sm bg-amber-1 rounded-borders">
-          <q-icon name="lock" size="16px" class="q-mr-xs" />
-          Tekan tombol Generate Barcode di atas terlebih dahulu untuk membuka formulir ini.
-        </div>
-
-        <div v-else-if="saved" class="text-center q-pa-md bg-green-1 rounded-borders">
+        <div v-if="saved" class="text-center q-pa-md bg-green-1 rounded-borders">
           <q-icon name="check_circle" color="positive" size="42px" />
           <div class="text-subtitle1 text-weight-bold text-slate-900 q-mt-xs">
-            Paket {{ paket.nomor_resi }} TERDAFTAR!
+            Paket {{ paket?.nomor_resi }} TERDAFTAR!
           </div>
           <div class="text-caption text-grey-7 q-mb-md">
             Petugas cabang kini dapat memindai resi ini. Cetak label ekspedisi profesional berukuran 10 × 15 cm.
@@ -512,40 +507,84 @@ watch(
   }
 )
 
-const handleGenerate = async (targetFormat = selectedFormat.value) => {
-  generating.value = true
-  const result = await paketStore.createResi(authStore.currentUser, targetFormat || 'CODE_128')
-  generating.value = false
+const UNASSIGNED_DRAFT_KEY = 'draft_paket_unassigned_form'
 
-  if (result.success) {
-    saved.value = false
-    paket.value = result.paket
-
-    if (authStore.currentUser?.name && !form.pengirim_nama) {
-      form.pengirim_nama = authStore.currentUser.name
-    }
-
+/**
+ * Handle penekanan tombol "GENERATE BARCODE"
+ * BARU PADA EVENT INI nomor resi diminta ke backend.
+ */
+const handleGenerate = async () => {
+  if (!selectedFormat.value) {
     $q.notify({
-      type: 'positive',
-      icon: 'verified',
-      message: `Nomor resi ${result.paket.nomor_resi} berhasil dibuat (Status: DRAFT).`,
-      position: 'top',
-      timeout: 2200
-    })
-
-    await nextTick()
-    await renderCurrentBarcode()
-  } else {
-    $q.notify({
-      type: 'negative',
-      icon: 'error',
-      message: result.message || 'Gagal membuat nomor resi.',
+      type: 'warning',
+      icon: 'warning',
+      message: 'Silakan pilih format barcode terlebih dahulu.',
       position: 'top',
       timeout: 2500
     })
+    return
+  }
+
+  // Idempotensi: Jika nomor resi sudah ada untuk paket saat ini, jangan generate resi baru ke backend!
+  if (paket.value?.nomor_resi) {
+    await renderCurrentBarcode()
+    $q.notify({
+      type: 'info',
+      icon: 'refresh',
+      message: `Barcode diperbarui untuk nomor resi ${paket.value.nomor_resi} (Format: ${selectedFormat.value}).`,
+      position: 'top',
+      timeout: 2000
+    })
+    return
+  }
+
+  generating.value = true
+  try {
+    const result = await paketStore.createResi(authStore.currentUser, selectedFormat.value)
+    if (result.success && result.paket) {
+      saved.value = false
+      paket.value = result.paket
+
+      if (authStore.currentUser?.name && !form.pengirim_nama) {
+        form.pengirim_nama = authStore.currentUser.name
+      }
+
+      $q.notify({
+        type: 'positive',
+        icon: 'verified',
+        message: `Nomor resi ${result.paket.nomor_resi} berhasil dibuat!`,
+        position: 'top',
+        timeout: 2200
+      })
+
+      await nextTick()
+      await renderCurrentBarcode()
+    } else {
+      $q.notify({
+        type: 'negative',
+        icon: 'error',
+        message: result.message || 'Gagal membuat nomor resi.',
+        position: 'top',
+        timeout: 2500
+      })
+    }
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      icon: 'error',
+      message: err.message || 'Terjadi kesalahan sistem saat membuat nomor resi.',
+      position: 'top',
+      timeout: 2500
+    })
+  } finally {
+    generating.value = false
   }
 }
 
+/**
+ * Handle perubahan format barcode di dropdown.
+ * PENTING: Perubahan format barcode TIDAK PERNAH membuat nomor resi ataupun draft baru di backend!
+ */
 const handleFormatChange = async (newFormat) => {
   if (newFormat === 'UPC_EAN_EXTENSION') {
     $q.notify({
@@ -567,38 +606,9 @@ const handleFormatChange = async (newFormat) => {
     return
   }
 
-  const currentResi = (paket.value?.nomor_resi || '').trim()
-
-  const isNumericFormat = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'ITF', 'CODABAR', 'RSS_14', 'UPC_EAN_EXTENSION'].includes(newFormat)
-  const isCurrentlyNumeric = /^\d+$/.test(currentResi)
-
-  let needsNewResi = false
-  if (isNumericFormat && !isCurrentlyNumeric) {
-    needsNewResi = true
-  } else if (!isNumericFormat && isCurrentlyNumeric) {
-    needsNewResi = true
-  } else if (newFormat === 'EAN_13' && currentResi.length !== 13) {
-    needsNewResi = true
-  } else if (newFormat === 'EAN_8' && currentResi.length !== 8) {
-    needsNewResi = true
-  } else if (newFormat === 'UPC_A' && currentResi.length !== 12) {
-    needsNewResi = true
-  } else if (newFormat === 'UPC_E' && currentResi.length !== 8) {
-    needsNewResi = true
-  } else if (newFormat === 'UPC_EAN_EXTENSION' && currentResi.length !== 5) {
-    needsNewResi = true
-  } else if (newFormat === 'ITF' && currentResi.length !== 12) {
-    needsNewResi = true
-  } else if (newFormat === 'CODABAR' && currentResi.length !== 10) {
-    needsNewResi = true
-  } else if (newFormat === 'RSS_14' && currentResi.length !== 14) {
-    needsNewResi = true
-  }
-
-  if (needsNewResi) {
-    // Generate nomor resi yang sesuai dari backend
-    await handleGenerate(newFormat)
-  } else {
+  // Jika nomor resi SUDAH ada, cukup re-render barcode dengan nomor resi yang sama menggunakan format baru
+  if (paket.value?.nomor_resi) {
+    await nextTick()
     await renderCurrentBarcode()
   }
 }
@@ -613,6 +623,26 @@ const handleSave = async () => {
       timeout: 2500
     })
     return
+  }
+
+  // Jika user langsung simpan sebelum menekan tombol Generate Barcode, terbitkan nomor resi otomatis
+  if (!paket.value?.nomor_resi) {
+    generating.value = true
+    const genRes = await paketStore.createResi(authStore.currentUser, selectedFormat.value)
+    generating.value = false
+    if (!genRes.success || !genRes.paket) {
+      $q.notify({
+        type: 'negative',
+        icon: 'error',
+        message: genRes.message || 'Gagal menerbitkan nomor resi untuk paket ini.',
+        position: 'top',
+        timeout: 2500
+      })
+      return
+    }
+    paket.value = genRes.paket
+    await nextTick()
+    await renderCurrentBarcode()
   }
 
   saving.value = true
@@ -664,6 +694,7 @@ const handleSave = async () => {
 
   if (result.success) {
     localStorage.removeItem(`draft_paket_${paket.value.nomor_resi}`)
+    localStorage.removeItem(UNASSIGNED_DRAFT_KEY)
     localStorage.setItem(`paket_barcode_format_${paket.value.nomor_resi.toUpperCase()}`, selectedFormat.value)
     paket.value = { ...payload, ...(result.paket || {}), barcode_format: selectedFormat.value, pengirim_detail, penerima_detail, status: 'TERDAFTAR' }
     saved.value = true
@@ -695,28 +726,40 @@ const resetForm = () => {
   selectedFormat.value = null
   barcodeError.value = ''
   currentPayload.value = null
+  localStorage.removeItem(UNASSIGNED_DRAFT_KEY)
   Object.assign(form, emptyForm())
+  if (svgRef.value) svgRef.value.innerHTML = ''
 }
 
 const saveDraftToStorage = () => {
-  if (paket.value?.nomor_resi && !saved.value) {
+  if (saved.value) return
+
+  if (paket.value?.nomor_resi) {
     localStorage.setItem(`draft_paket_${paket.value.nomor_resi}`, JSON.stringify(form))
     if (selectedFormat.value) {
       localStorage.setItem(`paket_barcode_format_${paket.value.nomor_resi.toUpperCase()}`, selectedFormat.value)
+    }
+  } else {
+    // Simpan isian form lokal jika user belum menekan Generate Barcode (TANPA nomor resi DB)
+    const hasData = form.nama_barang || form.pengirim_nama || form.penerima_nama || form.pengirim_alamat || form.penerima_alamat
+    if (hasData) {
+      localStorage.setItem(UNASSIGNED_DRAFT_KEY, JSON.stringify({ form, selectedFormat: selectedFormat.value }))
     }
   }
 }
 
 onBeforeRouteLeave((to, from, next) => {
-  if (paket.value?.nomor_resi && !saved.value) {
+  if (!saved.value) {
     saveDraftToStorage()
-    $q.notify({
-      type: 'info',
-      icon: 'bookmark',
-      message: `Draft resi ${paket.value.nomor_resi} telah disimpan`,
-      position: 'bottom-right',
-      timeout: 2000
-    })
+    if (paket.value?.nomor_resi) {
+      $q.notify({
+        type: 'info',
+        icon: 'bookmark',
+        message: `Draft resi ${paket.value.nomor_resi} telah disimpan`,
+        position: 'bottom-right',
+        timeout: 2000
+      })
+    }
   }
   next()
 })
@@ -725,11 +768,19 @@ onBeforeUnmount(() => {
   saveDraftToStorage()
 })
 
-// Lanjutkan draft dari halaman "Paket Saya" (?resi=XXXX)
+// Lanjutkan draft dari halaman "Paket Saya" (?resi=XXXX) atau pulihkan form yang belum di-generate resi
 onMounted(async () => {
   const resi = (route.query.resi || '').toString().toUpperCase()
   if (!resi) {
-    // Tidak generate resi otomatis. Menunggu user memilih format & menekan tombol Generate Barcode.
+    // Pulihkan form draft lokal jika ada (tanpa resi, tidak menyentuh database)
+    const localUnassigned = localStorage.getItem(UNASSIGNED_DRAFT_KEY)
+    if (localUnassigned) {
+      try {
+        const parsed = JSON.parse(localUnassigned)
+        if (parsed.form) Object.assign(form, parsed.form)
+        if (parsed.selectedFormat) selectedFormat.value = parsed.selectedFormat
+      } catch (_) {}
+    }
     return
   }
 

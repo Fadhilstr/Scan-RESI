@@ -1,40 +1,14 @@
 <template>
   <div class="login-shell flex flex-center q-pa-md">
-    <div class="row login-card shadow-6">
-      <!-- Brand Panel (desktop only) -->
-      <div class="col gt-sm bg-wahana-gradient text-white brand-panel">
-        <div class="brand-inner column justify-between full-height">
-          <div class="row items-center q-gutter-x-sm">
-            <q-avatar size="38px" class="bg-wahana-yellow" style="border-radius: 10px;">
-              <q-icon name="qr_code_scanner" size="22px" class="text-wahana-navy" />
-            </q-avatar>
-            <span class="text-subtitle1 text-weight-bold">Dijak Express</span>
-          </div>
-
-          <div>
-            <div class="text-h4 text-weight-bold" style="letter-spacing: -0.02em; line-height: 1.25;">
-              Platform Barcode<br>Logistik
-            </div>
-            <p class="text-body2 text-blue-grey-3 q-mt-md" style="max-width: 320px;">
-              Generate dan scan barcode resi dengan verifikasi OTP terenkripsi
-            </p>
-          </div>
-
-          <div class="text-caption text-blue-grey-4">
-            &copy; 2026 Dijak Express &middot; Seluruh aktivitas terekam pada audit log
-          </div>
-        </div>
-      </div>
-
+    <div class="login-card shadow-6">
       <!-- Form Panel -->
-      <div class="col-12 col-sm bg-white form-panel">
+      <div class="bg-white form-panel">
         <div class="form-inner">
-          <div class="lt-md text-center q-mb-lg">
-            <q-avatar size="48px" class="bg-wahana-navy text-amber-4 q-mb-sm" style="border-radius: 12px;">
-              <q-icon name="local_shipping" size="28px" />
+          <div class="text-center q-mb-lg">
+            <q-avatar size="48px" class="bg-wahana-yellow text-wahana-navy q-mb-sm shadow-1" style="border-radius: 12px;">
+              <q-icon name="qr_code_scanner" size="28px" />
             </q-avatar>
-            <div class="text-h6 text-weight-bold">Dijak Express</div>
-            <div class="text-caption text-grey-6">Platform Barcode Logistik</div>
+            <div class="text-h6 text-weight-bold text-wahana-navy">Dijak Express</div>
           </div>
 
           <!-- STEP 1: LOGIN KREDENSIAL -->
@@ -84,30 +58,6 @@
                 label="Masuk"
               />
             </q-form>
-
-            <q-separator class="q-my-lg" />
-
-            <div class="overline-label text-center q-mb-sm">Quick Login Demo</div>
-
-            <div class="row q-col-gutter-sm">
-              <div v-for="account in quickAccounts" :key="account.userId" class="col-6">
-                <q-btn
-                  outline
-                  no-caps
-                  dense
-                  color="primary"
-                  :icon="account.icon"
-                  :label="account.label"
-                  align="left"
-                  class="full-width quick-btn"
-                  @click="quickLogin(account.userId)"
-                />
-              </div>
-            </div>
-
-            <div class="text-caption text-grey-5 text-center q-mt-lg">
-              Prototype internal &middot; bukan untuk produksi
-            </div>
           </div>
 
           <!-- STEP 2: VERIFIKASI OTP 6-DIGIT LOGIN -->
@@ -386,9 +336,6 @@ const confirmPassword = ref('')
 let expireInterval = null
 let cooldownInterval = null
 
-const quickAccounts = [
-  { userId: 'USR-ADMIN-001', label: 'Admin (Master)', icon: 'admin_panel_settings' }
-]
 
 const startTimers = () => {
   stopTimers()
@@ -432,10 +379,6 @@ const handleLogin = async () => {
   processLoginResult(res)
 }
 
-const quickLogin = async (userId) => {
-  const res = await authStore.quickLogin(userId)
-  processLoginResult(res)
-}
 
 const processLoginResult = (res) => {
   if (res.success) {
@@ -670,7 +613,7 @@ const redirectByRole = (role) => {
 
 .login-card {
   width: 100%;
-  max-width: 880px;
+  max-width: 440px;
   margin: auto;
   border-radius: 18px;
   overflow: hidden;
@@ -678,27 +621,15 @@ const redirectByRole = (role) => {
   border: 1px solid var(--dj-border);
 }
 
-.brand-panel {
-  min-height: 560px;
-}
-
-.brand-inner {
-  padding: 32px;
-}
-
 .form-panel {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
 }
 
 .form-inner {
   width: 100%;
-  max-width: 380px;
-  padding: 40px 36px;
-}
-
-.quick-btn {
-  border-radius: 10px;
+  padding: 40px 32px;
 }
 </style>

@@ -25,6 +25,8 @@ sub send_otp_email {
     my $port = int($cfg->{smtp_port} // 587);
     my $user = $cfg->{smtp_user} // '';
     my $pass = $cfg->{smtp_pass} // '';
+    $user =~ s/^\s+|\s+$//g;
+    $pass =~ s/\s+//g;
 
     if (!$user || !$pass || $pass eq 'ganti-dengan-app-password') {
         warn "[MAIL SIMULATION] SMTP credentials belum diisi di .env ($user / $pass). Simulasi pengiriman OTP ke $to_email sukses.\n";
@@ -154,20 +156,29 @@ END_HTML
 
     warn "[MAIL DEBUG] Mencoba mengirim email OTP HTML ($context) ke $to_email via $host:$port ($user)...\n";
 
-    my $smtp = Net::SMTP->new(
-        $host,
+    my $sec_mode = lc($cfg->{smtp_secure} // '');
+    my $is_direct_ssl = ($port == 465 || $sec_mode eq 'ssl' || $sec_mode eq 'true');
+
+    my %smtp_opts = (
         Port    => $port,
-        Timeout => 15,
+        Timeout => 20,
         Debug   => 0,
     );
+
+    if ($is_direct_ssl) {
+        $smtp_opts{SSL} = 1;
+        $smtp_opts{SSL_verify_mode} = 0;
+    }
+
+    my $smtp = Net::SMTP->new($host, %smtp_opts);
 
     unless ($smtp) {
         warn "[MAIL ERROR] Gagal koneksi ke server SMTP $host:$port ($!)\n";
         return (0, "Gagal terhubung ke server email SMTP.");
     }
 
-    # Jalankan STARTTLS jika port 587
-    if ($port == 587 || ($cfg->{smtp_secure} && $cfg->{smtp_secure} ne 'false')) {
+    # Jalankan STARTTLS hanya jika BUKAN direct SSL dan port 587 atau mode starttls
+    if (!$is_direct_ssl && ($port == 587 || $sec_mode eq 'starttls')) {
         if ($smtp->can('starttls')) {
             eval {
                 $smtp->starttls(SSL_verify_mode => 0) or die "STARTTLS failed";
