@@ -25,3 +25,11 @@ scripts/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# User Account Seeders (kredensial akun)
+backend/db/seed_users.sql
+backend/db/seeder_users.sql
+backend/db/seed*.sql
+backend/db/seeder*.sql
+backend/seed_users.sh
+backend/seed_users.pl
