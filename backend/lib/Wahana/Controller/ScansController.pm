@@ -172,6 +172,20 @@ sub create {
                 }
             }
         }
+
+        # Fallback: lookup via barcode_value (untuk format mapped seperti CODABAR, ITF, EAN_8, UPC_A, UPC_E, RSS_14)
+        # Diperlukan karena localStorage mapping hanya ada di browser customer, bukan di browser petugas.
+        if (!$paket) {
+            my $row_by_bv = $dbh->selectrow_hashref(
+                Wahana::Query->get('paket_lookup_by_barcode_value'), undef, $resi
+            );
+            if ($row_by_bv) {
+                $paket = $dbh->selectrow_hashref(
+                    Wahana::Query->get('scans_check_paket_registered'), undef, $row_by_bv->{nomor_resi}
+                );
+                $resi = $row_by_bv->{nomor_resi} if $paket;
+            }
+        }
     }
 
     unless ($paket) {

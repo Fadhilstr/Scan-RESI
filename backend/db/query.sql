@@ -180,8 +180,8 @@ UPDATE paket SET status = 'REPLACED' WHERE (draft_id = ? OR nomor_resi = ?) AND 
 UPDATE paket SET status = 'VOID' WHERE draft_id = ? AND status = 'REPLACED';
 
 -- name: paket_insert_draft
-INSERT INTO paket (nomor_resi, status, created_by, draft_id, barcode_format, nama_barang, pengirim, alamat_pengirim, telepon_pengirim, penerima, alamat_tujuan, telepon_penerima, berat_kg, jenis_layanan, created_at)
-VALUES (?, 'DRAFT', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW());
+INSERT INTO paket (nomor_resi, status, created_by, draft_id, barcode_format, barcode_value, nama_barang, pengirim, alamat_pengirim, telepon_pengirim, penerima, alamat_tujuan, telepon_penerima, berat_kg, jenis_layanan, created_at)
+VALUES (?, 'DRAFT', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW());
 
 -- name: paket_get_detail
 SELECT p.*, u.name AS creator_name
@@ -194,6 +194,11 @@ SELECT * FROM paket WHERE nomor_resi = ?;
 -- name: paket_list_base
 SELECT p.*, u.name AS creator_name
   FROM paket p LEFT JOIN users u ON u.id = p.created_by;
+
+-- name: paket_lookup_by_barcode_value
+SELECT p.*, u.name AS creator_name
+  FROM paket p LEFT JOIN users u ON u.id = p.created_by
+ WHERE p.barcode_value = ? LIMIT 1;
 
 -- name: paket_update_data
 UPDATE paket

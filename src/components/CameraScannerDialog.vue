@@ -108,6 +108,7 @@ const ALL_SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.PDF_417,
   Html5QrcodeSupportedFormats.RSS_14,
   Html5QrcodeSupportedFormats.RSS_EXPANDED,
+  Html5QrcodeSupportedFormats.UPC_A,
   Html5QrcodeSupportedFormats.UPC_E,
   Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION
 ]
