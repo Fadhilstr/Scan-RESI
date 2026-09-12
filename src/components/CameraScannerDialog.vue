@@ -91,6 +91,10 @@ import { useQuasar } from 'quasar'
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
 import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library'
 import { normalizeScannedBarcode } from '../utils/barcodeGenerator'
+import { applyZxingRssExpandedPatch } from '../utils/zxingRssExpandedPatcher'
+
+// Terapkan perbaikan translasi Java->JS ZXing untuk RSS Expanded secara transparan
+applyZxingRssExpandedPatch()
 
 const $q = useQuasar()
 
@@ -159,6 +163,7 @@ const stopZxing = () => {
 const startZxingFallback = (videoElement) => {
   if (!videoElement || zxingReader) return
   try {
+    applyZxingRssExpandedPatch()
     const hints = new Map()
     hints.set(DecodeHintType.TRY_HARDER, true)
     hints.set(DecodeHintType.POSSIBLE_FORMATS, [

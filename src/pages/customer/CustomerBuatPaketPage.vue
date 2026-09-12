@@ -43,7 +43,7 @@
                 </div>
                 <q-select
                   v-model="selectedFormat"
-                  :options="BARCODE_FORMAT_OPTIONS"
+                  :options="customerBarcodeFormatOptions"
                   emit-value
                   map-options
                   outlined
@@ -409,6 +409,10 @@ const svgRef = ref(null)
 const showLabel = ref(false)
 
 const selectedFormat = ref(null)
+// Sembunyikan MAXICODE dari daftar pilihan generate barcode customer, tanpa menghapusnya dari scanner/backend
+const customerBarcodeFormatOptions = computed(() =>
+  BARCODE_FORMAT_OPTIONS.filter((opt) => opt.value !== 'MAXICODE')
+)
 const generatingBarcode = ref(false)
 const barcodeError = ref('')
 const currentPayload = ref(null)

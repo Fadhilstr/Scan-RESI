@@ -13,6 +13,7 @@
     "build": "quasar build",
     "build:pwa": "quasar build -m pwa",
     "test:api": "node tests/api_automated_tests.js",
+    "test:scanner": "node tests/test_rss_expanded_patch.js",
     "postinstall": "quasar prepare --silent"
   },
   "dependencies": {
