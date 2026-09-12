@@ -46,8 +46,10 @@
             </div>
           </div>
 
-          <!-- Garis bantu scan -->
-          <div v-if="status === 'scanning'" class="scan-guide absolute-center"></div>
+          <!-- Garis bantu scan & frame putih area scanning -->
+          <div v-if="status === 'scanning'" class="scan-frame-box">
+            <div class="scan-line"></div>
+          </div>
         </div>
 
         <div class="text-caption text-grey-7 text-center q-mt-sm row items-center justify-center">
@@ -315,8 +317,8 @@ const startCamera = async () => {
           fps: 15,
           qrbox: (viewfinderWidth, viewfinderHeight) => {
             return {
-              width: Math.floor(Math.min(viewfinderWidth * 0.9, 520)),
-              height: Math.floor(Math.min(viewfinderHeight * 0.8, 340))
+              width: Math.floor(Math.min(viewfinderWidth * 0.84, 360)),
+              height: Math.floor(Math.min(viewfinderHeight * 0.65, 210))
             }
           }
         },
@@ -462,6 +464,14 @@ onBeforeUnmount(stopCamera)
 #camera-scanner-region video {
   border-radius: 12px;
   object-fit: cover;
+  width: 100% !important;
+}
+
+/* Sembunyikan SVG/Shaded region bawaan html5-qrcode agar tidak menumpuk */
+:deep(#camera-scanner-region__scan_region svg),
+:deep(#camera-scanner-region__scan_region img),
+:deep(#camera-scanner-region__shaded_region) {
+  display: none !important;
 }
 
 /* Panel hasil scan — tonal sesuai tingkat keberhasilan */
@@ -503,15 +513,54 @@ onBeforeUnmount(stopCamera)
 .history-chip--warning { background-color: #fee2e2; color: #b91c1c; }
 .history-chip--danger  { background-color: #fee2e2; color: #b91c1c; }
 
-.scan-guide {
-  width: 78%;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, #ffc700, transparent);
-  animation: scanline 1.6s ease-in-out infinite alternate;
+/* Box Frame Putih Area Scanning (Reference Parent untuk Scan Line) */
+.scan-frame-box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(84%, 360px);
+  height: min(65%, 210px);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
   pointer-events: none;
+  z-index: 5;
 }
-@keyframes scanline {
-  from { transform: translateY(-90px); opacity: 0.4; }
-  to   { transform: translateY(90px);  opacity: 1; }
+
+/* Garis Laser Scan Line Kuning */
+.scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    #ffc700 15%,
+    #ffffff 50%,
+    #ffc700 85%,
+    transparent 100%
+  );
+  box-shadow: 0 0 8px #ffc700, 0 0 12px #ffc700;
+  animation: scan-laser 2s ease-in-out infinite alternate;
+}
+
+@keyframes scan-laser {
+  0% {
+    top: 0%;
+    transform: translateY(0);
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    transform: translateY(-100%);
+    opacity: 0.75;
+  }
 }
 </style>
