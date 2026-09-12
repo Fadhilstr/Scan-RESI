@@ -52,7 +52,8 @@
 
         <div class="text-caption text-grey-7 text-center q-mt-sm row items-center justify-center">
           <q-icon name="info" size="16px" color="grey-6" class="q-mr-xs" />
-          <span>Arahkan barcode ke kamera — deteksi otomatis dengan jeda 1,2 detik</span>
+          <span v-if="isProcessing" class="text-weight-bold text-amber-9">Memproses data scan...</span>
+          <span v-else>Arahkan barcode ke kamera — deteksi otomatis siap membaca</span>
         </div>
 
         <!-- Hasil scan TERAKHIR sesungguhnya (tervalidasi backend) -->
@@ -217,6 +218,9 @@ const errorMessage = ref('')
 const technicalError = ref('')
 const latest = ref(null)
 const history = ref([])
+const isProcessing = ref(false)
+let feedbackTimer = null
+let lockFallbackTimer = null
 
 // Ikon sesuai tingkat hasil terakhir
 const levelIcon = computed(() => {
@@ -232,8 +236,19 @@ watch(
   () => props.feedback,
   (fb) => {
     if (!fb) return
+    if (lockFallbackTimer) {
+      clearTimeout(lockFallbackTimer)
+      lockFallbackTimer = null
+    }
+
     latest.value = fb
-    history.value = [fb, ...history.value].slice(0, 3)
+    history.value = [fb, ...history.value.filter((h) => h.seq !== fb.seq)].slice(0, 3)
+
+    if (feedbackTimer) clearTimeout(feedbackTimer)
+    // Tampilkan alert warna (Hijau/Merah) selama 1.8 detik, kemudian unlock kamera
+    feedbackTimer = setTimeout(() => {
+      isProcessing.value = false
+    }, 1800)
   }
 )
 
@@ -243,6 +258,9 @@ watch(
 const onOpen = () => {
   latest.value = null
   history.value = []
+  isProcessing.value = false
+  if (feedbackTimer) clearTimeout(feedbackTimer)
+  if (lockFallbackTimer) clearTimeout(lockFallbackTimer)
   startCamera()
 }
 
@@ -335,6 +353,8 @@ const startCamera = async () => {
 }
 
 const stopCamera = () => {
+  if (feedbackTimer) clearTimeout(feedbackTimer)
+  if (lockFallbackTimer) clearTimeout(lockFallbackTimer)
   stopZxing()
   if (!scanner) return
   try {
@@ -347,6 +367,7 @@ const stopCamera = () => {
     /* sudah terhenti */
   }
   status.value = 'idle'
+  isProcessing.value = false
 }
 
 const cleanupScanner = () => {
@@ -366,14 +387,15 @@ const closeDialog = () => {
 }
 
 // ---------------------------------------------------------------------
-// Deteksi Otomatis Cepat dengan Cooldown 1.2 Detik
+// Deteksi Otomatis Cepat dengan Lock isProcessing & Continuous Mode
 // ---------------------------------------------------------------------
 const onScanSuccess = (decodedText, decodedResult) => {
+  if (isProcessing.value) return
   const now = Date.now()
   if (now - lastEmitAt < COOLDOWN_MS) return
 
   const raw = String(decodedText || '').trim()
-  if (!raw || raw.length < 4) return // Abaikan noise parsial 1-3 karakter (misal glitch '1' atau '-')
+  if (!raw || raw.length < 4) return // Abaikan noise parsial 1-3 karakter
 
   const formatName =
     decodedResult?.result?.format?.formatName ||
@@ -385,23 +407,20 @@ const onScanSuccess = (decodedText, decodedResult) => {
   if (!resi || resi.length < 4) return // Pastikan hasil normalisasi memiliki panjang nomor resi yang valid
 
   lastEmitAt = now
+  isProcessing.value = true
 
   playBeep()
   navigator.vibrate?.(80)
 
-  // Notifikasi submit bahwa barcode berhasil dipindai
-  $q.notify({
-    type: 'positive',
-    icon: 'check_circle',
-    message: `Barcode ${resi} berhasil dipindai & disubmit`,
-    position: 'top',
-    timeout: 1800
-  })
-
-  // Tutup kamera & dialog, teruskan ke parent
-  stopCamera()
-  show.value = false
+  // Emisikan hasil deteksi ke parent (BarcodeInput -> PetugasScanPage)
+  // Kamera TETAP AKTIF untuk continuous scanning tanpa perlu tombol "Mulai Kamera" lagi
   emit('detected', resi, formatName)
+
+  // Fallback timer jika feedback dari backend/store terhambat
+  if (lockFallbackTimer) clearTimeout(lockFallbackTimer)
+  lockFallbackTimer = setTimeout(() => {
+    isProcessing.value = false
+  }, 5000)
 }
 
 // Bunyi "beep" singkat tanpa file audio (WebAudio API)
@@ -453,19 +472,19 @@ onBeforeUnmount(stopCamera)
 .scan-result--success {
   background-color: #dcfce7;
   color: #15803d;
-  border-color: #bbf7d0;
+  border-color: #22c55e;
 }
 
 .scan-result--warning {
-  background-color: #fef3c7;
-  color: #b45309;
-  border-color: #fde68a;
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-color: #ef4444;
 }
 
 .scan-result--danger {
   background-color: #fee2e2;
   color: #b91c1c;
-  border-color: #fecaca;
+  border-color: #ef4444;
 }
 
 .history-chip {
@@ -476,7 +495,7 @@ onBeforeUnmount(stopCamera)
 }
 
 .history-chip--success { background-color: #dcfce7; color: #15803d; }
-.history-chip--warning { background-color: #fef3c7; color: #b45309; }
+.history-chip--warning { background-color: #fee2e2; color: #b91c1c; }
 .history-chip--danger  { background-color: #fee2e2; color: #b91c1c; }
 
 .scan-guide {

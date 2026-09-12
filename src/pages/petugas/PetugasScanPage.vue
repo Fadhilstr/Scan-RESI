@@ -337,26 +337,27 @@ const handleBarcodeScan = async (resiInput) => {
     lastPaket.value = lookup.success ? lookup.paket : null
 
     if (result.success) {
-      setFeedback(cleanResi, 'success', 'MASUK', result.message)
+      const msg = result.message || `Scan berhasil, resi ${cleanResi} sudah terdaftar.`
+      setFeedback(cleanResi, 'success', 'BERHASIL', msg)
       $q.notify({
         type: 'positive',
         icon: 'check_circle',
-        message: result.message,
+        message: msg,
         position: 'top',
-        timeout: 1800
+        timeout: 2000
       })
       return
     }
 
     if (result.reason === 'DUPLICATE') {
-      const dupMsg = result.message || `Resi ${cleanResi} sudah pernah discan dan tidak ditambahkan.`
-      setFeedback(cleanResi, 'warning', 'DUPLIKAT', dupMsg)
+      const dupMsg = result.message || `Resi ${cleanResi} sudah terdaftar.`
+      setFeedback(cleanResi, 'danger', 'DUPLIKAT', dupMsg)
       $q.notify({
-        type: 'warning',
+        type: 'negative',
         icon: 'warning',
         message: dupMsg,
         position: 'top',
-        timeout: 3500
+        timeout: 3000
       })
       return
     }
@@ -372,11 +373,11 @@ const handleBarcodeScan = async (resiInput) => {
 
       setFeedback(cleanResi, 'danger', 'MASIH DRAFT', msg, detail)
       $q.notify({
-        type: 'warning',
+        type: 'negative',
         icon: 'gpp_bad',
         message: detail ? `${msg} (${detail})` : msg,
         position: 'top',
-        timeout: 4500
+        timeout: 4000
       })
       return
     }
@@ -384,11 +385,11 @@ const handleBarcodeScan = async (resiInput) => {
     if (result.reason === 'UNKNOWN_RESI') {
       setFeedback(cleanResi, 'danger', 'TAK DIKENAL', result.message)
       $q.notify({
-        type: 'warning',
+        type: 'negative',
         icon: 'gpp_bad',
         message: result.message,
         position: 'top',
-        timeout: 3500
+        timeout: 3000
       })
       return
     }

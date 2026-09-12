@@ -125,7 +125,6 @@ const handleScan = () => {
 
 // Hasil deteksi kamera → alur scan yang sama dengan input manual (FR-3)
 const handleCameraDetected = (val, format = null) => {
-  showCamera.value = false
   submitValue(val, format)
 }
 
