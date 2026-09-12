@@ -239,56 +239,63 @@ sub create {
             undef, $resi, $task_id
         );
 
-        # Generate scan_id unik via UUID untuk mencegah race condition (BUG-004)
-        # Format: SCN-<uuid_hex_28> (total 32 karakter, muat di VARCHAR(32))
-        my $scan_id = $dbh->selectrow_array("SELECT CONCAT('SCN-', SUBSTRING(REPLACE(UUID(), '-', ''), 1, 28))");
-        $scan_id ||= sprintf('SCN-%s', substr(join('', map { sprintf("%02x", rand(256)) } 1..14), 0, 28));
+        if ($dup) {
+            record_audit(
+                user_id    => $user_id,
+                action     => 'SCAN_DUPLICATE',
+                details    => "Resi: $resi, Status: DUPLICATE",
+                ip_address => $req->{ip},
+            );
 
-        my $status = $dup ? 'DUPLICATE' : 'SUCCESS';
+            $dbh->commit();
 
-        $dbh->do(
-            Wahana::Query->get('scans_insert'),
-            undef,
-            $scan_id, $resi, $user_id, $task_id,
-            trim($body->{lokasi}      // '') || $task->{lokasi} || 'CIPUTAT',
-            $status,
-            trim($body->{device_id}   // '') || 'SCAN-DEVICE-01',
-            trim($body->{jenis_scan}  // '') || 'INBOUND',
-        ) or die "insert gagal: " . ($dbh->errstr // '');
-
-        # Progress hanya bertambah untuk scan SUCCESS (FR-4.2)
-        $dbh->do(Wahana::Query->get('tasks_increment_progress'), undef, 1, $task_id)
-            unless $dup;
-
-        $dbh->commit();
-
-        my $row = $dbh->selectrow_hashref(
-            Wahana::Query->get('scans_get_by_id'), undef, $scan_id
-        );
-        my $scan_obj = map_scan($row);
-
-        record_audit(
-            user_id    => $user_id,
-            action     => $dup ? 'SCAN_DUPLICATE' : 'SCAN_EVENT_CREATED',
-            details    => "Resi: $resi, Status: $status",
-            ip_address => $req->{ip},
-        );
-
-        $result = $dup
-            ? {
+            $result = {
                 success     => \0,
                 reason      => 'DUPLICATE',
                 status_scan => 'DUPLICATE',
                 message     => "Nomor resi $resi sudah pernah discan.",
-                scan        => $scan_obj,
-            }
-            : {
+            };
+        } else {
+            # Generate scan_id unik via UUID untuk mencegah race condition (BUG-004)
+            # Format: SCN-<uuid_hex_28> (total 32 karakter, muat di VARCHAR(32))
+            my $scan_id = $dbh->selectrow_array("SELECT CONCAT('SCN-', SUBSTRING(REPLACE(UUID(), '-', ''), 1, 28))");
+            $scan_id ||= sprintf('SCN-%s', substr(join('', map { sprintf("%02x", rand(256)) } 1..14), 0, 28));
+
+            $dbh->do(
+                Wahana::Query->get('scans_insert'),
+                undef,
+                $scan_id, $resi, $user_id, $task_id,
+                trim($body->{lokasi}      // '') || $task->{lokasi} || 'CIPUTAT',
+                'SUCCESS',
+                trim($body->{device_id}   // '') || 'SCAN-DEVICE-01',
+                trim($body->{jenis_scan}  // '') || 'INBOUND',
+            ) or die "insert gagal: " . ($dbh->errstr // '');
+
+            # Progress hanya bertambah untuk scan SUCCESS (FR-4.2)
+            $dbh->do(Wahana::Query->get('tasks_increment_progress'), undef, 1, $task_id);
+
+            record_audit(
+                user_id    => $user_id,
+                action     => 'SCAN_EVENT_CREATED',
+                details    => "Resi: $resi, Status: SUCCESS",
+                ip_address => $req->{ip},
+            );
+
+            $dbh->commit();
+
+            my $row = $dbh->selectrow_hashref(
+                Wahana::Query->get('scans_get_by_id'), undef, $scan_id
+            );
+            my $scan_obj = map_scan($row);
+
+            $result = {
                 success     => \1,
                 resi        => $resi,
                 status_scan => 'SUCCESS',
                 message     => "Nomor resi $resi berhasil discan.",
                 scan        => $scan_obj,
             };
+        }
 
         1;
     } or do {

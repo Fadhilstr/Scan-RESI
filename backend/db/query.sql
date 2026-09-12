@@ -139,7 +139,7 @@ SELECT s.*, u.name AS user_name
 SELECT COUNT(*) FROM scan_events WHERE user_id = ? AND status_scan = 'SUCCESS';
 
 -- name: scans_stats_duplicate
-SELECT COUNT(*) FROM scan_events WHERE user_id = ? AND status_scan = 'DUPLICATE';
+SELECT COUNT(*) FROM audit_logs WHERE user_id = ? AND action = 'SCAN_DUPLICATE';
 
 -- name: scans_stats_last_scan
 SELECT MAX(waktu_scan) FROM scan_events WHERE user_id = ?;

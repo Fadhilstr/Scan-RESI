@@ -282,6 +282,21 @@ export async function addScan({ resi, currentUser, activeTask, lokasi = 'CIPUTAT
         evt.status_scan === 'SUCCESS'
     )
 
+    if (isDuplicate) {
+      await addAuditLog({
+        user_id: currentUser.id,
+        user_name: currentUser.name,
+        action: 'SCAN_DUPLICATE',
+        details: `Resi: ${sanitizedResi}, Status: DUPLICATE`
+      })
+
+      return {
+        success: false,
+        reason: 'DUPLICATE',
+        message: `Nomor resi ${sanitizedResi} sudah pernah discan.`
+      }
+    }
+
     const newScan = {
       scan_id: `SCN-${String(LOCAL_SCANS.length + 1).padStart(5, '0')}`,
       nomor_resi: sanitizedResi,
@@ -290,7 +305,7 @@ export async function addScan({ resi, currentUser, activeTask, lokasi = 'CIPUTAT
       task_id: activeTask.task_id,
       waktu_scan: nowString(),
       lokasi,
-      status_scan: isDuplicate ? 'DUPLICATE' : 'SUCCESS',
+      status_scan: 'SUCCESS',
       device_id,
       jenis_scan
     }
@@ -300,18 +315,9 @@ export async function addScan({ resi, currentUser, activeTask, lokasi = 'CIPUTAT
     await addAuditLog({
       user_id: currentUser.id,
       user_name: currentUser.name,
-      action: isDuplicate ? 'SCAN_DUPLICATE' : 'SCAN_EVENT_CREATED',
-      details: `Resi: ${sanitizedResi}, Status: ${isDuplicate ? 'DUPLICATE' : 'SUCCESS'}`
+      action: 'SCAN_EVENT_CREATED',
+      details: `Resi: ${sanitizedResi}, Status: SUCCESS`
     })
-
-    if (isDuplicate) {
-      return {
-        success: false,
-        reason: 'DUPLICATE',
-        message: `Nomor resi ${sanitizedResi} sudah pernah discan.`,
-        scan: { ...newScan }
-      }
-    }
 
     // Increment task progress
     await incrementTaskProgress(activeTask.task_id)
