@@ -1,3 +1,4 @@
+
 /**
  * zxingRssExpandedPatcher.js
  * Runtime patcher transparan untuk memperbaiki cacat bawaan translasi Java -> JavaScript
@@ -337,13 +338,13 @@ export function applyZxingRssExpandedPatch() {
             const pFinder = p.getFinderPattern
               ? p.getFinderPattern()
               : p.getFinderPatter
-              ? p.getFinderPatter()
-              : null
+                ? p.getFinderPatter()
+                : null
             const ppFinder = pp.getFinderPattern
               ? pp.getFinderPattern()
               : pp.getFinderPatter
-              ? pp.getFinderPatter()
-              : null
+                ? pp.getFinderPatter()
+                : null
             if (
               p.getLeftChar()?.getValue() === pp.getLeftChar()?.getValue() &&
               p.getRightChar()?.getValue() === pp.getRightChar()?.getValue() &&
@@ -382,13 +383,13 @@ export function applyZxingRssExpandedPatch() {
         const p1Finder = p1.getFinderPattern
           ? p1.getFinderPattern()
           : p1.getFinderPatter
-          ? p1.getFinderPatter()
-          : null
+            ? p1.getFinderPatter()
+            : null
         const p2Finder = p2.getFinderPattern
           ? p2.getFinderPattern()
           : p2.getFinderPatter
-          ? p2.getFinderPatter()
-          : null
+            ? p2.getFinderPatter()
+            : null
         if (p1.getLeftChar()?.getValue() !== p2.getLeftChar()?.getValue()) return false
         if (p1.getRightChar()?.getValue() !== p2.getRightChar()?.getValue()) return false
         if (p1Finder?.getValue() !== p2Finder?.getValue()) return false

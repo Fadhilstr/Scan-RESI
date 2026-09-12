@@ -46,8 +46,12 @@
             </div>
           </div>
 
-          <!-- Frame scanning minimalis dengan corner brackets -->
-          <div v-if="status === 'scanning'" class="scan-frame-box">
+          <!-- HANYA SATU FRAME SCANNING RESMI DENGAN CORNER BRACKETS -->
+          <div
+            v-if="status === 'scanning'"
+            class="scan-frame-box"
+            :class="{ 'scan-frame-box--paused': isPaused || isProcessingScan }"
+          >
             <div class="scan-corner scan-corner--top-left"></div>
             <div class="scan-corner scan-corner--top-right"></div>
             <div class="scan-corner scan-corner--bottom-left"></div>
@@ -55,11 +59,23 @@
           </div>
         </div>
 
+        <!-- Status State Machine Barcode Scanner -->
         <div class="text-caption text-grey-7 text-center q-mt-sm row items-center justify-center">
-          <q-icon name="info" size="15px" color="grey-6" class="q-mr-xs" />
-          <span v-if="isProcessing || scannerState === 'PROCESSING'" class="text-weight-bold text-primary">Memproses data scan...</span>
-          <span v-else-if="scannerState === 'ALERT'" class="text-weight-bold text-amber-9">Menampilkan hasil scan...</span>
-          <span v-else class="text-slate-600">Arahkan barcode ke dalam kotak</span>
+          <template v-if="scannerState === 'PAUSED' || scannerState === 'PROCESSING'">
+            <q-spinner-dots size="16px" color="amber-9" class="q-mr-xs" />
+            <span class="text-weight-bold text-amber-9">PAUSED — Memproses resi {{ lastScannedResi }}...</span>
+          </template>
+          <template v-else-if="scannerState === 'ALERT' || scannerState === 'COOLDOWN'">
+            <q-icon name="check_circle" size="16px" color="positive" class="q-mr-xs" v-if="latest?.level === 'success'" />
+            <q-icon name="warning" size="16px" color="negative" class="q-mr-xs" v-else />
+            <span class="text-weight-bold" :class="latest?.level === 'success' ? 'text-positive' : 'text-negative'">
+              {{ latest ? `${latest.label}: ${latest.message}` : 'Hasil scan diproses' }}
+            </span>
+          </template>
+          <template v-else-if="status === 'scanning'">
+            <q-icon name="center_focus_strong" size="16px" color="primary" class="q-mr-xs" />
+            <span class="text-weight-bold text-slate-700">SCANNING — Arahkan barcode ke dalam kotak</span>
+          </template>
         </div>
 
         <!-- Hasil scan TERAKHIR sesungguhnya (tervalidasi backend) -->
@@ -138,27 +154,27 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'detected'])
 
 const REGION_ID = 'camera-scanner-region'
-const COOLDOWN_MS = 1500 // Anti-duplikasi pembacaan ulang resi yang sama
 
 const show = computed({
   get: () => props.modelValue,
   set: (val) => emit('update:modelValue', val)
 })
 
-// Lifecycle variables
+// Lifecycle & State Machine Variables
 let scanner = null
 let zxingReader = null
 let bindInterval = null
 let audioCtx = null
 
-let lastEmitAt = 0
+let lastScanTimestamp = 0
 let lastScannedResi = ''
-let isZxingPaused = false
 let emptyFramesCount = 0
 
+// State Machine Status: IDLE -> STARTING -> SCANNING -> PAUSED -> PROCESSING -> ALERT -> COOLDOWN -> RESUME -> SCANNING
 const status = ref('idle') // idle | starting | scanning | error
-const scannerState = ref('IDLE') // IDLE | SCANNING | PROCESSING | ALERT | RESETTING
-const isProcessing = ref(false)
+const scannerState = ref('IDLE') // IDLE | SCANNING | PAUSED | PROCESSING | ALERT | COOLDOWN | RESUME
+const isPaused = ref(false)
+const isProcessingScan = ref(false)
 
 const errorMessage = ref('')
 const technicalError = ref('')
@@ -167,7 +183,7 @@ const history = ref([])
 
 let feedbackTimer = null
 let lockFallbackTimer = null
-let resetStateTimer = null
+let cooldownTimer = null
 
 const stopZxing = () => {
   if (bindInterval) {
@@ -187,7 +203,6 @@ const stopZxing = () => {
     }
     zxingReader = null
   }
-  isZxingPaused = false
 }
 
 const startZxingFallback = (videoElement) => {
@@ -234,7 +249,8 @@ const startZxingFallback = (videoElement) => {
 
     zxingReader = new BrowserMultiFormatReader(hints, 250)
     zxingReader.decodeContinuously(videoElement, (result, err) => {
-      if (isZxingPaused || scannerState.value !== 'SCANNING' || isProcessing.value) {
+      // KUNCI STATE MACHINE: Jika scanner dalam kondisi PAUSED atau PROCESSING, abaikan hasil decode!
+      if (isPaused.value || isProcessingScan.value || scannerState.value !== 'SCANNING' || status.value !== 'scanning') {
         return
       }
       if (result && result.getText && result.getText()) {
@@ -261,64 +277,7 @@ const levelIcon = computed(() => {
   }
 })
 
-// Pause proses decode pada kedua engine
-const pauseDecoders = () => {
-  isZxingPaused = true
-  if (scanner) {
-    try {
-      if (typeof scanner.pause === 'function') {
-        scanner.pause(true)
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
-// Resume proses decode pada kedua engine
-const resumeDecoders = () => {
-  if (scanner) {
-    try {
-      if (typeof scanner.resume === 'function') {
-        scanner.resume()
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  isZxingPaused = false
-}
-
-// Reset State & Aktifkan Kamera Kembali Siap Scan
-const resetAndResumeScanner = () => {
-  if (feedbackTimer) {
-    clearTimeout(feedbackTimer)
-    feedbackTimer = null
-  }
-  if (lockFallbackTimer) {
-    clearTimeout(lockFallbackTimer)
-    lockFallbackTimer = null
-  }
-  if (resetStateTimer) {
-    clearTimeout(resetStateTimer)
-    resetStateTimer = null
-  }
-
-  scannerState.value = 'RESETTING'
-  isProcessing.value = false
-
-  // Resume kedua engine scanner
-  resumeDecoders()
-
-  // Berikan sedikit tenggat (150ms) agar buffer frame kamera bersih sebelum siap scan baru
-  resetStateTimer = setTimeout(() => {
-    if (status.value === 'scanning' && show.value) {
-      scannerState.value = 'SCANNING'
-    }
-  }, 150)
-}
-
-// Parent mengirim hasil validasi baru → tampilkan + catat riwayat sesi (hanya resi unik)
+// Parent mengirim hasil validasi baru -> tampilkan alert + catat riwayat -> masuk cooldown -> resume scanner
 watch(
   () => props.feedback,
   (fb) => {
@@ -334,28 +293,59 @@ watch(
     scannerState.value = 'ALERT'
 
     if (feedbackTimer) clearTimeout(feedbackTimer)
-    // Tampilkan alert warna (Hijau/Merah) selama 1.8 detik, kemudian reset state & resume scanner
+    // Tampilkan alert selama 1.2 detik, kemudian masuk fase COOLDOWN dan RESUME
     feedbackTimer = setTimeout(() => {
-      resetAndResumeScanner()
-    }, 1800)
+      resumeScanner()
+    }, 1200)
   }
 )
 
 // ---------------------------------------------------------------------
-// Siklus hidup kamera
+// RESUME SCANNER AUTOMATION
+// ---------------------------------------------------------------------
+const resumeScanner = () => {
+  if (feedbackTimer) { clearTimeout(feedbackTimer); feedbackTimer = null }
+  if (lockFallbackTimer) { clearTimeout(lockFallbackTimer); lockFallbackTimer = null }
+  if (cooldownTimer) { clearTimeout(cooldownTimer); cooldownTimer = null }
+
+  scannerState.value = 'COOLDOWN'
+
+  // Resume native html5-qrcode jika didukung
+  if (scanner && typeof scanner.resume === 'function') {
+    try {
+      scanner.resume()
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Cooldown singkat 300ms untuk memastikan buffer frame kamera bersih
+  cooldownTimer = setTimeout(() => {
+    emptyFramesCount = 0
+    isPaused.value = false
+    isProcessingScan.value = false
+    if (status.value === 'scanning' && show.value) {
+      scannerState.value = 'SCANNING'
+    }
+  }, 300)
+}
+
+// ---------------------------------------------------------------------
+// SIKLUS HIDUP KAMERA & SINGLE INSTANCE GUARANTEE
 // ---------------------------------------------------------------------
 const onOpen = () => {
   latest.value = null
   history.value = []
   lastScannedResi = ''
-  lastEmitAt = 0
+  lastScanTimestamp = 0
   emptyFramesCount = 0
-  isProcessing.value = false
+  isPaused.value = false
+  isProcessingScan.value = false
   scannerState.value = 'IDLE'
 
   if (feedbackTimer) clearTimeout(feedbackTimer)
   if (lockFallbackTimer) clearTimeout(lockFallbackTimer)
-  if (resetStateTimer) clearTimeout(resetStateTimer)
+  if (cooldownTimer) clearTimeout(cooldownTimer)
   startCamera()
 }
 
@@ -367,17 +357,16 @@ const FRIENDLY_ERRORS = {
 }
 
 const startCamera = async () => {
-  // Pastikan instance lama terhenti total
+  // Pastikan instance lama terhenti total (mencegah kamera/overlay ganda)
   cleanupScanner()
 
-  // 1. Konteks tidak aman → getUserMedia pasti diblokir browser
+  // Konteks tidak aman → getUserMedia diblokir browser
   if (!window.isSecureContext) {
     status.value = 'error'
     scannerState.value = 'IDLE'
     errorMessage.value =
       `Halaman ini dibuka via ${location.protocol}//${location.host}. ` +
-      `Kamera hanya aktif di http://localhost atau halaman HTTPS. ` +
-      `Gunakan: https://${location.hostname || 'localhost'}:9000`
+      `Kamera hanya aktif di http://localhost atau halaman HTTPS.`
     technicalError.value = 'insecure context'
     return
   }
@@ -387,7 +376,6 @@ const startCamera = async () => {
   errorMessage.value = ''
   technicalError.value = ''
 
-  // 2. Rantai percobaan: kamera belakang/default → kamera mana pun
   const attempts = [
     { facingMode: 'environment' },
     true
@@ -432,7 +420,8 @@ const startCamera = async () => {
 
       status.value = 'scanning'
       scannerState.value = 'SCANNING'
-      isProcessing.value = false
+      isPaused.value = false
+      isProcessingScan.value = false
       emptyFramesCount = 0
       return
     } catch (err) {
@@ -442,7 +431,6 @@ const startCamera = async () => {
     }
   }
 
-  // 3. Semua percobaan gagal — tampilkan pesan ramah + detail teknis
   console.error('[CAMERA] Semua percobaan kamera gagal:', lastError)
   status.value = 'error'
   scannerState.value = 'IDLE'
@@ -456,7 +444,7 @@ const startCamera = async () => {
 const stopCamera = () => {
   if (feedbackTimer) { clearTimeout(feedbackTimer); feedbackTimer = null }
   if (lockFallbackTimer) { clearTimeout(lockFallbackTimer); lockFallbackTimer = null }
-  if (resetStateTimer) { clearTimeout(resetStateTimer); resetStateTimer = null }
+  if (cooldownTimer) { clearTimeout(cooldownTimer); cooldownTimer = null }
 
   stopZxing()
   if (scanner) {
@@ -472,7 +460,8 @@ const stopCamera = () => {
   }
   status.value = 'idle'
   scannerState.value = 'IDLE'
-  isProcessing.value = false
+  isPaused.value = false
+  isProcessingScan.value = false
   lastScannedResi = ''
   emptyFramesCount = 0
 }
@@ -493,13 +482,12 @@ const closeDialog = () => {
   show.value = false
 }
 
-// Handler frame tanpa barcode: hitung berturut-turut untuk mereset lock resi saat kamera dijauhkan
+// Handler frame tanpa barcode: hitung berturut-turut untuk mereset lock resi saat barcode diangkat/dijauhkan dari kamera
 const onScanFailure = () => {
-  if (scannerState.value === 'SCANNING' && !isProcessing.value) {
+  if (status.value === 'scanning' && !isPaused.value) {
     emptyFramesCount++
-    if (emptyFramesCount >= 15) {
+    if (emptyFramesCount >= 5) {
       if (lastScannedResi) {
-        console.log('[CAMERA] Kamera menjauhi barcode. Reset lock resi sebelumnya.')
         lastScannedResi = ''
       }
     }
@@ -507,19 +495,20 @@ const onScanFailure = () => {
 }
 
 // ---------------------------------------------------------------------
-// Deteksi Otomatis Cepat dengan Strict Lock & Lifecycle Pausing
+// DETEKSI OTOMATIS BERDASARKAN STATE MACHINE & LOCKING RIGID
+// SCANNING -> DETECTED -> PAUSED -> PROCESSING -> RESULT/ALERT -> COOLDOWN -> RESUME -> SCANNING
 // ---------------------------------------------------------------------
 const onScanSuccess = (decodedText, decodedResult) => {
-  // Guard 1: Cek state scanner dan lock processing
-  if (scannerState.value !== 'SCANNING' || isProcessing.value) {
+  // Guard 1: Jika scanner sedang PAUSED / PROCESSING / BUKAN SCANNING, langsung batalkan callback!
+  if (isPaused.value || isProcessingScan.value || scannerState.value !== 'SCANNING' || status.value !== 'scanning') {
     return
   }
 
   const now = Date.now()
 
-  // Guard 2: Sanitasi dasar input decode
+  // Guard 2: Sanitasi input decode
   const raw = String(decodedText || '').trim()
-  if (!raw || raw.length < 4) return // Abaikan noise parsial 1-3 karakter
+  if (!raw || raw.length < 4) return
 
   const formatName =
     decodedResult?.result?.format?.formatName ||
@@ -528,36 +517,44 @@ const onScanSuccess = (decodedText, decodedResult) => {
     null
 
   const resi = normalizeScannedBarcode(raw, formatName) || raw
-  if (!resi || resi.length < 4) return // Pastikan panjang resi valid
+  if (!resi || resi.length < 4) return
 
-  // Guard 3: KUNCI KETAT resi yang sama — tidak akan di-scan ulang sampai kamera diarahkan ke tempat kosong / barcode lain
-  if (lastScannedResi === resi) {
+  // Guard 3: KUNCI KETAT resi yang sama jika masih ditahan di depan kamera (< 3.0 detik)
+  if (lastScannedResi === resi && (now - lastScanTimestamp) < 3000) {
     emptyFramesCount = 0
     return
   }
 
-  // LOCK SCANNER & PAUSE DECODERS
-  scannerState.value = 'PROCESSING'
-  isProcessing.value = true
-  lastEmitAt = now
+  // === MASUK KE STATE PAUSED & PROCESSING SEKETIKA (LANGSUNG KUNCI CALLBACK) ===
+  isPaused.value = true
+  isProcessingScan.value = true
+  scannerState.value = 'PAUSED'
   lastScannedResi = resi
+  lastScanTimestamp = now
   emptyFramesCount = 0
 
-  pauseDecoders()
+  // Pause native html5-qrcode jika didukung
+  if (scanner && typeof scanner.pause === 'function') {
+    try {
+      scanner.pause(true)
+    } catch {
+      /* ignore */
+    }
+  }
 
   playBeep()
-  navigator.vibrate?.(80)
+  navigator.vibrate?.(60)
 
-  // Emisikan hasil deteksi ke parent (BarcodeInput -> PetugasScanPage)
+  // Emisikan hasil deteksi ke parent HANYA 1 KALI (Single Event Emission)
   emit('detected', resi, formatName)
 
-  // Fallback timer jika feedback dari backend/store terhambat
+  // Fallback lock timer (jika respon backend/store terhambat)
   if (lockFallbackTimer) clearTimeout(lockFallbackTimer)
   lockFallbackTimer = setTimeout(() => {
-    if (scannerState.value === 'PROCESSING') {
-      resetAndResumeScanner()
+    if (scannerState.value === 'PAUSED' || scannerState.value === 'PROCESSING') {
+      resumeScanner()
     }
-  }, 5000)
+  }, 4000)
 }
 
 // Bunyi "beep" singkat tanpa file audio (WebAudio API)
@@ -587,16 +584,12 @@ watch(
 onBeforeUnmount(stopCamera)
 </script>
 
-<!-- Unscoped CSS khusus untuk elemen dinamis html5-qrcode (tidak bisa di-target scoped CSS karena tanpa data-v attribute) -->
+<!-- Unscoped CSS khusus untuk elemen dinamis html5-qrcode — matikan seluruh overlay bawaan agar HANYA ADA 1 FRAME SCANNING -->
 <style>
-#camera-scanner-region__scan_region {
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
-  background: transparent !important;
-}
-
-#camera-scanner-region__scan_region *,
+#camera-scanner-region__scan_region,
+#camera-scanner-region__scan_region svg,
+#camera-scanner-region__scan_region img,
+#camera-scanner-region__scan_region canvas,
 #camera-scanner-region__shaded_region,
 #camera-scanner-region__dashboard,
 #camera-scanner-region__status_span,
@@ -605,12 +598,7 @@ onBeforeUnmount(stopCamera)
   border: none !important;
   box-shadow: none !important;
   outline: none !important;
-}
-
-/* Matikan svg / border canvas bawaan html5-qrcode */
-#camera-scanner-region__scan_region svg,
-#camera-scanner-region__scan_region img,
-#camera-scanner-region__shaded_region {
+  background: transparent !important;
   display: none !important;
 }
 </style>
@@ -679,7 +667,7 @@ onBeforeUnmount(stopCamera)
 .history-chip--warning { background-color: #fee2e2; color: #b91c1c; }
 .history-chip--danger  { background-color: #fee2e2; color: #b91c1c; }
 
-/* Box Frame Area Scanning 1D Logistik (Desain Minimalis & Clean) */
+/* HANYA SATU BOX FRAME AREA SCANNING RESMI (BERADA TEPAT DI TENGAH PREVIEW KAMERA) */
 .scan-frame-box {
   position: absolute;
   top: 50%;
@@ -691,7 +679,16 @@ onBeforeUnmount(stopCamera)
   overflow: hidden;
   pointer-events: none;
   z-index: 5;
-  border-radius: 10px;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.scan-frame-box--paused {
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65) !important;
+}
+
+.scan-frame-box--paused .scan-corner {
+  border-color: #f59e0b !important;
 }
 
 /* Corner Brackets Frame (┌ ┐ └ ┘) Modern */
@@ -702,6 +699,7 @@ onBeforeUnmount(stopCamera)
   border-color: rgba(255, 255, 255, 0.92);
   border-style: solid;
   pointer-events: none;
+  transition: border-color 0.3s ease;
 }
 
 .scan-corner--top-left {
@@ -731,6 +729,4 @@ onBeforeUnmount(stopCamera)
   border-width: 0 2.5px 2.5px 0;
   border-bottom-right-radius: 8px;
 }
-
 </style>
-

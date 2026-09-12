@@ -20,11 +20,6 @@ my %RULES = (
         window_sec   => 300,
         message      => 'Permintaan kode OTP terlalu sering. Silakan tunggu 5 menit.',
     },
-    'GLOBAL' => {
-        max_requests => 120,
-        window_sec   => 60,
-        message      => 'Batas trafik API terlampaui. Silakan perlambat permintaan Anda.',
-    },
 );
 
 sub check_rate_limit {
