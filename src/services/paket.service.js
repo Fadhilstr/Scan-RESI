@@ -57,6 +57,7 @@ const nowString = () => getWIBTimeString()
 // LOCAL DATA — KOSONG (tidak ada dummy data)
 // =====================================================================
 export const LOCAL_PAKETS = []
+LOCAL_PAKETS.length = 0
 
 // Generator lokal — HANYA untuk mode demo; produksi selalu via backend.
 const makeLocalResi = () => {
@@ -301,5 +302,95 @@ export async function getPaketByResi(nomorResi) {
     return { success: !!data.success, reason: data.reason, paket: data.paket, message: data.message }
   } catch (err) {
     return { success: false, reason: 'ERROR', message: err.message || 'Gagal mencari data paket.' }
+  }
+}
+
+/**
+ * Hapus satu paket berdasarkan nomor resi.
+ * @param {string} nomorResi
+ */
+export async function deletePaketByResi(nomorResi) {
+  const resi = (nomorResi || '').trim().toUpperCase()
+  if (!resi) {
+    return { success: false, message: 'Nomor resi tidak boleh kosong.' }
+  }
+
+  if (USE_LOCAL_DATA) {
+    const idx = LOCAL_PAKETS.findIndex((p) => p.nomor_resi === resi)
+    if (idx !== -1) {
+      LOCAL_PAKETS.splice(idx, 1)
+      await addAuditLog({
+        user_id: 'SYSTEM',
+        user_name: 'System',
+        action: 'PAKET_DELETED',
+        details: `Paket dengan resi ${resi} berhasil dihapus.`
+      })
+      return { success: true, message: `Paket ${resi} berhasil dihapus.` }
+    }
+    return { success: false, message: `Paket ${resi} tidak ditemukan.` }
+  }
+
+  try {
+    const data = await api.delete(`/api/paket/${encodeURIComponent(resi)}`)
+    return { success: !!data.success, message: data.message || `Paket ${resi} berhasil dihapus.` }
+  } catch (err) {
+    return { success: false, message: err.message || 'Gagal menghapus paket.' }
+  }
+}
+
+/**
+ * Hapus seluruh paket milik user / pengirim / creator tertentu (contoh: Andre).
+ * @param {string} queryStr
+ */
+export async function deletePaketsByQuery(queryStr = 'andre') {
+  const target = (queryStr || 'andre').toLowerCase().trim()
+  let deletedCount = 0
+
+  if (USE_LOCAL_DATA) {
+    for (let i = LOCAL_PAKETS.length - 1; i >= 0; i--) {
+      const p = LOCAL_PAKETS[i]
+      const cb = (p.created_by || '').toLowerCase()
+      const cn = (p.creator_name || '').toLowerCase()
+      const pg = (p.pengirim || '').toLowerCase()
+      const pn = (p.penerima || '').toLowerCase()
+
+      if (cb.includes(target) || cn.includes(target) || pg.includes(target) || pn.includes(target)) {
+        LOCAL_PAKETS.splice(i, 1)
+        deletedCount++
+      }
+    }
+
+    // Bersihkan juga dari localStorage jika ada cache/mapping
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i)
+        if (key && (key.startsWith('barcode_mapping_') || key.startsWith('paket_'))) {
+          const val = (localStorage.getItem(key) || '').toLowerCase()
+          if (val.includes(target)) {
+            localStorage.removeItem(key)
+          }
+        }
+      }
+    } catch {}
+
+    await addAuditLog({
+      user_id: 'SYSTEM',
+      user_name: 'System',
+      action: 'PAKET_BATCH_DELETED',
+      details: `Menghapus seluruh paket (${deletedCount} paket) yang terkait dengan user/pengirim '${queryStr}'.`
+    })
+
+    return {
+      success: true,
+      deletedCount,
+      message: `Berhasil menghapus ${deletedCount} paket yang terkait dengan '${queryStr}'.`
+    }
+  }
+
+  try {
+    const data = await api.delete(`/api/paket/user/${encodeURIComponent(target)}`)
+    return { success: true, message: data.message || `Seluruh paket milik ${queryStr} berhasil dihapus.` }
+  } catch (err) {
+    return { success: false, message: err.message || 'Gagal menghapus seluruh paket.' }
   }
 }

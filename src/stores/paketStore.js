@@ -14,6 +14,8 @@ import {
   generateResi as svcGenerateResi,
   savePaketData as svcSavePaketData,
   getPaketByResi as svcGetPaketByResi,
+  deletePaketByResi as svcDeletePaketByResi,
+  deletePaketsByQuery as svcDeletePaketsByQuery,
   parseDateToTime,
   LOCAL_PAKETS
 } from '../services/paket.service'
@@ -126,6 +128,42 @@ export const usePaketStore = defineStore('paket', {
         if (mapped) targetResi = mapped.toUpperCase()
       }
       return await svcGetPaketByResi(targetResi)
+    },
+
+    /**
+     * Hapus satu paket berdasarkan nomor resi.
+     */
+    async deletePaket(nomorResi) {
+      this.isLoading = true
+      try {
+        const result = await svcDeletePaketByResi(nomorResi)
+        if (USE_LOCAL_DATA) {
+          this.pakets = [...LOCAL_PAKETS]
+        } else if (result.success) {
+          await this.fetchPakets()
+        }
+        return result
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    /**
+     * Hapus seluruh paket milik user / pengirim / creator tertentu.
+     */
+    async deletePaketsByUser(queryStr = 'andre') {
+      this.isLoading = true
+      try {
+        const result = await svcDeletePaketsByQuery(queryStr)
+        if (USE_LOCAL_DATA) {
+          this.pakets = [...LOCAL_PAKETS]
+        } else {
+          await this.fetchPakets()
+        }
+        return result
+      } finally {
+        this.isLoading = false
+      }
     }
   }
 })

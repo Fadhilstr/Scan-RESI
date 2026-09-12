@@ -194,6 +194,39 @@ export function compressUpcaToUpce(upcaStr) {
 }
 
 /**
+ * Validasi ketat format nomor resi sistem (mencegah false-positive noise dari garis keyboard/benda)
+ * @param {string} str
+ * @returns {boolean}
+ */
+export function isValidResiFormat(str) {
+  if (!str || typeof str !== 'string') return false
+  const s = str.trim().toUpperCase()
+  if (s.length < 4 || s.length > 50) return false
+
+  // 1. Alfanumerik 4-32 karakter (format resi standar sistem: C128ANDR, 4VEUU3Z4, DTMXANDR, dll)
+  if (/^[A-Z0-9]{4,32}$/.test(s)) {
+    if (/^\d+$/.test(s)) {
+      const len = s.length
+      // Panjang digit murni yang valid dalam sistem: 8 (EAN8/UPCE), 10 (CODABAR), 12 (UPCA/ITF), 13 (EAN13), 14 (RSS14)
+      if (len === 8 || len === 10 || len === 12 || len === 13 || len === 14) {
+        if (len === 14 && !s.startsWith('1')) return false // RSS_14 selalu diawali 1
+        return true
+      }
+      return false
+    }
+    return true
+  }
+
+  // 2. Codabar wrapped: A...B, C...D, dsb
+  if (/^[ABCD][0-9\-\$\:\/\.\+]{6,20}[ABCD]$/.test(s)) return true
+
+  // 3. GS1 Expanded / RSS Expanded
+  if (s.includes('(10)') || s.includes('(01)')) return true
+
+  return false
+}
+
+/**
  * Normalisasi nomor resi dari output scanner kamera/laser (GS1 AI, Codabar start/stop, MaxiCode, UPC-E, dsb)
  * @param {string} raw - Output mentah dari scanner
  * @param {string|null} format - Format barcode opsional (misal: 'MAXICODE', 'CODE_93', 'UPC_E', dsb)
@@ -388,10 +421,12 @@ export function normalizeScannedBarcode(raw, format = null) {
     }
   }
 
-  // 12. ITF: Angka genap 4-16 digit (kecuali jika dikenali sebagai format lain)
-  if (fmt === 'ITF' || (fmt !== 'RSS_14' && /^\d{4,16}$/.test(s) && s.length % 2 === 0)) {
+
+
+  // 12. ITF: ITF di sistem adalah 12 digit (genap 12 digit)
+  if (fmt === 'ITF' || (fmt !== 'RSS_14' && /^\d{12}$/.test(s))) {
     const digits = s.replace(/\D/g, '')
-    if (digits.length >= 4 && digits.length <= 16) {
+    if (digits.length === 12) {
       return checkLocalStorage(digits) || digits
     }
   }
@@ -409,8 +444,8 @@ export function normalizeScannedBarcode(raw, format = null) {
     return checkLocalStorage(mCodaGen[1]) || mCodaGen[1]
   }
 
-  // Tolak teks artefak pendek (misal '-' atau '1')
-  if (s.length < 4) return ''
+  // Tolak teks artefak pendek / invalid format
+  if (s.length < 4 || !isValidResiFormat(s)) return ''
 
   return s
 }

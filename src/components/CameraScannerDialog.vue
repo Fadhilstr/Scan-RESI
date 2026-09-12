@@ -46,13 +46,12 @@
             </div>
           </div>
 
-          <!-- Frame scanning minimalis dengan corner brackets & laser line -->
+          <!-- Frame scanning minimalis dengan corner brackets -->
           <div v-if="status === 'scanning'" class="scan-frame-box">
             <div class="scan-corner scan-corner--top-left"></div>
             <div class="scan-corner scan-corner--top-right"></div>
             <div class="scan-corner scan-corner--bottom-left"></div>
             <div class="scan-corner scan-corner--bottom-right"></div>
-            <div class="scan-line"></div>
           </div>
         </div>
 
@@ -155,6 +154,7 @@ let audioCtx = null
 let lastEmitAt = 0
 let lastScannedResi = ''
 let isZxingPaused = false
+let emptyFramesCount = 0
 
 const status = ref('idle') // idle | starting | scanning | error
 const scannerState = ref('IDLE') // IDLE | SCANNING | PROCESSING | ALERT | RESETTING
@@ -242,6 +242,8 @@ const startZxingFallback = (videoElement) => {
         const fmtEnum = result.getBarcodeFormat()
         const formatName = ZXING_FORMAT_NAME_MAP[fmtEnum] || null
         onScanSuccess(text, { result: { format: { format: fmtEnum, formatName } } })
+      } else {
+        onScanFailure()
       }
     })
     console.log('[CAMERA] ZXing auxiliary engine aktif memindai video.')
@@ -316,7 +318,7 @@ const resetAndResumeScanner = () => {
   }, 150)
 }
 
-// Parent mengirim hasil validasi baru → tampilkan + catat riwayat sesi
+// Parent mengirim hasil validasi baru → tampilkan + catat riwayat sesi (hanya resi unik)
 watch(
   () => props.feedback,
   (fb) => {
@@ -327,7 +329,7 @@ watch(
     }
 
     latest.value = fb
-    history.value = [fb, ...history.value.filter((h) => h.seq !== fb.seq)].slice(0, 3)
+    history.value = [fb, ...history.value.filter((h) => h.resi !== fb.resi)].slice(0, 3)
 
     scannerState.value = 'ALERT'
 
@@ -347,6 +349,7 @@ const onOpen = () => {
   history.value = []
   lastScannedResi = ''
   lastEmitAt = 0
+  emptyFramesCount = 0
   isProcessing.value = false
   scannerState.value = 'IDLE'
 
@@ -358,7 +361,7 @@ const onOpen = () => {
 
 const FRIENDLY_ERRORS = {
   NotAllowedError: 'Izin kamera ditolak. Klik ikon 🔒/📷 di address bar → izinkan Kamera → muat ulang halaman.',
-  NotFoundError: 'Tidak ada kamera yang terdeteksi pada perangkat ini.',
+  NotFound: 'Tidak ada kamera yang terdeteksi pada perangkat ini.',
   NotReadableError: 'Kamera sedang dipakai aplikasi lain. Tutup aplikasi tersebut lalu coba lagi.',
   OverconstrainedError: 'Kamera tidak mendukung mode yang diminta.'
 }
@@ -398,7 +401,7 @@ const startCamera = async () => {
         formatsToSupport: ALL_SUPPORTED_FORMATS,
         verbose: false,
         experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true
+          useBarCodeDetectorIfSupported: false
         }
       })
       await scanner.start(
@@ -407,7 +410,7 @@ const startCamera = async () => {
           fps: 15
         },
         onScanSuccess,
-        () => {} // frame tanpa barcode — abaikan
+        onScanFailure
       )
 
       // Sambungkan auxiliary engine ZXing untuk membaca Code 93 & GS1 Expanded
@@ -430,6 +433,7 @@ const startCamera = async () => {
       status.value = 'scanning'
       scannerState.value = 'SCANNING'
       isProcessing.value = false
+      emptyFramesCount = 0
       return
     } catch (err) {
       lastError = err
@@ -470,6 +474,7 @@ const stopCamera = () => {
   scannerState.value = 'IDLE'
   isProcessing.value = false
   lastScannedResi = ''
+  emptyFramesCount = 0
 }
 
 const cleanupScanner = () => {
@@ -486,6 +491,19 @@ const cleanupScanner = () => {
 
 const closeDialog = () => {
   show.value = false
+}
+
+// Handler frame tanpa barcode: hitung berturut-turut untuk mereset lock resi saat kamera dijauhkan
+const onScanFailure = () => {
+  if (scannerState.value === 'SCANNING' && !isProcessing.value) {
+    emptyFramesCount++
+    if (emptyFramesCount >= 15) {
+      if (lastScannedResi) {
+        console.log('[CAMERA] Kamera menjauhi barcode. Reset lock resi sebelumnya.')
+        lastScannedResi = ''
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -512,8 +530,9 @@ const onScanSuccess = (decodedText, decodedResult) => {
   const resi = normalizeScannedBarcode(raw, formatName) || raw
   if (!resi || resi.length < 4) return // Pastikan panjang resi valid
 
-  // Guard 3: Pencegahan rescan berulang untuk resi yang sama jika belum berpindah barcode/cooldown
-  if (lastScannedResi === resi && now - lastEmitAt < COOLDOWN_MS * 2) {
+  // Guard 3: KUNCI KETAT resi yang sama — tidak akan di-scan ulang sampai kamera diarahkan ke tempat kosong / barcode lain
+  if (lastScannedResi === resi) {
+    emptyFramesCount = 0
     return
   }
 
@@ -522,6 +541,7 @@ const onScanSuccess = (decodedText, decodedResult) => {
   isProcessing.value = true
   lastEmitAt = now
   lastScannedResi = resi
+  emptyFramesCount = 0
 
   pauseDecoders()
 
@@ -712,32 +732,5 @@ onBeforeUnmount(stopCamera)
   border-bottom-right-radius: 8px;
 }
 
-/* Laser Scan Line Kuning (Smooth 60fps GPU Hardware Acceleration) */
-.scan-line {
-  position: absolute;
-  top: 0;
-  left: 4px;
-  right: 4px;
-  height: 2px;
-  background: linear-gradient(90deg, transparent 0%, #facc15 15%, #fef08a 50%, #facc15 85%, transparent 100%);
-  box-shadow: 0 0 8px #facc15, 0 0 12px rgba(250, 204, 21, 0.7);
-  will-change: transform;
-  animation: scan-laser-smooth 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
-  pointer-events: none;
-}
-
-@keyframes scan-laser-smooth {
-  0% {
-    transform: translateY(2px);
-    opacity: 0.9;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(calc(100% - 4px));
-    opacity: 0.9;
-  }
-}
 </style>
 

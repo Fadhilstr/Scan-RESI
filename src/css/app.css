@@ -284,9 +284,17 @@ body {
 
 /* ---------- Global Fix: Sembunyikan elemen visual bawaan html5-qrcode ---------- */
 #camera-scanner-region__scan_region,
-#camera-scanner-region__shaded_region {
+#camera-scanner-region__shaded_region,
+#camera-scanner-region__scan_region_paused {
   display: none !important;
   border: none !important;
   box-shadow: none !important;
+}
+
+#camera-scanner-region div {
+  text-shadow: none !important;
+}
+#camera-scanner-region > div > div {
+  color: transparent !important;
 }
 

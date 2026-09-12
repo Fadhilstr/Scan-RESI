@@ -340,6 +340,7 @@ const handleBarcodeScan = async (resiInput) => {
       const msg = result.message || `Scan berhasil, resi ${cleanResi} sudah terdaftar.`
       setFeedback(cleanResi, 'success', 'BERHASIL', msg)
       $q.notify({
+        group: 'scan-feedback',
         type: 'positive',
         icon: 'check_circle',
         message: msg,
@@ -353,6 +354,7 @@ const handleBarcodeScan = async (resiInput) => {
       const dupMsg = result.message || `Resi ${cleanResi} sudah terdaftar.`
       setFeedback(cleanResi, 'danger', 'DUPLIKAT', dupMsg)
       $q.notify({
+        group: 'scan-feedback',
         type: 'negative',
         icon: 'warning',
         message: dupMsg,
@@ -373,6 +375,7 @@ const handleBarcodeScan = async (resiInput) => {
 
       setFeedback(cleanResi, 'danger', 'MASIH DRAFT', msg, detail)
       $q.notify({
+        group: 'scan-feedback',
         type: 'negative',
         icon: 'gpp_bad',
         message: detail ? `${msg} (${detail})` : msg,
@@ -385,6 +388,7 @@ const handleBarcodeScan = async (resiInput) => {
     if (result.reason === 'UNKNOWN_RESI') {
       setFeedback(cleanResi, 'danger', 'TAK DIKENAL', result.message)
       $q.notify({
+        group: 'scan-feedback',
         type: 'negative',
         icon: 'gpp_bad',
         message: result.message,
@@ -397,6 +401,7 @@ const handleBarcodeScan = async (resiInput) => {
     // FINISHED / EMPTY / ERROR / lainnya
     setFeedback(cleanResi, 'danger', 'GAGAL', result.message)
     $q.notify({
+      group: 'scan-feedback',
       type: 'negative',
       icon: 'error',
       message: result.message,
