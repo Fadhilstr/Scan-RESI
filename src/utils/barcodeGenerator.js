@@ -10,6 +10,7 @@ export const BARCODE_FORMAT_OPTIONS = [
   { label: 'QR_CODE', value: 'QR_CODE', supported: true, category: '2D Matrix' },
   { label: 'AZTEC', value: 'AZTEC', supported: true, category: '2D Matrix' },
   { label: 'DATA_MATRIX', value: 'DATA_MATRIX', supported: true, category: '2D Matrix' },
+  { label: 'MAXICODE', value: 'MAXICODE', supported: true, category: '2D Matrix' },
   { label: 'PDF_417', value: 'PDF_417', supported: true, category: '2D Stacked' },
   { label: 'CODE_39', value: 'CODE_39', supported: true, category: '1D' },
   { label: 'CODE_93', value: 'CODE_93', supported: true, category: '1D' },
@@ -19,6 +20,7 @@ export const BARCODE_FORMAT_OPTIONS = [
   { label: 'EAN_8', value: 'EAN_8', supported: true, category: '1D Numerik' },
   { label: 'UPC_A', value: 'UPC_A', supported: true, category: '1D Numerik' },
   { label: 'UPC_E', value: 'UPC_E', supported: true, category: '1D Numerik' },
+  { label: 'UPC_EAN_EXTENSION', value: 'UPC_EAN_EXTENSION', supported: true, category: '1D Extension' },
   { label: 'RSS_14 (GS1 DataBar)', value: 'RSS_14', supported: true, category: '1D GS1' },
   { label: 'RSS_EXPANDED (GS1 Expanded)', value: 'RSS_EXPANDED', supported: true, category: '1D GS1' }
 ]
@@ -31,6 +33,7 @@ const BWIP_FORMAT_MAP = {
   QR_CODE: 'qrcode',
   AZTEC: 'azteccode',
   DATA_MATRIX: 'datamatrix',
+  MAXICODE: 'maxicode',
   PDF_417: 'pdf417',
   CODE_39: 'code39',
   CODE_93: 'code93',
@@ -40,6 +43,7 @@ const BWIP_FORMAT_MAP = {
   EAN_8: 'ean8',
   UPC_A: 'upca',
   UPC_E: 'upce',
+  UPC_EAN_EXTENSION: 'ean13',
   RSS_14: 'databaromni',
   RSS_EXPANDED: 'databarexpanded'
 }
@@ -212,6 +216,9 @@ export function isValidResiFormat(str) {
 
   // 3. GS1 Expanded / RSS Expanded
   if (s.includes('(10)') || s.includes('(01)')) return true
+
+  // 4. UPC/EAN with Supplemental Extension: 12-13 digit main + 2 atau 5 digit extension (contoh: 9781234567897 90000)
+  if (/^\d{12,13}\s+\d{2,5}$/.test(s)) return true
 
   return false
 }
@@ -444,7 +451,21 @@ export function normalizeScannedBarcode(raw, format = null) {
 
 
 
-  // 12. ITF: ITF di sistem adalah 12 digit (genap 12 digit)
+  // 12. UPC_EAN_EXTENSION: Parsing format EAN/UPC + 2/5 digit extension
+  if (fmt === 'UPC_EAN_EXTENSION' || /^\d{12,13}\s+\d{2,5}$/.test(s)) {
+    const mExt = s.match(/^(\d{12,13})\s+(\d{2,5})$/)
+    if (mExt) {
+      const full = `${mExt[1]} ${mExt[2]}`
+      return (
+        checkLocalStorage(full) ||
+        checkLocalStorage(s) ||
+        checkLocalStorage(mExt[1]) ||
+        full
+      )
+    }
+  }
+
+  // 13. ITF: ITF di sistem adalah 12 digit (genap 12 digit)
   if (fmt === 'ITF' || (fmt !== 'RSS_14' && /^\d{12}$/.test(s))) {
     const digits = s.replace(/\D/g, '')
     if (digits.length === 12) {
@@ -615,6 +636,23 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
         const payload6 = stringToDeterministicDigits(cleanTracking, 6)
         const cd = calculateUpceCheckDigit(payload6)
         barcodeValue = '0' + payload6 + cd
+      }
+      break
+    }
+
+    case 'UPC_EAN_EXTENSION': {
+      if (/^\d{13}\s+\d{2,5}$/.test(cleanTracking)) {
+        isMapped = false
+        barcodeValue = cleanTracking
+      } else if (/^\d{13}$/.test(cleanTracking)) {
+        isMapped = true
+        barcodeValue = `${cleanTracking} 90000`
+      } else {
+        isMapped = true
+        const d12 = stringToDeterministicDigits(cleanTracking, 12)
+        const cd = calculateMod10CheckDigit(d12)
+        const ext5 = stringToDeterministicDigits(cleanTracking + '_EXT', 5)
+        barcodeValue = `${d12}${cd} ${ext5}`
       }
       break
     }
@@ -890,6 +928,13 @@ export function generateClientResi(format = 'CODE_128') {
   if (fmt === 'RSS_14') {
     const data = '1' + randomDigits(12)
     return data + calculateMod10CheckDigit(data)
+  }
+  if (fmt === 'UPC_EAN_EXTENSION') {
+    const data = '899' + randomDigits(9)
+    return `${data}${calculateMod10CheckDigit(data)} ${randomDigits(5)}`
+  }
+  if (fmt === 'MAXICODE') {
+    return '(10)' + randomChars(8)
   }
   return randomChars(8)
 }

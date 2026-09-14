@@ -362,7 +362,16 @@
             </div>
           </div>
 
-          <div class="row items-center justify-end q-mt-md">
+          <div class="row items-center justify-end q-gutter-sm q-mt-md">
+            <q-btn
+              outline
+              color="grey-8"
+              icon="bookmark_border"
+              label="Simpan Draft"
+              no-caps
+              class="text-weight-bold"
+              @click="handleSaveDraftManual"
+            />
             <q-btn
               type="submit"
               color="primary"
@@ -678,10 +687,37 @@ const handleSave = async () => {
   }
 }
 
+const manualDraftSaved = ref(false)
+
+const handleSaveDraftManual = () => {
+  const hasData = form.nama_barang || form.pengirim_nama || form.penerima_nama || form.pengirim_alamat || form.penerima_alamat
+  if (!hasData && !paket.value?.nomor_resi) {
+    $q.notify({
+      type: 'warning',
+      icon: 'warning',
+      message: 'Isi data paket atau pengirim/penerima terlebih dahulu sebelum menyimpan draft.',
+      position: 'top',
+      timeout: 2500
+    })
+    return
+  }
+
+  manualDraftSaved.value = true
+  saveDraftToStorage()
+  $q.notify({
+    type: 'positive',
+    icon: 'bookmark',
+    message: 'Draft paket berhasil disimpan secara lokal.',
+    position: 'top',
+    timeout: 2000
+  })
+}
+
 const resetForm = () => {
   paket.value = null
   draftId.value = null
   saved.value = false
+  manualDraftSaved.value = false
   selectedFormat.value = null
   barcodeError.value = ''
   currentPayload.value = null
@@ -693,9 +729,8 @@ const resetForm = () => {
 const saveDraftToStorage = () => {
   if (saved.value) return
 
-  // Simpan isian form lokal jika user belum menekan Simpan (TANPA membuat record paket di DB/store)
-  const hasData = form.nama_barang || form.pengirim_nama || form.penerima_nama || form.pengirim_alamat || form.penerima_alamat
-  if (hasData || paket.value?.nomor_resi) {
+  // BUG-002: Hanya simpan state lokal jika user secara eksplisit menekan 'Simpan Draft'
+  if (manualDraftSaved.value) {
     localStorage.setItem(UNASSIGNED_DRAFT_KEY, JSON.stringify({
       form,
       selectedFormat: selectedFormat.value,
@@ -705,14 +740,17 @@ const saveDraftToStorage = () => {
 }
 
 onBeforeRouteLeave((to, from, next) => {
-  if (!saved.value) {
+  // BUG-002: Jangan simpan draft otomatis di route leave kecuali user menekan 'Simpan Draft'
+  if (manualDraftSaved.value && !saved.value) {
     saveDraftToStorage()
   }
   next()
 })
 
 onBeforeUnmount(() => {
-  saveDraftToStorage()
+  if (manualDraftSaved.value && !saved.value) {
+    saveDraftToStorage()
+  }
 })
 
 // Lanjutkan draft dari halaman "Paket Saya" (?resi=XXXX) atau pulihkan form yang belum di-generate resi

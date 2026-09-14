@@ -58,6 +58,10 @@
             <q-spinner-dots size="16px" color="amber-9" class="q-mr-xs" />
             <span class="text-weight-bold text-amber-9">PAUSED — Memproses resi {{ lastScannedResi }}...</span>
           </template>
+          <template v-else-if="scannerState === 'WAITING_FOR_EXTENSION'">
+            <q-spinner-dots size="16px" color="primary" class="q-mr-xs" />
+            <span class="text-weight-bold text-primary">Membaca supplemental extension (+2 / +5 digit)...</span>
+          </template>
           <template v-else-if="scannerState === 'ALERT' || scannerState === 'COOLDOWN'">
             <q-icon name="check_circle" size="16px" color="positive" class="q-mr-xs" v-if="latest?.level === 'success'" />
             <q-icon name="warning" size="16px" color="negative" class="q-mr-xs" v-else />
@@ -119,6 +123,7 @@ import {
 } from '@zxing/library'
 import { normalizeScannedBarcode } from '../utils/barcodeGenerator'
 import { applyZxingRssExpandedPatch } from '../utils/zxingRssExpandedPatcher'
+import { readBarcodesWasm, mapZxingWasmFormat } from '../utils/zxingWasmReader'
 
 // Terapkan perbaikan translasi Java->JS ZXing untuk RSS Expanded secara transparan
 applyZxingRssExpandedPatch()
@@ -133,6 +138,7 @@ const ALL_SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.CODE_93,
   Html5QrcodeSupportedFormats.CODE_128,
   Html5QrcodeSupportedFormats.DATA_MATRIX,
+  Html5QrcodeSupportedFormats.MAXICODE,
   Html5QrcodeSupportedFormats.ITF,
   Html5QrcodeSupportedFormats.EAN_13,
   Html5QrcodeSupportedFormats.EAN_8,
@@ -140,7 +146,8 @@ const ALL_SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.RSS_14,
   Html5QrcodeSupportedFormats.RSS_EXPANDED,
   Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_E
+  Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION
 ]
 
 const props = defineProps({
@@ -186,9 +193,14 @@ let lastScannedResi = ''
 let lastEmittedResi = ''
 let emptyFramesCount = 0
 
-// State Machine Status: IDLE -> STARTING -> SCANNING -> PAUSED -> PROCESSING -> ALERT -> COOLDOWN -> RESUME -> SCANNING
+// Synchronous Mutex Lock & Dua Tahap Extension State Machine
+let isProcessingSync = false
+let pendingMainBarcode = ''
+let waitingExtensionTimer = null
+
+// State Machine Status: IDLE -> STARTING -> SCANNING -> WAITING_FOR_EXTENSION -> PAUSED -> PROCESSING -> ALERT -> COOLDOWN -> RESUME -> SCANNING
 const status = ref('idle') // idle | starting | scanning | error
-const scannerState = ref('IDLE') // IDLE | SCANNING | PAUSED | PROCESSING | ALERT | COOLDOWN | RESUME
+const scannerState = ref('IDLE') // IDLE | SCANNING | WAITING_FOR_EXTENSION | PAUSED | PROCESSING | ALERT | COOLDOWN | RESUME
 const isPaused = ref(false)
 const isProcessingScan = ref(false)
 
@@ -210,6 +222,11 @@ const stopZxing = () => {
     clearTimeout(fallbackTimer)
     fallbackTimer = null
   }
+  if (waitingExtensionTimer) {
+    clearTimeout(waitingExtensionTimer)
+    waitingExtensionTimer = null
+  }
+  pendingMainBarcode = ''
   if (zxingReader) {
     try {
       zxingReader.stopContinuousDecode()
@@ -263,6 +280,8 @@ const startZxingFallback = (videoElement) => {
       BarcodeFormat.EAN_8,
       BarcodeFormat.UPC_A,
       BarcodeFormat.UPC_E,
+      BarcodeFormat.MAXICODE,
+      BarcodeFormat.UPC_EAN_EXTENSION,
       BarcodeFormat.AZTEC,
       BarcodeFormat.PDF_417
     ]
@@ -291,21 +310,28 @@ const startZxingFallback = (videoElement) => {
       [BarcodeFormat.EAN_8]: 'EAN_8',
       [BarcodeFormat.EAN_13]: 'EAN_13',
       [BarcodeFormat.ITF]: 'ITF',
+      [BarcodeFormat.MAXICODE]: 'MAXICODE',
       [BarcodeFormat.PDF_417]: 'PDF_417',
       [BarcodeFormat.QR_CODE]: 'QR_CODE',
       [BarcodeFormat.RSS_14]: 'RSS_14',
       [BarcodeFormat.RSS_EXPANDED]: 'RSS_EXPANDED',
       [BarcodeFormat.UPC_A]: 'UPC_A',
-      [BarcodeFormat.UPC_E]: 'UPC_E'
+      [BarcodeFormat.UPC_E]: 'UPC_E',
+      [BarcodeFormat.UPC_EAN_EXTENSION]: 'UPC_EAN_EXTENSION'
     }
 
     fallbackCanvas = document.createElement('canvas')
     fallbackCtx = fallbackCanvas.getContext('2d', { willReadFrequently: true })
 
-    const processFrame = () => {
+    const processFrame = async () => {
       if (!show.value || status.value !== 'scanning') return
 
-      if (isPaused.value || isProcessingScan.value || scannerState.value !== 'SCANNING') {
+      if (
+        isProcessingSync ||
+        isPaused.value ||
+        isProcessingScan.value ||
+        (scannerState.value !== 'SCANNING' && scannerState.value !== 'WAITING_FOR_EXTENSION')
+      ) {
         fallbackTimer = setTimeout(processFrame, 100)
         return
       }
@@ -326,8 +352,8 @@ const startZxingFallback = (videoElement) => {
       isFrameProcessing = true
 
       try {
-        // Skala canvas ke lebar optimal (maks 1080px) untuk kepresisian tinggi modul 1-px
-        const maxW = 1080
+        // Skala canvas ke lebar optimal (maks 960px) untuk keseimbangan kecepatan & ketajaman modul bar HP
+        const maxW = 960
         const scale = vw > maxW ? maxW / vw : 1.0
         const cw = Math.floor(vw * scale)
         const ch = Math.floor(vh * scale)
@@ -339,9 +365,48 @@ const startZxingFallback = (videoElement) => {
 
         fallbackCtx.drawImage(videoElement, 0, 0, cw, ch)
         const imgData = fallbackCtx.getImageData(0, 0, cw, ch)
-        const data = imgData.data
 
-        // Konversi ke grayscale Uint8ClampedArray untuk RGBLuminanceSource
+        // -----------------------------------------------------------------
+        // FAST-PATH WASM (ZXing-C++):
+        // Membaca DataBarExp (RSS_EXPANDED), EAN/UPC + Extension, MaxiCode secara instan (<40ms)
+        // -----------------------------------------------------------------
+        let wasmFormats = []
+        if (preferred === 'RSS_EXPANDED') {
+          wasmFormats = ['DataBarExp', 'DataBarExpStk']
+        } else if (preferred === 'UPC_EAN_EXTENSION') {
+          wasmFormats = ['EANUPC']
+        } else if (preferred === 'MAXICODE') {
+          wasmFormats = ['MaxiCode']
+        } else if (wantGs1Heavy) {
+          wasmFormats = ['DataBarExp', 'DataBarExpStk', 'DataBar', 'Code93']
+        } else {
+          // AUTO mode: prioritaskan format-format logistik yang sulit di JS
+          wasmFormats = ['DataBarExp', 'DataBarExpStk', 'EANUPC', 'MaxiCode', 'DataBar', 'Code93']
+        }
+
+        try {
+          const wasmResults = await readBarcodesWasm(imgData, {
+            formats: wasmFormats,
+            eanAddOnSymbol: 'Read'
+          })
+
+          if (wasmResults && wasmResults.length > 0) {
+            const r = wasmResults[0]
+            if (r && r.text) {
+              const text = r.text
+              const formatName = mapZxingWasmFormat(r.format, text)
+              onScanSuccess(text, { result: { format: { formatName } } })
+              return
+            }
+          }
+        } catch {
+          /* WASM pass selesai tanpa temuan -> lanjut ke JS auxiliary pass */
+        }
+
+        // -----------------------------------------------------------------
+        // JS AUXILIARY ENGINE (@zxing/library):
+        // -----------------------------------------------------------------
+        const data = imgData.data
         const gray = new Uint8ClampedArray(cw * ch)
         for (let i = 0; i < cw * ch; i++) {
           const r = data[i * 4]
@@ -358,11 +423,11 @@ const startZxingFallback = (videoElement) => {
         try { rss14Dedicated.reset() } catch {}
         try { code93Dedicated.reset() } catch {}
 
-        // Crop ROI tengah (area laser overlay 85% x 65%) untuk kepresisian modul GS1 DataBar & Code93
+        // Crop ROI tengah (area laser overlay 94% x 55%) untuk kepresisian modul GS1 DataBar & Code93
         let roiSource = lumSource
         try {
-          const cropW = Math.floor(cw * 0.85)
-          const cropH = Math.floor(ch * 0.65)
+          const cropW = Math.floor(cw * 0.94)
+          const cropH = Math.floor(ch * 0.55)
           const cropX = Math.floor((cw - cropW) / 2)
           const cropY = Math.floor((ch - cropH) / 2)
           roiSource = lumSource.crop(cropX, cropY, cropW, cropH)
@@ -498,11 +563,15 @@ const levelIcon = computed(() => {
   }
 })
 
-// Parent mengirim hasil validasi baru -> tampilkan alert + catat riwayat -> masuk cooldown -> resume scanner
+let lastFeedbackSeq = 0
+
+// Parent mengirim hasil validasi baru (setelah request HTTP selesai) -> tampilkan alert + catat riwayat -> masuk cooldown -> resume scanner
 watch(
   () => props.feedback,
   (fb) => {
-    if (!fb) return
+    if (!fb || fb.seq === lastFeedbackSeq) return
+    lastFeedbackSeq = fb.seq
+
     if (lockFallbackTimer) {
       clearTimeout(lockFallbackTimer)
       lockFallbackTimer = null
@@ -528,6 +597,8 @@ const resumeScanner = () => {
   if (feedbackTimer) { clearTimeout(feedbackTimer); feedbackTimer = null }
   if (lockFallbackTimer) { clearTimeout(lockFallbackTimer); lockFallbackTimer = null }
   if (cooldownTimer) { clearTimeout(cooldownTimer); cooldownTimer = null }
+  if (waitingExtensionTimer) { clearTimeout(waitingExtensionTimer); waitingExtensionTimer = null }
+  pendingMainBarcode = ''
 
   scannerState.value = 'COOLDOWN'
 
@@ -543,6 +614,7 @@ const resumeScanner = () => {
   // Cooldown singkat 300ms untuk memastikan buffer frame kamera bersih
   cooldownTimer = setTimeout(() => {
     emptyFramesCount = 0
+    isProcessingSync = false
     isPaused.value = false
     isProcessingScan.value = false
     if (status.value === 'scanning' && show.value) {
@@ -561,13 +633,16 @@ const onOpen = () => {
   lastEmittedResi = ''
   lastScanTimestamp = 0
   emptyFramesCount = 0
+  isProcessingSync = false
   isPaused.value = false
   isProcessingScan.value = false
+  pendingMainBarcode = ''
   scannerState.value = 'IDLE'
 
   if (feedbackTimer) clearTimeout(feedbackTimer)
   if (lockFallbackTimer) clearTimeout(lockFallbackTimer)
   if (cooldownTimer) clearTimeout(cooldownTimer)
+  if (waitingExtensionTimer) clearTimeout(waitingExtensionTimer)
   startCamera()
 }
 
@@ -683,8 +758,26 @@ const stopCamera = () => {
   if (feedbackTimer) { clearTimeout(feedbackTimer); feedbackTimer = null }
   if (lockFallbackTimer) { clearTimeout(lockFallbackTimer); lockFallbackTimer = null }
   if (cooldownTimer) { clearTimeout(cooldownTimer); cooldownTimer = null }
+  if (waitingExtensionTimer) { clearTimeout(waitingExtensionTimer); waitingExtensionTimer = null }
+  pendingMainBarcode = ''
+  isProcessingSync = false
 
   stopZxing()
+
+  // Hentikan hardware track kamera secara eksplisit agar stream tidak bocor
+  const videoEl = document.querySelector(`#${REGION_ID} video`)
+  if (videoEl && videoEl.srcObject) {
+    try {
+      const stream = videoEl.srcObject
+      if (typeof stream.getTracks === 'function') {
+        stream.getTracks().forEach((track) => {
+          try { track.stop() } catch {}
+        })
+      }
+      videoEl.srcObject = null
+    } catch {}
+  }
+
   if (scanner) {
     try {
       const s = scanner
@@ -706,6 +799,26 @@ const stopCamera = () => {
 
 const cleanupScanner = () => {
   stopZxing()
+  isProcessingSync = false
+  if (waitingExtensionTimer) {
+    clearTimeout(waitingExtensionTimer)
+    waitingExtensionTimer = null
+  }
+  pendingMainBarcode = ''
+
+  const videoEl = document.querySelector(`#${REGION_ID} video`)
+  if (videoEl && videoEl.srcObject) {
+    try {
+      const stream = videoEl.srcObject
+      if (typeof stream.getTracks === 'function') {
+        stream.getTracks().forEach((track) => {
+          try { track.stop() } catch {}
+        })
+      }
+      videoEl.srcObject = null
+    } catch {}
+  }
+
   if (scanner) {
     try {
       scanner.clear()
@@ -741,12 +854,16 @@ const onScanFailure = () => {
 // SCANNING -> DETECTED -> PAUSED -> PROCESSING -> RESULT/ALERT -> COOLDOWN -> RESUME -> SCANNING
 // ---------------------------------------------------------------------
 const onScanSuccess = (decodedText, decodedResult) => {
-  // Guard 1: Jika scanner sedang PAUSED / PROCESSING / BUKAN SCANNING, langsung batalkan callback!
-  if (isPaused.value || isProcessingScan.value || scannerState.value !== 'SCANNING' || status.value !== 'scanning') {
+  // Guard 1: Mutex Lock synchronous dan status check
+  if (
+    isProcessingSync ||
+    isPaused.value ||
+    isProcessingScan.value ||
+    (scannerState.value !== 'SCANNING' && scannerState.value !== 'WAITING_FOR_EXTENSION') ||
+    status.value !== 'scanning'
+  ) {
     return
   }
-
-  const now = Date.now()
 
   // Guard 2: Sanitasi input decode
   const raw = String(decodedText || '').trim()
@@ -757,6 +874,46 @@ const onScanSuccess = (decodedText, decodedResult) => {
     decodedResult?.format?.formatName ||
     decodedResult?.result?.formatName ||
     null
+
+  // Dua Tahap State Machine Khusus UPC_EAN_EXTENSION:
+  // Jika barcode utama (EAN13/UPCA/EAN8) terdeteksi TANPA extension saat mode UPC_EAN_EXTENSION,
+  // tahan sementara (350ms) di state WAITING_FOR_EXTENSION agar frame kamera berkesempatan membaca extension symbol
+  const isUpcEanMain =
+    formatName === 'EAN_13' ||
+    formatName === 'UPC_A' ||
+    formatName === 'EAN_8' ||
+    /^\d{12,13}$/.test(raw)
+  const hasAddOn = /\s+\d{2,5}$/.test(raw)
+
+  if (
+    props.preferredFormat === 'UPC_EAN_EXTENSION' &&
+    isUpcEanMain &&
+    !hasAddOn &&
+    scannerState.value !== 'WAITING_FOR_EXTENSION'
+  ) {
+    scannerState.value = 'WAITING_FOR_EXTENSION'
+    pendingMainBarcode = raw
+    if (waitingExtensionTimer) clearTimeout(waitingExtensionTimer)
+    waitingExtensionTimer = setTimeout(() => {
+      waitingExtensionTimer = null
+      if (scannerState.value === 'WAITING_FOR_EXTENSION') {
+        finalizeScan(pendingMainBarcode, formatName)
+      }
+    }, 350)
+    return
+  }
+
+  // Jika sedang di WAITING_FOR_EXTENSION dan sekarang dapat teks dengan extension (atau kode baru):
+  if (waitingExtensionTimer) {
+    clearTimeout(waitingExtensionTimer)
+    waitingExtensionTimer = null
+  }
+
+  finalizeScan(raw, formatName)
+}
+
+const finalizeScan = (raw, formatName) => {
+  const now = Date.now()
 
   // Full-frame: latar (garis keyboard, label tetangga) ikut ter-decode.
   // Hasil yang gagal normalisasi/validasi ditolak senyap — tanpa beep/emit.
@@ -771,10 +928,12 @@ const onScanSuccess = (decodedText, decodedResult) => {
     return
   }
 
-  // === MASUK KE STATE PAUSED & PROCESSING SEKETIKA (LANGSUNG KUNCI CALLBACK) ===
+  // === MASUK KE STATE PAUSED & PROCESSING SEKETIKA DENGAN SYNCHRONOUS MUTEX ===
+  isProcessingSync = true
   isPaused.value = true
   isProcessingScan.value = true
   scannerState.value = 'PAUSED'
+  pendingMainBarcode = ''
   lastScannedResi = resi
   lastEmittedResi = resi
   lastScanTimestamp = now
@@ -795,13 +954,14 @@ const onScanSuccess = (decodedText, decodedResult) => {
   // Emisikan hasil deteksi ke parent HANYA 1 KALI (Single Event Emission)
   emit('detected', resi, formatName)
 
-  // Fallback lock timer (jika respon backend/store terhambat)
+  // Safety fallback lock timer: Kamera 100% PAUSED sampai HTTP request selesai.
+  // Fallback hanya aktif jika server/jaringan mati total (30 detik timeout).
   if (lockFallbackTimer) clearTimeout(lockFallbackTimer)
   lockFallbackTimer = setTimeout(() => {
     if (scannerState.value === 'PAUSED' || scannerState.value === 'PROCESSING') {
       resumeScanner()
     }
-  }, 4000)
+  }, 30000)
 }
 
 // Bunyi "beep" singkat tanpa file audio (WebAudio API)
@@ -920,8 +1080,8 @@ onBeforeUnmount(stopCamera)
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 84%;
-  height: 60%;
+  width: 92%;
+  height: 55%;
   border: 2px dashed rgba(255, 255, 255, 0.7);
   border-radius: 12px;
   pointer-events: none;
