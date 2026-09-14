@@ -45,18 +45,6 @@
               <q-btn outline dense color="amber-4" icon="refresh" label="Coba Lagi" no-caps class="q-mt-md" @click="startCamera" />
             </div>
           </div>
-
-          <!-- HANYA SATU FRAME SCANNING RESMI DENGAN CORNER BRACKETS -->
-          <div
-            v-if="status === 'scanning'"
-            class="scan-frame-box"
-            :class="{ 'scan-frame-box--paused': isPaused || isProcessingScan }"
-          >
-            <div class="scan-corner scan-corner--top-left"></div>
-            <div class="scan-corner scan-corner--top-right"></div>
-            <div class="scan-corner scan-corner--bottom-left"></div>
-            <div class="scan-corner scan-corner--bottom-right"></div>
-          </div>
         </div>
 
         <!-- Status State Machine Barcode Scanner -->
@@ -74,7 +62,7 @@
           </template>
           <template v-else-if="status === 'scanning'">
             <q-icon name="center_focus_strong" size="16px" color="primary" class="q-mr-xs" />
-            <span class="text-weight-bold text-slate-700">SCANNING — Arahkan barcode ke dalam kotak</span>
+            <span class="text-weight-bold text-slate-700">SCANNING — Arahkan barcode ke layar kamera</span>
           </template>
         </div>
 
@@ -111,7 +99,18 @@
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useQuasar } from 'quasar'
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode'
-import { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } from '@zxing/library'
+import {
+  DecodeHintType,
+  BarcodeFormat,
+  RGBLuminanceSource,
+  BinaryBitmap,
+  HybridBinarizer,
+  GlobalHistogramBinarizer,
+  MultiFormatReader,
+  Code93Reader,
+  RSSExpandedReader,
+  InvertedLuminanceSource
+} from '@zxing/library'
 import { normalizeScannedBarcode } from '../utils/barcodeGenerator'
 import { applyZxingRssExpandedPatch } from '../utils/zxingRssExpandedPatcher'
 
@@ -148,6 +147,12 @@ const props = defineProps({
   feedback: {
     type: Object,
     default: null
+  },
+  // P1: hint format dominan (misal 'RSS_EXPANDED' / 'CODE_93') agar ZXing fallback pakai set hints & fast-path.
+  // null/undefined = AUTO (9 format gabungan, bukan 15).
+  preferredFormat: {
+    type: String,
+    default: null
   }
 })
 
@@ -165,6 +170,10 @@ let scanner = null
 let zxingReader = null
 let bindInterval = null
 let audioCtx = null
+let fallbackCanvas = null
+let fallbackCtx = null
+let isFrameProcessing = false
+let fallbackTimer = null
 
 let lastScanTimestamp = 0
 let lastScannedResi = ''
@@ -190,6 +199,10 @@ const stopZxing = () => {
     clearInterval(bindInterval)
     bindInterval = null
   }
+  if (fallbackTimer) {
+    clearTimeout(fallbackTimer)
+    fallbackTimer = null
+  }
   if (zxingReader) {
     try {
       zxingReader.stopContinuousDecode()
@@ -203,31 +216,57 @@ const stopZxing = () => {
     }
     zxingReader = null
   }
+  fallbackCanvas = null
+  fallbackCtx = null
+  isFrameProcessing = false
 }
 
 const startZxingFallback = (videoElement) => {
-  if (!videoElement || zxingReader) return
+  if (!videoElement || fallbackTimer) return
   try {
     applyZxingRssExpandedPatch()
-    const hints = new Map()
-    hints.set(DecodeHintType.TRY_HARDER, true)
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+
+    const GS1_FAMILY = ['RSS_EXPANDED', 'RSS_14', 'CODABAR', 'CODE_93']
+    const preferred = String(props.preferredFormat || '').toUpperCase()
+    const wantGs1Heavy = GS1_FAMILY.includes(preferred)
+
+    // Format 2D murni ditangani engine utama → fallback tidak perlu jalan (hemat CPU).
+    const PURE_2D = ['QR_CODE', 'DATA_MATRIX', 'AZTEC', 'PDF_417']
+    if (PURE_2D.includes(preferred)) return
+
+    const GS1_ZXING_FORMATS = [
       BarcodeFormat.CODE_93,
-      BarcodeFormat.CODABAR,
       BarcodeFormat.RSS_EXPANDED,
       BarcodeFormat.RSS_14,
-      BarcodeFormat.CODE_39,
       BarcodeFormat.CODE_128,
-      BarcodeFormat.ITF,
-      BarcodeFormat.EAN_13,
-      BarcodeFormat.EAN_8,
-      BarcodeFormat.UPC_A,
-      BarcodeFormat.UPC_E,
+      BarcodeFormat.CODABAR,
+      BarcodeFormat.ITF
+    ]
+    // AUTO: CODE_93 & RSS_EXPANDED diprioritaskan di awal array
+    const AUTO_ZXING_FORMATS = [
+      BarcodeFormat.CODE_93,
+      BarcodeFormat.RSS_EXPANDED,
+      BarcodeFormat.CODE_128,
       BarcodeFormat.QR_CODE,
-      BarcodeFormat.DATA_MATRIX,
-      BarcodeFormat.AZTEC,
-      BarcodeFormat.PDF_417
-    ])
+      BarcodeFormat.EAN_13,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.RSS_14,
+      BarcodeFormat.CODABAR,
+      BarcodeFormat.ITF
+    ]
+    const hints = new Map()
+    hints.set(DecodeHintType.TRY_HARDER, true)
+    hints.set(
+      DecodeHintType.POSSIBLE_FORMATS,
+      wantGs1Heavy ? GS1_ZXING_FORMATS : AUTO_ZXING_FORMATS
+    )
+
+    const multiReader = new MultiFormatReader()
+    multiReader.setHints(hints)
+
+    // Fast-path dedicated readers
+    const code93Dedicated = new Code93Reader()
+    const rssExpandedDedicated = new RSSExpandedReader()
 
     const ZXING_FORMAT_NAME_MAP = {
       [BarcodeFormat.AZTEC]: 'AZTEC',
@@ -247,24 +286,155 @@ const startZxingFallback = (videoElement) => {
       [BarcodeFormat.UPC_E]: 'UPC_E'
     }
 
-    zxingReader = new BrowserMultiFormatReader(hints, 250)
-    zxingReader.decodeContinuously(videoElement, (result, err) => {
-      // KUNCI STATE MACHINE: Jika scanner dalam kondisi PAUSED atau PROCESSING, abaikan hasil decode!
-      if (isPaused.value || isProcessingScan.value || scannerState.value !== 'SCANNING' || status.value !== 'scanning') {
+    fallbackCanvas = document.createElement('canvas')
+    fallbackCtx = fallbackCanvas.getContext('2d', { willReadFrequently: true })
+
+    const processFrame = () => {
+      if (!show.value || status.value !== 'scanning') return
+
+      if (isPaused.value || isProcessingScan.value || scannerState.value !== 'SCANNING') {
+        fallbackTimer = setTimeout(processFrame, 100)
         return
       }
-      if (result && result.getText && result.getText()) {
-        const text = result.getText()
-        const fmtEnum = result.getBarcodeFormat()
-        const formatName = ZXING_FORMAT_NAME_MAP[fmtEnum] || null
-        onScanSuccess(text, { result: { format: { format: fmtEnum, formatName } } })
-      } else {
-        onScanFailure()
+
+      if (isFrameProcessing) {
+        fallbackTimer = setTimeout(processFrame, 40)
+        return
       }
-    })
-    console.log('[CAMERA] ZXing auxiliary engine aktif memindai video.')
+
+      const vw = videoElement.videoWidth
+      const vh = videoElement.videoHeight
+
+      if (!vw || !vh) {
+        fallbackTimer = setTimeout(processFrame, 150)
+        return
+      }
+
+      isFrameProcessing = true
+
+      try {
+        // Skala canvas ke lebar optimal (maks 960px) untuk kecepatan & kepresisian modul 1-px
+        const maxW = 960
+        const scale = vw > maxW ? maxW / vw : 1.0
+        const cw = Math.floor(vw * scale)
+        const ch = Math.floor(vh * scale)
+
+        if (fallbackCanvas.width !== cw || fallbackCanvas.height !== ch) {
+          fallbackCanvas.width = cw
+          fallbackCanvas.height = ch
+        }
+
+        fallbackCtx.drawImage(videoElement, 0, 0, cw, ch)
+        const imgData = fallbackCtx.getImageData(0, 0, cw, ch)
+        const data = imgData.data
+
+        // Konversi ke grayscale Uint8ClampedArray untuk RGBLuminanceSource
+        const gray = new Uint8ClampedArray(cw * ch)
+        for (let i = 0; i < cw * ch; i++) {
+          const r = data[i * 4]
+          const g = data[i * 4 + 1]
+          const b = data[i * 4 + 2]
+          gray[i] = (r * 306 + g * 601 + b * 117) >> 10
+        }
+
+        const lumSource = new RGBLuminanceSource(gray, cw, ch)
+        let decodeResult = null
+
+        // Fast-path 1: Jika preferredFormat spesifik ke CODE_93 atau RSS_EXPANDED
+        if (preferred === 'CODE_93') {
+          try {
+            const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(lumSource))
+            decodeResult = code93Dedicated.decode(bitmap)
+          } catch {
+            try {
+              const bitmap = new BinaryBitmap(new HybridBinarizer(lumSource))
+              decodeResult = code93Dedicated.decode(bitmap)
+            } catch {}
+          }
+        } else if (preferred === 'RSS_EXPANDED') {
+          try {
+            const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(lumSource))
+            decodeResult = rssExpandedDedicated.decode(bitmap)
+          } catch {
+            try {
+              const bitmap = new BinaryBitmap(new HybridBinarizer(lumSource))
+              decodeResult = rssExpandedDedicated.decode(bitmap)
+            } catch {}
+          }
+        }
+
+        // Pass 1 Utama: HybridBinarizer + MultiFormatReader
+        if (!decodeResult) {
+          try {
+            const bitmapHybrid = new BinaryBitmap(new HybridBinarizer(lumSource))
+            decodeResult = multiReader.decodeWithState(bitmapHybrid)
+          } catch {}
+        }
+
+        // Pass 2 Fallback: GlobalHistogramBinarizer + MultiFormatReader (Sangat ampuh untuk garis 1-px CODE_93 & bayangan gudang)
+        if (!decodeResult) {
+          try {
+            const bitmapGlobal = new BinaryBitmap(new GlobalHistogramBinarizer(lumSource))
+            decodeResult = multiReader.decodeWithState(bitmapGlobal)
+          } catch {}
+        }
+
+        // Pass 3 Inverted: Barcode pada latar gelap / refleksi gudang
+        if (!decodeResult && (wantGs1Heavy || preferred === 'CODE_93')) {
+          try {
+            const invLum = new InvertedLuminanceSource(lumSource)
+            const bitmapInv = new BinaryBitmap(new GlobalHistogramBinarizer(invLum))
+            decodeResult = multiReader.decodeWithState(bitmapInv)
+          } catch {}
+        }
+
+        if (decodeResult && decodeResult.getText && decodeResult.getText()) {
+          const text = decodeResult.getText()
+          const fmtEnum = decodeResult.getBarcodeFormat()
+          const formatName = ZXING_FORMAT_NAME_MAP[fmtEnum] || null
+          onScanSuccess(text, { result: { format: { format: fmtEnum, formatName } } })
+        }
+      } catch (err) {
+        /* decode gagal senyap di frame ini */
+      } finally {
+        isFrameProcessing = false
+        fallbackTimer = setTimeout(processFrame, 60)
+      }
+    }
+
+    fallbackTimer = setTimeout(processFrame, 100)
+    console.log('[CAMERA] ZXing auxiliary engine (Dual-Pass MultiFormat + FastPath CODE_93 & RSS_EXPANDED) aktif.')
   } catch (err) {
     console.warn('[CAMERA] ZXing auxiliary engine could not bind:', err)
+  }
+}
+
+const applyHardwareCameraConstraints = async (videoElement) => {
+  if (!videoElement) return
+  try {
+    const stream = videoElement.srcObject
+    if (stream && typeof stream.getVideoTracks === 'function') {
+      const tracks = stream.getVideoTracks()
+      if (tracks && tracks.length > 0) {
+        const track = tracks[0]
+        if (typeof track.getCapabilities === 'function' && typeof track.applyConstraints === 'function') {
+          const caps = track.getCapabilities() || {}
+          const constraints = {}
+          if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+            constraints.focusMode = 'continuous'
+          }
+          if (caps.zoom && typeof caps.zoom === 'object' && caps.zoom.max >= 1.2) {
+            constraints.zoom = Math.min(1.2, caps.zoom.max)
+          }
+          if (Object.keys(constraints).length > 0) {
+            await track.applyConstraints({ advanced: [constraints] }).catch(() => {})
+            console.log('[CAMERA] Hardware constraints applied:', constraints)
+          }
+        }
+      }
+    }
+  } catch {
+    /* hardware constraint opsional */
   }
 }
 
@@ -377,6 +547,13 @@ const startCamera = async () => {
   technicalError.value = ''
 
   const attempts = [
+    // P1: minta resolusi HD + fokus kontinu agar bar 1-px CODE_93 & stacked RSS terbaca di HP menengah
+    {
+      facingMode: 'environment',
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      focusMode: 'continuous'
+    },
     { facingMode: 'environment' },
     true
   ]
@@ -395,7 +572,12 @@ const startCamera = async () => {
       await scanner.start(
         cameraConfig,
         {
-          fps: 15
+          // Full-frame: tanpa qrbox agar seluruh area video di-decode
+          // (simbol lebar RSS_EXPANDED & posisi tepi ikut terbaca).
+          // 30 fps dihindari: mempergelap frame gudang & membebani CPU HP menengah.
+          fps: 22,
+          aspectRatio: 1.7777778,
+          disableFlip: false
         },
         onScanSuccess,
         onScanFailure
@@ -410,11 +592,15 @@ const startCamera = async () => {
         if (videoEl && videoEl.videoWidth > 0) {
           if (bindInterval) clearInterval(bindInterval)
           bindInterval = null
+          applyHardwareCameraConstraints(videoEl)
           startZxingFallback(videoEl)
         } else if (bindAttempts > 20) {
           if (bindInterval) clearInterval(bindInterval)
           bindInterval = null
-          if (videoEl) startZxingFallback(videoEl)
+          if (videoEl) {
+            applyHardwareCameraConstraints(videoEl)
+            startZxingFallback(videoEl)
+          }
         }
       }, 200)
 
@@ -516,7 +702,9 @@ const onScanSuccess = (decodedText, decodedResult) => {
     decodedResult?.result?.formatName ||
     null
 
-  const resi = normalizeScannedBarcode(raw, formatName) || raw
+  // Full-frame: latar (garis keyboard, label tetangga) ikut ter-decode.
+  // Hasil yang gagal normalisasi/validasi ditolak senyap — tanpa beep/emit.
+  const resi = normalizeScannedBarcode(raw, formatName)
   if (!resi || resi.length < 4) return
 
   // Guard 3: KUNCI KETAT resi yang sama jika masih ditahan di depan kamera (< 3.0 detik)
@@ -667,66 +855,5 @@ onBeforeUnmount(stopCamera)
 .history-chip--warning { background-color: #fee2e2; color: #b91c1c; }
 .history-chip--danger  { background-color: #fee2e2; color: #b91c1c; }
 
-/* HANYA SATU BOX FRAME AREA SCANNING RESMI (BERADA TEPAT DI TENGAH PREVIEW KAMERA) */
-.scan-frame-box {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(78%, 340px);
-  height: min(48%, 150px);
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.42);
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 5;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-}
-
-.scan-frame-box--paused {
-  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.65) !important;
-}
-
-.scan-frame-box--paused .scan-corner {
-  border-color: #f59e0b !important;
-}
-
-/* Corner Brackets Frame (┌ ┐ └ ┘) Modern */
-.scan-corner {
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  border-color: rgba(255, 255, 255, 0.92);
-  border-style: solid;
-  pointer-events: none;
-  transition: border-color 0.3s ease;
-}
-
-.scan-corner--top-left {
-  top: 0;
-  left: 0;
-  border-width: 2.5px 0 0 2.5px;
-  border-top-left-radius: 8px;
-}
-
-.scan-corner--top-right {
-  top: 0;
-  right: 0;
-  border-width: 2.5px 2.5px 0 0;
-  border-top-right-radius: 8px;
-}
-
-.scan-corner--bottom-left {
-  bottom: 0;
-  left: 0;
-  border-width: 0 0 2.5px 2.5px;
-  border-bottom-left-radius: 8px;
-}
-
-.scan-corner--bottom-right {
-  bottom: 0;
-  right: 0;
-  border-width: 0 2.5px 2.5px 0;
-  border-bottom-right-radius: 8px;
-}
+/* Preview kamera full-frame: tanpa overlay kotak, seluruh area video di-decode */
 </style>

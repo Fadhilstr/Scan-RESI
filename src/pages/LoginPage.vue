@@ -111,6 +111,7 @@
 
               <div class="row items-center justify-between q-mt-xs">
                 <q-btn
+                  type="button"
                   flat
                   dense
                   no-caps
@@ -121,6 +122,7 @@
                 />
 
                 <q-btn
+                  type="button"
                   outline
                   dense
                   no-caps
@@ -226,8 +228,9 @@
               />
 
               <div class="row items-center justify-between q-mt-xs">
-                <q-btn flat dense no-caps color="grey-7" icon="arrow_back" label="Batal" @click="cancelForgot" />
+                <q-btn type="button" flat dense no-caps color="grey-7" icon="arrow_back" label="Batal" @click="cancelForgot" />
                 <q-btn
+                  type="button"
                   outline
                   dense
                   no-caps
@@ -449,8 +452,7 @@ const handleResendOtp = async () => {
 
   const res = await authStore.resendOtp(preauthToken.value)
   if (res.success) {
-    resendCooldownSeconds.value = 60
-    otpExpireSeconds.value = 300
+    startTimers()
     $q.notify({
       type: 'positive',
       icon: 'mark_email_read',

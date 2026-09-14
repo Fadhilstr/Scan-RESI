@@ -264,6 +264,11 @@ export function normalizeScannedBarcode(raw, format = null) {
   if (typeof format === 'string') {
     fmt = format.toUpperCase()
   } else if (typeof format === 'number') {
+    // P2: URUTAN enum ZXing (@zxing/library BarcodeFormat) BERBEDA dari
+    // Html5QrcodeSupportedFormats di header file ini. Jalur live kamera selalu
+    // memetakan enum -> nama via ZXING_FORMAT_NAME_MAP dulu, sehingga map
+    // numerik ini mengikuti urutan ZXing (bukan urutan html5-qrcode).
+    // Nama string selalu diutamakan; angka hanya fallback legacy.
     const FORMAT_ENUM_MAP = {
       0: 'AZTEC', 1: 'CODABAR', 2: 'CODE_39', 3: 'CODE_93', 4: 'CODE_128',
       5: 'DATA_MATRIX', 6: 'EAN_8', 7: 'EAN_13', 8: 'ITF', 9: 'MAXICODE', 10: 'PDF_417',
@@ -275,7 +280,7 @@ export function normalizeScannedBarcode(raw, format = null) {
   }
 
   // 2. RSS_EXPANDED: Parsing format GS1 DataBar Expanded (01)GTIN-14(10)TrackingNo
-  if (fmt === 'RSS_EXPANDED' || /\(01\).+\(10\)/i.test(s) || /^01\d{14}10/i.test(s) || s.includes('(10)')) {
+  if (fmt === 'RSS_EXPANDED' || /\(01\).+\(10\)/i.test(s) || /^01\d{14}10/i.test(s) || s.includes('(10)') || s.includes('(01)')) {
     const mGs1 = s.match(/^(?:\(01\)|01)\s*\d{14}\s*(?:\(10\)|10)\s*([A-Z0-9]+)$/i)
     if (mGs1 && mGs1[1]) {
       const extracted = mGs1[1].toUpperCase()
@@ -285,6 +290,20 @@ export function normalizeScannedBarcode(raw, format = null) {
     if (m10Paren && m10Paren[1]) {
       const extracted = m10Paren[1].toUpperCase()
       return checkLocalStorage(extracted) || checkLocalStorage(s) || extracted
+    }
+    // P2: fallback longgar — decode video terpotong sering hanya dapat (01)GTIN
+    // tanpa ekor (10). Jangan buang (return ''); kembalikan GTIN agar bisa
+    // lookup via barcode_value di backend.
+    const m01only = s.match(/^(?:\(01\)|01)\s*(\d{14})/i)
+    if (m01only && m01only[1]) {
+      const gtin = m01only[1]
+      return (
+        checkLocalStorage(gtin) ||
+        checkLocalStorage(`(01)${gtin}`) ||
+        checkLocalStorage(`01${gtin}`) ||
+        checkLocalStorage(s) ||
+        gtin
+      )
     }
   }
 
@@ -333,11 +352,23 @@ export function normalizeScannedBarcode(raw, format = null) {
     return ''
   }
 
-  // 6. CODE_93: Hapus non-alfanumerik, tetap kapital
+  // 6. CODE_93: pertahankan charset legal, kupas trailer check digits C & K
   if (fmt === 'CODE_93') {
-    const clean93 = s.replace(/[^A-Z0-9]/g, '')
+    // P2: charset legal Code 93 mencakup - . space / + % (sebelumnya ikut terhapus)
+    const clean93 = s.replace(/[^A-Z0-9\-\.\ \$\/\+\%]/g, '').trim()
     if (clean93 && clean93.length >= 4) {
-      return checkLocalStorage(clean93) || clean93
+      const direct = checkLocalStorage(clean93)
+      if (direct) return direct
+      // Decoder (bwip includecheck:true) sering mengembalikan base + C&K.
+      // Jika 2 char terakhir cocok sebagai C&K dari base, kupas lalu lookup lagi.
+      if (clean93.length >= 6) {
+        const base = clean93.slice(0, -2)
+        const ck = calculateCode93CheckDigits(base)
+        if (ck.full && clean93 === ck.full) {
+          return checkLocalStorage(base) || base
+        }
+      }
+      return clean93
     }
   }
 
@@ -682,6 +713,25 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
       }
       if (format === 'RSS_EXPANDED') {
         localStorage.setItem(`barcode_mapping_(10)${cleanTracking}`, cleanTracking)
+        // P2: varian GTIN saja (tanpa ekor 10) untuk hasil scan video terpotong
+        const mGtin = String(barcodeValue).match(/\(01\)(\d{14})/)
+        if (mGtin && mGtin[1]) {
+          localStorage.setItem(`barcode_mapping_${mGtin[1]}`, cleanTracking)
+          localStorage.setItem(`barcode_mapping_(01)${mGtin[1]}`, cleanTracking)
+          localStorage.setItem(`barcode_mapping_01${mGtin[1]}`, cleanTracking)
+        }
+      }
+      if (format === 'CODE_93') {
+        // P2: decoder bisa mengembalikan base+C&K (bwip includecheck:true),
+        // simpan varian ber-C&K agar direct mapping selalu kena.
+        try {
+          const ck = checkDigits || calculateCode93CheckDigits(barcodeValue)
+          if (ck && ck.full && ck.full !== barcodeValue) {
+            localStorage.setItem(`barcode_mapping_${ck.full}`, cleanTracking)
+          }
+        } catch {
+          /* ignore */
+        }
       }
 
       localStorage.setItem(`barcode_meta_${cleanTracking}_${format}`, JSON.stringify(payload))
@@ -710,10 +760,14 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
     const is2DMatrix = ['QR_CODE', 'AZTEC', 'DATA_MATRIX', 'MAXICODE'].includes(format)
     const isStacked = format === 'PDF_417'
 
+    const isCode93 = format === 'CODE_93'
+    const isExpanded = format === 'RSS_EXPANDED'
+
     const bwipOptions = {
       bcid,
       text: payload.barcode_value,
-      scale: options.scale || 3,
+      // P0: CODE_93 & RSS_EXPANDED butuh modul lebih besar agar terbaca kamera HP 720p
+      scale: options.scale || (isCode93 || isExpanded ? 4 : 3),
       includetext: false,
       backgroundcolor: 'ffffff'
     }
@@ -725,9 +779,11 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
 
     if (!is2DMatrix && !isStacked) {
       // Barcode 1D linear: tingkatkan tinggi dan beri quiet zone padding agar mudah dideteksi kamera
-      bwipOptions.height = options.height || (format === 'RSS_EXPANDED' ? 20 : 16)
-      bwipOptions.paddingwidth = 15
-      bwipOptions.paddingheight = 8
+      // P0: default lebih tinggi untuk CODE_93 (25) & RSS_EXPANDED (30), quiet zone lebih lega
+      const defaultHeight = isExpanded ? 30 : isCode93 ? 25 : 16
+      bwipOptions.height = options.height || defaultHeight
+      bwipOptions.paddingwidth = options.paddingwidth || (isCode93 || isExpanded ? 20 : 15)
+      bwipOptions.paddingheight = options.paddingheight || (isCode93 || isExpanded ? 12 : 8)
     }
 
     const svgString = bwipjs.toSVG(bwipOptions)
@@ -768,9 +824,18 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
       } else if (format === 'RSS_EXPANDED') {
         svgEl.removeAttribute('width')
         svgEl.removeAttribute('height')
-        svgEl.style.maxWidth = options.maxWidth || '320px'
-        svgEl.style.maxHeight = options.maxHeight || '95px'
-        svgEl.style.width = '100%'
+        svgEl.style.maxWidth = options.maxWidth || '490px'
+        svgEl.style.maxHeight = options.maxHeight || '148px'
+        // P0: jangan stretch width:100% agar modul tajam 1:1, mudah di-scan kamera HP
+        svgEl.style.width = 'auto'
+        svgEl.style.height = 'auto'
+      } else if (format === 'CODE_93') {
+        svgEl.removeAttribute('width')
+        svgEl.removeAttribute('height')
+        svgEl.style.maxWidth = options.maxWidth || '430px'
+        svgEl.style.maxHeight = options.maxHeight || '132px'
+        // P0: jangan stretch width:100% agar bar 1-px tidak blur saat downscale
+        svgEl.style.width = 'auto'
         svgEl.style.height = 'auto'
       } else {
         svgEl.removeAttribute('width')

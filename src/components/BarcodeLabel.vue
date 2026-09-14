@@ -379,17 +379,20 @@ const renderBarcode = async () => {
 
   const isExpanded = currentFormat.value === 'RSS_EXPANDED'
   const isMaxi = currentFormat.value === 'MAXICODE'
+  const isCode93 = currentFormat.value === 'CODE_93'
   const is2D = ['QR_CODE', 'AZTEC', 'DATA_MATRIX'].includes(currentFormat.value)
   const isStacked = currentFormat.value === 'PDF_417'
 
-  // Perbesar sedikit (~10-15%) untuk label cetak agar tetap presisi dalam batas 10x14/15cm
+  // P0: CODE_93 & RSS_EXPANDED dibesarkan agar terbaca kamera HP 720p (cahaya gudang)
   const res = await utilRenderBarcode(svgRef.value, targetResi, currentFormat.value, {
-    scale: 3,
-    height: isExpanded ? 23 : 18.5,
+    scale: isExpanded || isCode93 ? 4 : 3,
+    height: isExpanded ? 30 : isCode93 ? 25 : 18.5,
     qrSize: isMaxi ? 210 : (is2D ? 152 : 135),
     width: isStacked ? 260 : undefined,
-    maxWidth: isExpanded ? '345px' : (is2D ? '152px' : (isMaxi ? '210px' : (isStacked ? '260px' : '315px'))),
-    maxHeight: isMaxi ? '210px' : (is2D ? '152px' : (isExpanded ? '108px' : (isStacked ? '90px' : '95px'))),
+    paddingwidth: isExpanded || isCode93 ? 20 : undefined,
+    paddingheight: isExpanded || isCode93 ? 12 : undefined,
+    maxWidth: isExpanded ? '490px' : isCode93 ? '430px' : (is2D ? '152px' : (isMaxi ? '210px' : (isStacked ? '260px' : '315px'))),
+    maxHeight: isMaxi ? '210px' : (is2D ? '152px' : (isExpanded ? '148px' : isCode93 ? '132px' : (isStacked ? '90px' : '95px'))),
     background: '#ffffff',
     lineColor: '#000000'
   })

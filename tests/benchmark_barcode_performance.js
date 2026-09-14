@@ -61,6 +61,7 @@ async function renderBwipPng(bwipName, text) {
     height: 20,
     paddingwidth: 20,
     paddingheight: 15,
+    includecheck: bwipName === 'code93',
     backgroundcolor: 'ffffff'
   })
 
