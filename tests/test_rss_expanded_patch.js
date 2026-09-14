@@ -26,20 +26,21 @@ async function runTests() {
   console.log('TEST SUITE: GS1 DATABAR EXPANDED (RSS EXPANDED) PATCH & MAXICODE')
   console.log('===============================================================\n')
 
-  // Test 1: Verify MAXICODE remains supported in barcodeGenerator.js & system formats
-  console.log('TEST 1: Verifikasi MAXICODE tetap tersedia di master barcodeGenerator...')
+  // Test 1: Verify MAXICODE & UPC_EAN_EXTENSION removal from BARCODE_FORMAT_OPTIONS
+  console.log('TEST 1: Verifikasi MAXICODE & UPC_EAN_EXTENSION telah dihapus dari generator...')
   const maxiOpt = BARCODE_FORMAT_OPTIONS.find((opt) => opt.value === 'MAXICODE')
-  assert.ok(maxiOpt, 'MAXICODE harus tetap terdaftar di BARCODE_FORMAT_OPTIONS master!')
-  assert.strictEqual(maxiOpt.value, 'MAXICODE')
-  console.log('  -> PASS: MAXICODE tetap terdaftar di master generator.\n')
+  const upcExtOpt = BARCODE_FORMAT_OPTIONS.find((opt) => opt.value === 'UPC_EAN_EXTENSION')
+  assert.strictEqual(maxiOpt, undefined, 'MAXICODE tidak boleh terdaftar di BARCODE_FORMAT_OPTIONS!')
+  assert.strictEqual(upcExtOpt, undefined, 'UPC_EAN_EXTENSION tidak boleh terdaftar di BARCODE_FORMAT_OPTIONS!')
+  console.log('  -> PASS: MAXICODE & UPC_EAN_EXTENSION berhasil dihapus dari master generator.\n')
 
-  // Test 2: Verify MAXICODE filter for Customer Buat Paket dropdown
-  console.log('TEST 2: Verifikasi filter dropdown Customer Buat Paket mengecualikan MAXICODE...')
-  const customerFormatOptions = BARCODE_FORMAT_OPTIONS.filter((opt) => opt.value !== 'MAXICODE')
-  const foundInCustomer = customerFormatOptions.some((opt) => opt.value === 'MAXICODE')
-  assert.strictEqual(foundInCustomer, false, 'MAXICODE tidak boleh ada di dropdown customer!')
-  assert.ok(customerFormatOptions.length >= 15, 'Format barcode customer lainnya tetap lengkap.')
-  console.log(`  -> PASS: Total ${customerFormatOptions.length} format untuk customer (tanpa MAXICODE).\n`)
+  // Test 2: Verify Customer Buat Paket dropdown options (15 active formats)
+  console.log('TEST 2: Verifikasi 15 format aktif pada dropdown customer (tanpa MAXICODE & UPC_EAN_EXTENSION)...')
+  const customerFormatOptions = BARCODE_FORMAT_OPTIONS
+  assert.strictEqual(customerFormatOptions.length, 15, 'Total format barcode customer harus tepat 15 format.')
+  assert.ok(customerFormatOptions.some((opt) => opt.value === 'RSS_14'), 'RSS_14 harus tersedia.')
+  assert.ok(customerFormatOptions.some((opt) => opt.value === 'RSS_EXPANDED'), 'RSS_EXPANDED harus tersedia.')
+  console.log(`  -> PASS: Total ${customerFormatOptions.length} format untuk customer (RSS_14 & RSS_EXPANDED aktif).\n`)
 
   // Test 3: Apply ZXing RSS Expanded Patch
   console.log('TEST 3: Menerapkan patch runtime ZXing RSS Expanded...')

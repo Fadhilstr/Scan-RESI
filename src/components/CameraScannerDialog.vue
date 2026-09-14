@@ -114,6 +114,7 @@ import {
   MultiFormatReader,
   Code93Reader,
   RSSExpandedReader,
+  RSS14Reader,
   InvertedLuminanceSource
 } from '@zxing/library'
 import { normalizeScannedBarcode } from '../utils/barcodeGenerator'
@@ -240,24 +241,29 @@ const startZxingFallback = (videoElement) => {
     if (PURE_2D.includes(preferred)) return
 
     const GS1_ZXING_FORMATS = [
-      BarcodeFormat.CODE_93,
-      BarcodeFormat.RSS_EXPANDED,
       BarcodeFormat.RSS_14,
+      BarcodeFormat.RSS_EXPANDED,
+      BarcodeFormat.CODE_93,
       BarcodeFormat.CODE_128,
       BarcodeFormat.CODABAR,
       BarcodeFormat.ITF
     ]
-    // AUTO: CODE_93 & RSS_EXPANDED diprioritaskan di awal array
+    // AUTO: RSS_14, RSS_EXPANDED, & CODE_93 diprioritaskan di awal array
     const AUTO_ZXING_FORMATS = [
-      BarcodeFormat.CODE_93,
+      BarcodeFormat.RSS_14,
       BarcodeFormat.RSS_EXPANDED,
+      BarcodeFormat.CODE_93,
       BarcodeFormat.CODE_128,
       BarcodeFormat.QR_CODE,
       BarcodeFormat.EAN_13,
       BarcodeFormat.CODE_39,
-      BarcodeFormat.RSS_14,
       BarcodeFormat.CODABAR,
-      BarcodeFormat.ITF
+      BarcodeFormat.ITF,
+      BarcodeFormat.EAN_8,
+      BarcodeFormat.UPC_A,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.AZTEC,
+      BarcodeFormat.PDF_417
     ]
     const hints = new Map()
     hints.set(DecodeHintType.TRY_HARDER, true)
@@ -269,9 +275,10 @@ const startZxingFallback = (videoElement) => {
     const multiReader = new MultiFormatReader()
     multiReader.setHints(hints)
 
-    // Fast-path dedicated readers
+    // Fast-path dedicated readers khusus format GS1 & Code 93
     const code93Dedicated = new Code93Reader()
     const rssExpandedDedicated = new RSSExpandedReader()
+    const rss14Dedicated = new RSS14Reader()
 
     const ZXING_FORMAT_NAME_MAP = {
       [BarcodeFormat.AZTEC]: 'AZTEC',
@@ -303,7 +310,7 @@ const startZxingFallback = (videoElement) => {
       }
 
       if (isFrameProcessing) {
-        fallbackTimer = setTimeout(processFrame, 40)
+        fallbackTimer = setTimeout(processFrame, 35)
         return
       }
 
@@ -345,7 +352,7 @@ const startZxingFallback = (videoElement) => {
         const lumSource = new RGBLuminanceSource(gray, cw, ch)
         let decodeResult = null
 
-        // Fast-path 1: Jika preferredFormat spesifik ke CODE_93 atau RSS_EXPANDED
+        // Fast-path 1: Spesifik ke CODE_93, RSS_EXPANDED, atau RSS_14
         if (preferred === 'CODE_93') {
           try {
             const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(lumSource))
@@ -366,6 +373,28 @@ const startZxingFallback = (videoElement) => {
               decodeResult = rssExpandedDedicated.decode(bitmap)
             } catch {}
           }
+        } else if (preferred === 'RSS_14') {
+          try {
+            const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(lumSource))
+            decodeResult = rss14Dedicated.decode(bitmap)
+          } catch {
+            try {
+              const bitmap = new BinaryBitmap(new HybridBinarizer(lumSource))
+              decodeResult = rss14Dedicated.decode(bitmap)
+            } catch {}
+          }
+        }
+
+        // Fast-path GS1 & RSS tambahan (bila AUTO / wantGs1Heavy)
+        if (!decodeResult && (wantGs1Heavy || !preferred)) {
+          try {
+            const bitmapGlobal = new BinaryBitmap(new GlobalHistogramBinarizer(lumSource))
+            try {
+              decodeResult = rssExpandedDedicated.decode(bitmapGlobal)
+            } catch {
+              decodeResult = rss14Dedicated.decode(bitmapGlobal)
+            }
+          } catch {}
         }
 
         // Pass 1 Utama: HybridBinarizer + MultiFormatReader
@@ -385,7 +414,7 @@ const startZxingFallback = (videoElement) => {
         }
 
         // Pass 3 Inverted: Barcode pada latar gelap / refleksi gudang
-        if (!decodeResult && (wantGs1Heavy || preferred === 'CODE_93')) {
+        if (!decodeResult && (wantGs1Heavy || preferred === 'CODE_93' || preferred === 'RSS_14' || preferred === 'RSS_EXPANDED')) {
           try {
             const invLum = new InvertedLuminanceSource(lumSource)
             const bitmapInv = new BinaryBitmap(new GlobalHistogramBinarizer(invLum))
@@ -403,12 +432,12 @@ const startZxingFallback = (videoElement) => {
         /* decode gagal senyap di frame ini */
       } finally {
         isFrameProcessing = false
-        fallbackTimer = setTimeout(processFrame, 60)
+        fallbackTimer = setTimeout(processFrame, 35)
       }
     }
 
-    fallbackTimer = setTimeout(processFrame, 100)
-    console.log('[CAMERA] ZXing auxiliary engine (Dual-Pass MultiFormat + FastPath CODE_93 & RSS_EXPANDED) aktif.')
+    fallbackTimer = setTimeout(processFrame, 80)
+    console.log('[CAMERA] ZXing auxiliary engine (Dual-Pass MultiFormat + Dedicated RSS_14, RSS_EXPANDED, CODE_93) aktif.')
   } catch (err) {
     console.warn('[CAMERA] ZXing auxiliary engine could not bind:', err)
   }

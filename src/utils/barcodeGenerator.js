@@ -1,24 +1,15 @@
 import bwipjs from 'bwip-js'
 
 /**
- * 17 Format Barcode yang kompatibel dengan decoder kamera scanner (Html5QrcodeSupportedFormats):
- * QR_CODE = 0, AZTEC = 1, CODABAR = 2, CODE_39 = 3, CODE_93 = 4, CODE_128 = 5,
- * DATA_MATRIX = 6, MAXICODE = 7, ITF = 8, EAN_13 = 9, EAN_8 = 10, PDF_417 = 11,
- * RSS_14 = 12, RSS_EXPANDED = 13, UPC_A = 14, UPC_E = 15, UPC_EAN_EXTENSION = 16
+ * 15 Format Barcode standar yang didukung penuh oleh decoder kamera scanner:
+ * QR_CODE, AZTEC, CODABAR, CODE_39, CODE_93, CODE_128, DATA_MATRIX, ITF,
+ * EAN_13, EAN_8, PDF_417, RSS_14, RSS_EXPANDED, UPC_A, UPC_E.
  */
 export const BARCODE_FORMAT_OPTIONS = [
   { label: 'CODE_128', value: 'CODE_128', supported: true, category: '1D' },
   { label: 'QR_CODE', value: 'QR_CODE', supported: true, category: '2D Matrix' },
   { label: 'AZTEC', value: 'AZTEC', supported: true, category: '2D Matrix' },
   { label: 'DATA_MATRIX', value: 'DATA_MATRIX', supported: true, category: '2D Matrix' },
-  {
-    label: 'MAXICODE',
-    value: 'MAXICODE',
-    supported: false,
-    disable: true,
-    warning: 'Memerlukan scanner hardware/laser industri 2D (tidak didukung kamera webcam)',
-    category: '2D Matrix'
-  },
   { label: 'PDF_417', value: 'PDF_417', supported: true, category: '2D Stacked' },
   { label: 'CODE_39', value: 'CODE_39', supported: true, category: '1D' },
   { label: 'CODE_93', value: 'CODE_93', supported: true, category: '1D' },
@@ -40,7 +31,6 @@ const BWIP_FORMAT_MAP = {
   QR_CODE: 'qrcode',
   AZTEC: 'azteccode',
   DATA_MATRIX: 'datamatrix',
-  MAXICODE: 'maxicode',
   PDF_417: 'pdf417',
   CODE_39: 'code39',
   CODE_93: 'code93',
