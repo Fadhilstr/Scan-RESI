@@ -33,3 +33,4 @@ backend/db/seed*.sql
 backend/db/seeder*.sql
 backend/seed_users.sh
 backend/seed_users.pl
+backend/db/migrate_paket.sql
