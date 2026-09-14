@@ -183,6 +183,7 @@ let fallbackTimer = null
 
 let lastScanTimestamp = 0
 let lastScannedResi = ''
+let lastEmittedResi = ''
 let emptyFramesCount = 0
 
 // State Machine Status: IDLE -> STARTING -> SCANNING -> PAUSED -> PROCESSING -> ALERT -> COOLDOWN -> RESUME -> SCANNING
@@ -310,7 +311,7 @@ const startZxingFallback = (videoElement) => {
       }
 
       if (isFrameProcessing) {
-        fallbackTimer = setTimeout(processFrame, 35)
+        fallbackTimer = setTimeout(processFrame, 30)
         return
       }
 
@@ -325,8 +326,8 @@ const startZxingFallback = (videoElement) => {
       isFrameProcessing = true
 
       try {
-        // Skala canvas ke lebar optimal (maks 960px) untuk kecepatan & kepresisian modul 1-px
-        const maxW = 960
+        // Skala canvas ke lebar optimal (maks 1080px) untuk kepresisian tinggi modul 1-px
+        const maxW = 1080
         const scale = vw > maxW ? maxW / vw : 1.0
         const cw = Math.floor(vw * scale)
         const ch = Math.floor(vh * scale)
@@ -352,60 +353,76 @@ const startZxingFallback = (videoElement) => {
         const lumSource = new RGBLuminanceSource(gray, cw, ch)
         let decodeResult = null
 
-        // Fast-path 1: Spesifik ke CODE_93, RSS_EXPANDED, atau RSS_14
-        if (preferred === 'CODE_93') {
+        // Reset state pembaca dedicated sebelum memproses frame baru (mencegah akumulasi parsial row)
+        try { rssExpandedDedicated.reset() } catch {}
+        try { rss14Dedicated.reset() } catch {}
+        try { code93Dedicated.reset() } catch {}
+
+        // Crop ROI tengah (area laser overlay 85% x 65%) untuk kepresisian modul GS1 DataBar & Code93
+        let roiSource = lumSource
+        try {
+          const cropW = Math.floor(cw * 0.85)
+          const cropH = Math.floor(ch * 0.65)
+          const cropX = Math.floor((cw - cropW) / 2)
+          const cropY = Math.floor((ch - cropH) / 2)
+          roiSource = lumSource.crop(cropX, cropY, cropW, cropH)
+        } catch {
+          roiSource = lumSource
+        }
+
+        // Fast-path 1: Spesifik ke RSS_EXPANDED / GS1 DataBar Expanded
+        if (preferred === 'RSS_EXPANDED' || wantGs1Heavy || !preferred) {
           try {
-            const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(lumSource))
-            decodeResult = code93Dedicated.decode(bitmap)
-          } catch {
-            try {
-              const bitmap = new BinaryBitmap(new HybridBinarizer(lumSource))
-              decodeResult = code93Dedicated.decode(bitmap)
-            } catch {}
-          }
-        } else if (preferred === 'RSS_EXPANDED') {
-          try {
-            const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(lumSource))
+            const bitmap = new BinaryBitmap(new HybridBinarizer(roiSource))
             decodeResult = rssExpandedDedicated.decode(bitmap)
           } catch {
             try {
-              const bitmap = new BinaryBitmap(new HybridBinarizer(lumSource))
+              const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(roiSource))
               decodeResult = rssExpandedDedicated.decode(bitmap)
-            } catch {}
+            } catch {
+              try {
+                const bitmap = new BinaryBitmap(new HybridBinarizer(lumSource))
+                decodeResult = rssExpandedDedicated.decode(bitmap)
+              } catch {}
+            }
           }
-        } else if (preferred === 'RSS_14') {
+        }
+
+        // Fast-path 2: Spesifik ke RSS_14
+        if (!decodeResult && (preferred === 'RSS_14' || wantGs1Heavy || !preferred)) {
           try {
-            const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(lumSource))
+            const bitmap = new BinaryBitmap(new HybridBinarizer(roiSource))
             decodeResult = rss14Dedicated.decode(bitmap)
           } catch {
             try {
-              const bitmap = new BinaryBitmap(new HybridBinarizer(lumSource))
+              const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(roiSource))
               decodeResult = rss14Dedicated.decode(bitmap)
             } catch {}
           }
         }
 
-        // Fast-path GS1 & RSS tambahan (bila AUTO / wantGs1Heavy)
-        if (!decodeResult && (wantGs1Heavy || !preferred)) {
+        // Fast-path 3: CODE_93
+        if (!decodeResult && (preferred === 'CODE_93' || wantGs1Heavy)) {
           try {
-            const bitmapGlobal = new BinaryBitmap(new GlobalHistogramBinarizer(lumSource))
+            const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(roiSource))
+            decodeResult = code93Dedicated.decode(bitmap)
+          } catch {
             try {
-              decodeResult = rssExpandedDedicated.decode(bitmapGlobal)
-            } catch {
-              decodeResult = rss14Dedicated.decode(bitmapGlobal)
-            }
-          } catch {}
+              const bitmap = new BinaryBitmap(new HybridBinarizer(roiSource))
+              decodeResult = code93Dedicated.decode(bitmap)
+            } catch {}
+          }
         }
 
-        // Pass 1 Utama: HybridBinarizer + MultiFormatReader
+        // Pass 1 Utama: HybridBinarizer + MultiFormatReader (pada ROI crop)
         if (!decodeResult) {
           try {
-            const bitmapHybrid = new BinaryBitmap(new HybridBinarizer(lumSource))
+            const bitmapHybrid = new BinaryBitmap(new HybridBinarizer(roiSource))
             decodeResult = multiReader.decodeWithState(bitmapHybrid)
           } catch {}
         }
 
-        // Pass 2 Fallback: GlobalHistogramBinarizer + MultiFormatReader (Sangat ampuh untuk garis 1-px CODE_93 & bayangan gudang)
+        // Pass 2 Fallback: GlobalHistogramBinarizer + MultiFormatReader (full frame)
         if (!decodeResult) {
           try {
             const bitmapGlobal = new BinaryBitmap(new GlobalHistogramBinarizer(lumSource))
@@ -416,7 +433,7 @@ const startZxingFallback = (videoElement) => {
         // Pass 3 Inverted: Barcode pada latar gelap / refleksi gudang
         if (!decodeResult && (wantGs1Heavy || preferred === 'CODE_93' || preferred === 'RSS_14' || preferred === 'RSS_EXPANDED')) {
           try {
-            const invLum = new InvertedLuminanceSource(lumSource)
+            const invLum = new InvertedLuminanceSource(roiSource)
             const bitmapInv = new BinaryBitmap(new GlobalHistogramBinarizer(invLum))
             decodeResult = multiReader.decodeWithState(bitmapInv)
           } catch {}
@@ -432,11 +449,11 @@ const startZxingFallback = (videoElement) => {
         /* decode gagal senyap di frame ini */
       } finally {
         isFrameProcessing = false
-        fallbackTimer = setTimeout(processFrame, 35)
+        fallbackTimer = setTimeout(processFrame, 30)
       }
     }
 
-    fallbackTimer = setTimeout(processFrame, 80)
+    fallbackTimer = setTimeout(processFrame, 60)
     console.log('[CAMERA] ZXing auxiliary engine (Dual-Pass MultiFormat + Dedicated RSS_14, RSS_EXPANDED, CODE_93) aktif.')
   } catch (err) {
     console.warn('[CAMERA] ZXing auxiliary engine could not bind:', err)
@@ -541,6 +558,7 @@ const onOpen = () => {
   latest.value = null
   history.value = []
   lastScannedResi = ''
+  lastEmittedResi = ''
   lastScanTimestamp = 0
   emptyFramesCount = 0
   isPaused.value = false
@@ -706,7 +724,11 @@ const closeDialog = () => {
 const onScanFailure = () => {
   if (status.value === 'scanning' && !isPaused.value) {
     emptyFramesCount++
-    if (emptyFramesCount >= 18) {
+    // 120 frame (~5 detik) tanpa barcode sama sekali -> reset lock resi terakhir agar bisa discan ulang jika dibutuhkan
+    if (emptyFramesCount >= 120) {
+      if (lastEmittedResi) {
+        lastEmittedResi = ''
+      }
       if (lastScannedResi) {
         lastScannedResi = ''
       }
@@ -741,8 +763,10 @@ const onScanSuccess = (decodedText, decodedResult) => {
   const resi = normalizeScannedBarcode(raw, formatName)
   if (!resi || resi.length < 4) return
 
-  // Guard 3: KUNCI KETAT resi yang sama jika masih ditahan di depan kamera (< 3.0 detik)
-  if (lastScannedResi === resi && (now - lastScanTimestamp) < 3000) {
+  // Guard 3: KUNCI RIGID RESI TERAKHIR DALAM SESI KAMERA
+  // Mencegah re-emit, bunyi beep berulang, atau spam alert saat kamera masih diarahkan ke paket yang sama
+  if (lastEmittedResi === resi || (lastScannedResi === resi && (now - lastScanTimestamp) < 10000)) {
+    lastScannedResi = resi
     emptyFramesCount = 0
     return
   }
@@ -752,6 +776,7 @@ const onScanSuccess = (decodedText, decodedResult) => {
   isProcessingScan.value = true
   scannerState.value = 'PAUSED'
   lastScannedResi = resi
+  lastEmittedResi = resi
   lastScanTimestamp = now
   emptyFramesCount = 0
 

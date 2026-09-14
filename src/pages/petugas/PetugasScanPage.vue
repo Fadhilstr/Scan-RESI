@@ -304,6 +304,7 @@ const handleBarcodeScan = async (resiInput) => {
 
     setFeedback(resiInput, 'danger', 'DITOLAK', msg)
     $q.notify({
+      group: 'scan-feedback',
       type: 'negative',
       icon: 'error',
       message: msg,
