@@ -10,7 +10,7 @@
  *   Frontend hanya MEMBACA via GET /api/audit-logs.
  */
 
-import api, { USE_LOCAL_DATA } from './api'
+import api, { USE_LOCAL_DATA } from './api.js'
 
 // =====================================================================
 // LOCAL DUMMY DATA — seed awal agar halaman Audit Log tidak kosong

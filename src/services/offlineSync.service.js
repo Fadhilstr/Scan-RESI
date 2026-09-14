@@ -5,9 +5,9 @@
  * mengunggah antrean scan yang tersimpan di IndexedDB ke backend.
  */
 
-import { getPendingScans, removePendingScan, countPendingScans } from '../utils/offlineDb'
-import api, { USE_LOCAL_DATA } from './api'
-import { LOCAL_SCANS } from './scan.service'
+import { getPendingScans, removePendingScan, countPendingScans } from '../utils/offlineDb.js'
+import api, { USE_LOCAL_DATA } from './api.js'
+import { LOCAL_SCANS } from './scan.service.js'
 
 let isSyncing = false
 

@@ -23,6 +23,11 @@
         >
           <div id="camera-scanner-region"></div>
 
+          <!-- Single Centered Scan Area Overlay & Line -->
+          <div v-if="status === 'scanning'" class="scan-overlay-box">
+            <div class="scan-line" :class="{ 'scan-line--paused': isPaused || scannerState !== 'SCANNING' }"></div>
+          </div>
+
           <!-- Overlay loading / error -->
           <div
             v-if="status === 'starting'"
@@ -672,7 +677,7 @@ const closeDialog = () => {
 const onScanFailure = () => {
   if (status.value === 'scanning' && !isPaused.value) {
     emptyFramesCount++
-    if (emptyFramesCount >= 5) {
+    if (emptyFramesCount >= 18) {
       if (lastScannedResi) {
         lastScannedResi = ''
       }
@@ -855,5 +860,42 @@ onBeforeUnmount(stopCamera)
 .history-chip--warning { background-color: #fee2e2; color: #b91c1c; }
 .history-chip--danger  { background-color: #fee2e2; color: #b91c1c; }
 
-/* Preview kamera full-frame: tanpa overlay kotak, seluruh area video di-decode */
+/* Single Centered Scan Area & Laser Line Overlay */
+.scan-overlay-box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 84%;
+  height: 60%;
+  border: 2px dashed rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.scan-line {
+  width: 92%;
+  height: 2px;
+  background: #22c55e;
+  box-shadow: 0 0 10px #22c55e;
+  animation: scanMove 2s infinite ease-in-out;
+}
+
+.scan-line--paused {
+  background: #f59e0b;
+  box-shadow: 0 0 10px #f59e0b;
+  animation-play-state: paused;
+}
+
+@keyframes scanMove {
+  0% { transform: translateY(-45px); opacity: 0.8; }
+  50% { transform: translateY(45px); opacity: 1.0; }
+  100% { transform: translateY(-45px); opacity: 0.8; }
+}
 </style>
+

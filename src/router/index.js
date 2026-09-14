@@ -8,7 +8,7 @@ import {
 } from 'vue-router'
 
 import routes from './routes.js'
-import { useAuthStore } from '../stores/authStore'
+import { useAuthStore } from '../stores/authStore.js'
 
 let appRouter = null
 

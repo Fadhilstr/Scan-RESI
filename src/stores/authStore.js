@@ -24,12 +24,13 @@ import {
   updateUser as svcUpdateUser,
   deleteUser as svcDeleteUser,
   toggleUserStatus as svcToggleUserStatus
-} from '../services/auth.service'
-import { useTaskStore } from './taskStore'
-import { useScanStore } from './scanStore'
-import { usePaketStore } from './paketStore'
+} from '../services/auth.service.js'
+import { useTaskStore } from './taskStore.js'
+import { useScanStore } from './scanStore.js'
+import { usePaketStore } from './paketStore.js'
 
 const getSavedUser = () => {
+  if (typeof localStorage === 'undefined') return null
   try {
     const raw = localStorage.getItem('wahana_user')
     if (!raw) return null

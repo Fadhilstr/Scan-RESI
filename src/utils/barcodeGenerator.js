@@ -861,3 +861,46 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
     }
   }
 }
+
+const RESI_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+/**
+ * Menghasilkan nomor resi baru secara deterministik di sisi-klien sesuai format barcode.
+ * Digunakan untuk pratinjau barcode sebelum disimpan ke database (TANPA membuat draft di backend/paketStore).
+ * @param {string} format
+ * @returns {string}
+ */
+export function generateClientResi(format = 'CODE_128') {
+  const fmt = String(format || 'CODE_128').toUpperCase()
+  const randomDigits = (n) => Array.from({ length: n }, () => Math.floor(Math.random() * 10)).join('')
+  const randomChars = (n) => Array.from({ length: n }, () => RESI_CHARS[Math.floor(Math.random() * RESI_CHARS.length)]).join('')
+
+  if (fmt === 'EAN_13') {
+    const data = '899' + randomDigits(9)
+    return data + calculateMod10CheckDigit(data)
+  }
+  if (fmt === 'EAN_8') {
+    const data = randomDigits(7)
+    return data + calculateMod10CheckDigit(data)
+  }
+  if (fmt === 'UPC_A') {
+    const data = '0' + randomDigits(10)
+    return data + calculateMod10CheckDigit(data)
+  }
+  if (fmt === 'UPC_E') {
+    const payload6 = randomDigits(6)
+    return '0' + payload6 + calculateUpceCheckDigit(payload6)
+  }
+  if (fmt === 'ITF') {
+    return randomDigits(12)
+  }
+  if (fmt === 'CODABAR') {
+    return randomDigits(10)
+  }
+  if (fmt === 'RSS_14') {
+    const data = '1' + randomDigits(12)
+    return data + calculateMod10CheckDigit(data)
+  }
+  return randomChars(8)
+}
+

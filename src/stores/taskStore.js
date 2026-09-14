@@ -16,8 +16,8 @@ import {
   incrementTaskProgress as svcIncrementProgress,
   completeTask as svcCompleteTask,
   LOCAL_TASKS
-} from '../services/task.service'
-import { USE_LOCAL_DATA } from '../services/api'
+} from '../services/task.service.js'
+import { USE_LOCAL_DATA } from '../services/api.js'
 
 export const useTaskStore = defineStore('task', {
   state: () => ({

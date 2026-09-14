@@ -387,7 +387,7 @@
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { BARCODE_FORMAT_OPTIONS, renderBarcode as utilRenderBarcode, calculateCode93CheckDigits } from '../../utils/barcodeGenerator'
+import { BARCODE_FORMAT_OPTIONS, renderBarcode as utilRenderBarcode, calculateCode93CheckDigits, generateClientResi } from '../../utils/barcodeGenerator'
 import { useAuthStore } from '../../stores/authStore'
 import { usePaketStore } from '../../stores/paketStore'
 import { buildSingleLineAddress } from '../../utils/addressFormatter'
@@ -519,9 +519,8 @@ const UNASSIGNED_DRAFT_KEY = 'draft_paket_unassigned_form'
 
 /**
  * Handle penekanan tombol "GENERATE BARCODE"
- * BARU PADA EVENT INI nomor resi diminta ke backend.
- * Jika format diganti lalu ditekan lagi: backend menerbitkan resi baru dan
- * menandai resi sebelumnya sebagai REPLACED pada sesi draft yang sama.
+ * Barcode & nomor resi digenerate secara lokal untuk pratinjau.
+ * TIDAK MEMBUAT RECORD DRAFT DI BACKEND ATAU DAFTAR PAKET!
  */
 const handleGenerate = async () => {
   if (generating.value) return
@@ -540,55 +539,28 @@ const handleGenerate = async () => {
   // Double-click protection
   generating.value = true
   try {
-    const previousResi = paket.value?.nomor_resi || null
-    const result = await paketStore.createResi(
-      authStore.currentUser,
-      selectedFormat.value,
-      draftId.value,
-      previousResi,
-      {
-        nama_barang: form.nama_barang,
-        pengirim: form.pengirim_nama,
-        alamat_pengirim: form.pengirim_alamat,
-        telepon_pengirim: form.pengirim_telepon,
-        penerima: form.penerima_nama,
-        alamat_tujuan: form.penerima_alamat,
-        telepon_penerima: form.penerima_telepon,
-        berat_kg: form.berat_kg,
-        jenis_layanan: form.jenis_layanan
-      }
-    )
-
-    if (result.success && result.paket) {
-      saved.value = false
-      paket.value = result.paket
-      if (result.draft_id) {
-        draftId.value = result.draft_id
-      }
-
-      if (authStore.currentUser?.name && !form.pengirim_nama) {
-        form.pengirim_nama = authStore.currentUser.name
-      }
-
-      $q.notify({
-        type: 'positive',
-        icon: 'verified',
-        message: `Nomor resi ${result.paket.nomor_resi} berhasil dibuat (Format: ${selectedFormat.value})!`,
-        position: 'top',
-        timeout: 2200
-      })
-
-      await nextTick()
-      await renderCurrentBarcode()
-    } else {
-      $q.notify({
-        type: 'negative',
-        icon: 'error',
-        message: result.message || 'Gagal membuat nomor resi.',
-        position: 'top',
-        timeout: 2500
-      })
+    const clientResi = generateClientResi(selectedFormat.value)
+    saved.value = false
+    paket.value = {
+      nomor_resi: clientResi,
+      barcode_format: selectedFormat.value,
+      status: 'UNSAVED'
     }
+
+    if (authStore.currentUser?.name && !form.pengirim_nama) {
+      form.pengirim_nama = authStore.currentUser.name
+    }
+
+    $q.notify({
+      type: 'positive',
+      icon: 'verified',
+      message: `Pratinjau barcode ${clientResi} berhasil dibuat (Format: ${selectedFormat.value})!`,
+      position: 'top',
+      timeout: 2200
+    })
+
+    await nextTick()
+    await renderCurrentBarcode()
   } catch (err) {
     $q.notify({
       type: 'negative',
@@ -684,7 +656,6 @@ const handleSave = async () => {
   saving.value = false
 
   if (result.success) {
-    localStorage.removeItem(`draft_paket_${paket.value.nomor_resi}`)
     localStorage.removeItem(UNASSIGNED_DRAFT_KEY)
     localStorage.setItem(`paket_barcode_format_${paket.value.nomor_resi.toUpperCase()}`, selectedFormat.value)
     paket.value = { ...payload, ...(result.paket || {}), barcode_format: selectedFormat.value, pengirim_detail, penerima_detail, status: 'TERDAFTAR' }
@@ -726,43 +697,20 @@ const resetForm = () => {
 const saveDraftToStorage = () => {
   if (saved.value) return
 
-  if (paket.value?.nomor_resi) {
-    localStorage.setItem(`draft_paket_${paket.value.nomor_resi}`, JSON.stringify({
+  // Simpan isian form lokal jika user belum menekan Simpan (TANPA membuat record paket di DB/store)
+  const hasData = form.nama_barang || form.pengirim_nama || form.penerima_nama || form.pengirim_alamat || form.penerima_alamat
+  if (hasData || paket.value?.nomor_resi) {
+    localStorage.setItem(UNASSIGNED_DRAFT_KEY, JSON.stringify({
       form,
-      draftId: draftId.value,
-      format: selectedFormat.value
+      selectedFormat: selectedFormat.value,
+      resi: paket.value?.nomor_resi || null
     }))
-    if (draftId.value) {
-      localStorage.setItem(`draft_session_${draftId.value}`, JSON.stringify({
-        resi: paket.value.nomor_resi,
-        format: selectedFormat.value,
-        form
-      }))
-    }
-    if (selectedFormat.value) {
-      localStorage.setItem(`paket_barcode_format_${paket.value.nomor_resi.toUpperCase()}`, selectedFormat.value)
-    }
-  } else {
-    // Simpan isian form lokal jika user belum menekan Generate Barcode (TANPA nomor resi DB)
-    const hasData = form.nama_barang || form.pengirim_nama || form.penerima_nama || form.pengirim_alamat || form.penerima_alamat
-    if (hasData) {
-      localStorage.setItem(UNASSIGNED_DRAFT_KEY, JSON.stringify({ form, selectedFormat: selectedFormat.value }))
-    }
   }
 }
 
 onBeforeRouteLeave((to, from, next) => {
   if (!saved.value) {
     saveDraftToStorage()
-    if (paket.value?.nomor_resi) {
-      $q.notify({
-        type: 'info',
-        icon: 'bookmark',
-        message: `Draft resi ${paket.value.nomor_resi} telah disimpan`,
-        position: 'bottom-right',
-        timeout: 2000
-      })
-    }
   }
   next()
 })

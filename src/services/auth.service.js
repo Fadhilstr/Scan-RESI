@@ -16,8 +16,8 @@
  *     PATCH  /api/users/:id/status
  */
 
-import api, { USE_LOCAL_DATA } from './api'
-import { addAuditLog } from './audit.service'
+import api, { USE_LOCAL_DATA } from './api.js'
+import { addAuditLog } from './audit.service.js'
 
 // =====================================================================
 // LOCAL DUMMY DATA — Digunakan saat USE_LOCAL_DATA=true

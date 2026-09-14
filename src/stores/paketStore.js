@@ -18,8 +18,8 @@ import {
   deletePaketsByQuery as svcDeletePaketsByQuery,
   parseDateToTime,
   LOCAL_PAKETS
-} from '../services/paket.service'
-import { USE_LOCAL_DATA } from '../services/api'
+} from '../services/paket.service.js'
+import { USE_LOCAL_DATA } from '../services/api.js'
 
 export const usePaketStore = defineStore('paket', {
   state: () => ({

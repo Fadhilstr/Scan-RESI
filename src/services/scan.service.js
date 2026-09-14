@@ -16,10 +16,10 @@
  *     GET    /api/scans/stats/:user_id    — Statistik scan per user
  */
 
-import api, { USE_LOCAL_DATA } from './api'
-import { incrementTaskProgress } from './task.service'
-import { addAuditLog } from './audit.service'
-import { LOCAL_PAKETS } from './paket.service'
+import api, { USE_LOCAL_DATA } from './api.js'
+import { incrementTaskProgress } from './task.service.js'
+import { addAuditLog } from './audit.service.js'
+import { LOCAL_PAKETS } from './paket.service.js'
 
 // =====================================================================
 // LOCAL DUMMY DATA — Digunakan saat USE_LOCAL_DATA=true
@@ -196,7 +196,7 @@ export async function addScan({ resi, currentUser, activeTask, lokasi = 'CIPUTAT
 
   if (isOffline) {
     try {
-      const { savePendingScan, getCachedPaketByResi } = await import('../utils/offlineDb')
+      const { savePendingScan, getCachedPaketByResi } = await import('../utils/offlineDb.js')
 
       // Cek cache resi jika ada
       const cachedPaket = await getCachedPaketByResi(sanitizedResi)

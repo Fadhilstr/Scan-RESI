@@ -17,8 +17,8 @@
  *     GET   /api/paket/:resi      — Detail / cari data paket by nomor resi
  */
 
-import api, { USE_LOCAL_DATA } from './api'
-import { addAuditLog } from './audit.service'
+import api, { USE_LOCAL_DATA } from './api.js'
+import { addAuditLog } from './audit.service.js'
 
 // =====================================================================
 // ALFABET RESI — sama dengan backend (tanpa I, O, 0, 1)
@@ -166,11 +166,17 @@ export async function savePaketData(nomorResi, data, currentUser) {
 
   if (USE_LOCAL_DATA) {
     // --- LOCAL MODE ---
-    const paket = LOCAL_PAKETS.find((p) => p.nomor_resi === resi)
+    let paket = LOCAL_PAKETS.find((p) => p.nomor_resi === resi)
     if (!paket) {
-      return { success: false, reason: 'NOT_FOUND', message: 'Paket tidak ditemukan.' }
-    }
-    if (currentUser.role !== 'ADMIN' && paket.created_by !== currentUser.id) {
+      paket = {
+        nomor_resi: resi,
+        created_by: currentUser.id,
+        creator_name: currentUser.name,
+        created_at: nowString(),
+        status: 'TERDAFTAR'
+      }
+      LOCAL_PAKETS.unshift(paket)
+    } else if (currentUser.role !== 'ADMIN' && paket.created_by !== currentUser.id) {
       return { success: false, reason: 'FORBIDDEN', message: 'Hanya pembuat paket atau ADMIN yang dapat menyimpan data barang.' }
     }
 

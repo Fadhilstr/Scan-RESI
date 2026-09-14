@@ -15,11 +15,11 @@ import {
   addScan as svcAddScan,
   getUserScanStats as svcGetUserStats,
   LOCAL_SCANS
-} from '../services/scan.service'
-import { useTaskStore } from './taskStore'
-import { USE_LOCAL_DATA } from '../services/api'
-import { countPendingScans } from '../utils/offlineDb'
-import { syncPendingScans, setupNetworkListeners } from '../services/offlineSync.service'
+} from '../services/scan.service.js'
+import { useTaskStore } from './taskStore.js'
+import { USE_LOCAL_DATA } from '../services/api.js'
+import { countPendingScans } from '../utils/offlineDb.js'
+import { syncPendingScans, setupNetworkListeners } from '../services/offlineSync.service.js'
 
 export const useScanStore = defineStore('scan', {
   state: () => ({

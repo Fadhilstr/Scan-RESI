@@ -340,23 +340,27 @@ sub update {
     my $paket = $dbh->selectrow_hashref(
         Wahana::Query->get('paket_get_by_resi'), undef, $resi
     );
-    return { success => \0, reason => 'NOT_FOUND', message => 'Paket tidak ditemukan.' }
-        unless $paket;
 
-    my $is_owner = defined $paket->{created_by} && $paket->{created_by} eq $user_id;
-    return { success => \0, reason => 'FORBIDDEN',
-             message => 'Hanya pembuat paket atau ADMIN yang dapat menyimpan data barang.' }
-        unless $role eq 'ADMIN' || $is_owner;
+    if ($paket) {
+        my $is_owner = defined $paket->{created_by} && $paket->{created_by} eq $user_id;
+        return { success => \0, reason => 'FORBIDDEN',
+                 message => 'Hanya pembuat paket atau ADMIN yang dapat menyimpan data barang.' }
+            unless $role eq 'ADMIN' || $is_owner;
 
-    if ($paket->{status} eq 'TERDAFTAR') {
-        return { success => \1, message => 'Data paket sudah tersimpan (TERDAFTAR).',
-                 paket => map_paket($paket) };
+        if ($paket->{status} eq 'TERDAFTAR') {
+            return { success => \1, message => 'Data paket sudah tersimpan (TERDAFTAR).',
+                     paket => map_paket($paket) };
+        }
+    } else {
+        return { success => \0, reason => 'FORBIDDEN',
+                 message => 'Hanya CUSTOMER atau ADMIN yang dapat menyimpan data barang.' }
+            unless $role eq 'CUSTOMER' || $role eq 'ADMIN';
     }
 
     # Field wajib untuk naik ke TERDAFTAR
     my %valid_layanan = map { $_ => 1 } qw(REGULER EXPRESS SAME_DAY);
     my $layanan = $valid_layanan{ trim($body->{jenis_layanan} // '') }
-        ? $body->{jenis_layanan} : $paket->{jenis_layanan} || 'REGULER';
+        ? $body->{jenis_layanan} : ($paket ? $paket->{jenis_layanan} : 'REGULER');
     
     my $nama             = trim($body->{nama_barang}      // '');
     my $pengirim         = trim($body->{pengirim}         // '');
@@ -365,7 +369,7 @@ sub update {
     my $penerima         = trim($body->{penerima}         // '');
     my $alamat_tujuan    = trim($body->{alamat_tujuan}    // '');
     my $telepon_penerima = trim($body->{telepon_penerima} // '');
-    my $barcode_format = $body->{barcode_format} || $paket->{barcode_format} || 'CODE_128';
+    my $barcode_format   = $body->{barcode_format} || ($paket ? $paket->{barcode_format} : 'CODE_128');
     my $berat            = $body->{berat_kg};
     $berat = 0 unless defined $berat && $berat =~ /^\d+(\.\d+)?$/;
 
@@ -384,13 +388,24 @@ sub update {
             unless $field->[1] =~ /^\d{8,15}$/;
     }
 
-    $dbh->do(
-        Wahana::Query->get('paket_update_data'),
-        undef, $nama, $pengirim, $alamat_pengirim, $telepon_pengirim,
-            $penerima, $alamat_tujuan, $telepon_penerima,
-            $berat, $layanan, $barcode_format,
-            $resi
-    );
+    if ($paket) {
+        $dbh->do(
+            Wahana::Query->get('paket_update_data'),
+            undef, $nama, $pengirim, $alamat_pengirim, $telepon_pengirim,
+                $penerima, $alamat_tujuan, $telepon_penerima,
+                $berat, $layanan, $barcode_format,
+                $resi
+        );
+    } else {
+        my $barcode_val = generate_barcode_value($resi, $barcode_format);
+        $dbh->do(
+            Wahana::Query->get('paket_insert_registered'),
+            undef, $resi, $user_id, $barcode_format, $barcode_val,
+                $nama, $pengirim, $alamat_pengirim, $telepon_pengirim,
+                $penerima, $alamat_tujuan, $telepon_penerima,
+                $berat, $layanan
+        );
+    }
 
     record_audit(
         user_id    => $user_id,
@@ -399,7 +414,7 @@ sub update {
         ip_address => $req->{ip},
     );
 
-    if ($paket->{draft_id}) {
+    if ($paket && $paket->{draft_id}) {
         $dbh->do(
             Wahana::Query->get('paket_void_replaced_drafts'),
             undef, $paket->{draft_id}

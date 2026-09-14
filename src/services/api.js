@@ -15,12 +15,12 @@
 import axios from 'axios'
 import { Notify } from 'quasar'
 import { getActivePinia } from 'pinia'
-import { getAppRouter } from '../router/index'
+import { getAppRouter } from '../router/index.js'
 
 // =====================================================================
 // MODE FLAG — dikontrol dari .env
 // =====================================================================
-export const USE_LOCAL_DATA = import.meta.env.VITE_USE_LOCAL_DATA !== 'false'
+export const USE_LOCAL_DATA = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_USE_LOCAL_DATA !== 'false' : true
 
 // =====================================================================
 // AXIOS INSTANCE
@@ -30,7 +30,7 @@ const api = axios.create({
   // Kosongkan VITE_API_BASE_URL agar request same-origin ('/api/...'):
   //   - quasar dev        → diproxy ke backend oleh devServer.proxy
   //   - produksi (Nginx)  → diproxy oleh deploy/nginx.conf
-  baseURL: import.meta.env.VITE_API_BASE_URL || '',
+  baseURL: typeof import.meta !== 'undefined' && import.meta.env ? (import.meta.env.VITE_API_BASE_URL || '') : '',
   timeout: 45000,
   headers: {
     'Content-Type': 'application/json',
