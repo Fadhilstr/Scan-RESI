@@ -119,7 +119,7 @@ sub generate_resi {
             # 5 digit angka numerik untuk EAN-5 supplemental extension
             $resi = join('', map { int rand(10) } 1 .. 5);
         } else {
-            # Alfanumerik standar (CODE_128, QR_CODE, AZTEC, CODE_39, CODE_93, DATA_MATRIX, PDF_417, MAXICODE, RSS_EXPANDED)
+            # Alfanumerik standar (CODE_128, QR_CODE, AZTEC, CODE_39, CODE_93, DATA_MATRIX, PDF_417)
             $resi = join '',
                 map { substr $RESI_CHARS, int rand(length $RESI_CHARS), 1 }
                 1 .. $RESI_LEN;
@@ -146,20 +146,6 @@ sub generate_barcode_value {
     # Format yang barcode_value == nomor_resi (tidak perlu konversi)
     if ($format =~ /^(CODE_128|QR_CODE|AZTEC|DATA_MATRIX|PDF_417|CODE_39|CODE_93|UPC_EAN_EXTENSION)$/) {
         return $resi_up;
-    }
-
-    # FORMAT yang butuh konversi deterministic:
-    if ($format eq 'MAXICODE') {
-        return "(10)$resi_up";
-    }
-
-    if ($format eq 'RSS_EXPANDED') {
-        # barcode_value = (01)GTIN14(10)RESI
-        # GTIN-14 = '1' + 12 digit hash + check digit
-        my $hash12 = _str_to_det_digits($resi_up, 12);
-        my $d13    = '1' . $hash12;
-        my $cd     = calc_mod10($d13);
-        return "(01)${d13}${cd}(10)${resi_up}";
     }
 
     if ($format eq 'CODABAR') {

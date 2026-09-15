@@ -117,36 +117,29 @@ import {
   GlobalHistogramBinarizer,
   MultiFormatReader,
   Code93Reader,
-  RSSExpandedReader,
   RSS14Reader,
   InvertedLuminanceSource
 } from '@zxing/library'
 import { normalizeScannedBarcode } from '../utils/barcodeGenerator'
-import { applyZxingRssExpandedPatch } from '../utils/zxingRssExpandedPatcher'
-import { readBarcodesWasm, mapZxingWasmFormat } from '../utils/zxingWasmReader'
-
-// Terapkan perbaikan translasi Java->JS ZXing untuk RSS Expanded secara transparan
-applyZxingRssExpandedPatch()
+import { readBarcodesWasm, mapZxingWasmFormat, extractZxingWasmText } from '../utils/zxingWasmReader'
 
 const $q = useQuasar()
 
 const ALL_SUPPORTED_FORMATS = [
+  Html5QrcodeSupportedFormats.CODE_93,
+  Html5QrcodeSupportedFormats.UPC_E,
   Html5QrcodeSupportedFormats.QR_CODE,
   Html5QrcodeSupportedFormats.AZTEC,
   Html5QrcodeSupportedFormats.CODABAR,
   Html5QrcodeSupportedFormats.CODE_39,
-  Html5QrcodeSupportedFormats.CODE_93,
   Html5QrcodeSupportedFormats.CODE_128,
   Html5QrcodeSupportedFormats.DATA_MATRIX,
-  Html5QrcodeSupportedFormats.MAXICODE,
   Html5QrcodeSupportedFormats.ITF,
   Html5QrcodeSupportedFormats.EAN_13,
   Html5QrcodeSupportedFormats.EAN_8,
   Html5QrcodeSupportedFormats.PDF_417,
   Html5QrcodeSupportedFormats.RSS_14,
-  Html5QrcodeSupportedFormats.RSS_EXPANDED,
   Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_E,
   Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION
 ]
 
@@ -248,9 +241,7 @@ const stopZxing = () => {
 const startZxingFallback = (videoElement) => {
   if (!videoElement || fallbackTimer) return
   try {
-    applyZxingRssExpandedPatch()
-
-    const GS1_FAMILY = ['RSS_EXPANDED', 'RSS_14', 'CODABAR', 'CODE_93']
+    const GS1_FAMILY = ['RSS_14', 'CODABAR', 'CODE_93']
     const preferred = String(props.preferredFormat || '').toUpperCase()
     const wantGs1Heavy = GS1_FAMILY.includes(preferred)
 
@@ -259,18 +250,18 @@ const startZxingFallback = (videoElement) => {
     if (PURE_2D.includes(preferred)) return
 
     const GS1_ZXING_FORMATS = [
-      BarcodeFormat.RSS_14,
-      BarcodeFormat.RSS_EXPANDED,
       BarcodeFormat.CODE_93,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.RSS_14,
       BarcodeFormat.CODE_128,
       BarcodeFormat.CODABAR,
       BarcodeFormat.ITF
     ]
-    // AUTO: RSS_14, RSS_EXPANDED, & CODE_93 diprioritaskan di awal array
+    // AUTO: CODE_93 & UPC_E diprioritaskan di awal array
     const AUTO_ZXING_FORMATS = [
-      BarcodeFormat.RSS_14,
-      BarcodeFormat.RSS_EXPANDED,
       BarcodeFormat.CODE_93,
+      BarcodeFormat.UPC_E,
+      BarcodeFormat.RSS_14,
       BarcodeFormat.CODE_128,
       BarcodeFormat.QR_CODE,
       BarcodeFormat.EAN_13,
@@ -279,8 +270,6 @@ const startZxingFallback = (videoElement) => {
       BarcodeFormat.ITF,
       BarcodeFormat.EAN_8,
       BarcodeFormat.UPC_A,
-      BarcodeFormat.UPC_E,
-      BarcodeFormat.MAXICODE,
       BarcodeFormat.UPC_EAN_EXTENSION,
       BarcodeFormat.AZTEC,
       BarcodeFormat.PDF_417
@@ -295,9 +284,8 @@ const startZxingFallback = (videoElement) => {
     const multiReader = new MultiFormatReader()
     multiReader.setHints(hints)
 
-    // Fast-path dedicated readers khusus format GS1 & Code 93
+    // Fast-path dedicated readers khusus format Code 93 & RSS-14
     const code93Dedicated = new Code93Reader()
-    const rssExpandedDedicated = new RSSExpandedReader()
     const rss14Dedicated = new RSS14Reader()
 
     const ZXING_FORMAT_NAME_MAP = {
@@ -310,11 +298,9 @@ const startZxingFallback = (videoElement) => {
       [BarcodeFormat.EAN_8]: 'EAN_8',
       [BarcodeFormat.EAN_13]: 'EAN_13',
       [BarcodeFormat.ITF]: 'ITF',
-      [BarcodeFormat.MAXICODE]: 'MAXICODE',
       [BarcodeFormat.PDF_417]: 'PDF_417',
       [BarcodeFormat.QR_CODE]: 'QR_CODE',
       [BarcodeFormat.RSS_14]: 'RSS_14',
-      [BarcodeFormat.RSS_EXPANDED]: 'RSS_EXPANDED',
       [BarcodeFormat.UPC_A]: 'UPC_A',
       [BarcodeFormat.UPC_E]: 'UPC_E',
       [BarcodeFormat.UPC_EAN_EXTENSION]: 'UPC_EAN_EXTENSION'
@@ -368,35 +354,40 @@ const startZxingFallback = (videoElement) => {
 
         // -----------------------------------------------------------------
         // FAST-PATH WASM (ZXing-C++):
-        // Membaca DataBarExp (RSS_EXPANDED), EAN/UPC + Extension, MaxiCode secara instan (<40ms)
+        // Membaca Code 93, UPC-E, EAN/UPC, dsb secara ultra-instan (<10ms)
         // -----------------------------------------------------------------
         let wasmFormats = []
-        if (preferred === 'RSS_EXPANDED') {
-          wasmFormats = ['DataBarExp', 'DataBarExpStk']
+        if (preferred === 'CODE_93') {
+          wasmFormats = ['Code93']
+        } else if (preferred === 'UPC_E') {
+          wasmFormats = ['UPCE', 'EANUPC']
         } else if (preferred === 'UPC_EAN_EXTENSION') {
           wasmFormats = ['EANUPC']
-        } else if (preferred === 'MAXICODE') {
-          wasmFormats = ['MaxiCode']
+        } else if (preferred === 'RSS_14') {
+          wasmFormats = ['DataBar']
         } else if (wantGs1Heavy) {
-          wasmFormats = ['DataBarExp', 'DataBarExpStk', 'DataBar', 'Code93']
+          wasmFormats = ['Code93', 'UPCE', 'DataBar', 'EANUPC']
         } else {
-          // AUTO mode: prioritaskan format-format logistik yang sulit di JS
-          wasmFormats = ['DataBarExp', 'DataBarExpStk', 'EANUPC', 'MaxiCode', 'DataBar', 'Code93']
+          // AUTO mode: prioritaskan format Code 93, UPC-E, EAN/UPC, DataBar, 1D linear, dan 2D
+          wasmFormats = ['Code93', 'UPCE', 'EANUPC', 'DataBar', 'Code128', 'Code39', 'Codabar', 'ITF', 'QRCode', 'DataMatrix', 'Aztec', 'PDF417']
         }
 
         try {
           const wasmResults = await readBarcodesWasm(imgData, {
             formats: wasmFormats,
+            tryHarder: true,
             eanAddOnSymbol: 'Read'
           })
 
           if (wasmResults && wasmResults.length > 0) {
             const r = wasmResults[0]
-            if (r && r.text) {
-              const text = r.text
-              const formatName = mapZxingWasmFormat(r.format, text)
-              onScanSuccess(text, { result: { format: { formatName } } })
-              return
+            if (r) {
+              const text = extractZxingWasmText(r)
+              if (text) {
+                const formatName = mapZxingWasmFormat(r.format, text)
+                onScanSuccess(text, { result: { format: { formatName } } })
+                return
+              }
             }
           }
         } catch {
@@ -418,15 +409,14 @@ const startZxingFallback = (videoElement) => {
         const lumSource = new RGBLuminanceSource(gray, cw, ch)
         let decodeResult = null
 
-        // Reset state pembaca dedicated sebelum memproses frame baru (mencegah akumulasi parsial row)
-        try { rssExpandedDedicated.reset() } catch {}
-        try { rss14Dedicated.reset() } catch {}
+        // Reset state pembaca dedicated sebelum memproses frame baru
         try { code93Dedicated.reset() } catch {}
+        try { rss14Dedicated.reset() } catch {}
 
-        // Crop ROI tengah (area laser overlay 94% x 55%) untuk kepresisian modul GS1 DataBar & Code93
+        // Crop ROI tengah (area laser overlay 92% x 55%) untuk kepresisian modul Code 93 & 1D
         let roiSource = lumSource
         try {
-          const cropW = Math.floor(cw * 0.94)
+          const cropW = Math.floor(cw * 0.92)
           const cropH = Math.floor(ch * 0.55)
           const cropX = Math.floor((cw - cropW) / 2)
           const cropY = Math.floor((ch - cropH) / 2)
@@ -435,21 +425,16 @@ const startZxingFallback = (videoElement) => {
           roiSource = lumSource
         }
 
-        // Fast-path 1: Spesifik ke RSS_EXPANDED / GS1 DataBar Expanded
-        if (preferred === 'RSS_EXPANDED' || wantGs1Heavy || !preferred) {
+        // Fast-path 1: Spesifik ke CODE_93 (pada ROI crop)
+        if (preferred === 'CODE_93' || wantGs1Heavy || !preferred) {
           try {
-            const bitmap = new BinaryBitmap(new HybridBinarizer(roiSource))
-            decodeResult = rssExpandedDedicated.decode(bitmap)
+            const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(roiSource))
+            decodeResult = code93Dedicated.decode(bitmap)
           } catch {
             try {
-              const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(roiSource))
-              decodeResult = rssExpandedDedicated.decode(bitmap)
-            } catch {
-              try {
-                const bitmap = new BinaryBitmap(new HybridBinarizer(lumSource))
-                decodeResult = rssExpandedDedicated.decode(bitmap)
-              } catch {}
-            }
+              const bitmap = new BinaryBitmap(new HybridBinarizer(roiSource))
+              decodeResult = code93Dedicated.decode(bitmap)
+            } catch {}
           }
         }
 
@@ -462,19 +447,6 @@ const startZxingFallback = (videoElement) => {
             try {
               const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(roiSource))
               decodeResult = rss14Dedicated.decode(bitmap)
-            } catch {}
-          }
-        }
-
-        // Fast-path 3: CODE_93
-        if (!decodeResult && (preferred === 'CODE_93' || wantGs1Heavy)) {
-          try {
-            const bitmap = new BinaryBitmap(new GlobalHistogramBinarizer(roiSource))
-            decodeResult = code93Dedicated.decode(bitmap)
-          } catch {
-            try {
-              const bitmap = new BinaryBitmap(new HybridBinarizer(roiSource))
-              decodeResult = code93Dedicated.decode(bitmap)
             } catch {}
           }
         }
@@ -496,7 +468,7 @@ const startZxingFallback = (videoElement) => {
         }
 
         // Pass 3 Inverted: Barcode pada latar gelap / refleksi gudang
-        if (!decodeResult && (wantGs1Heavy || preferred === 'CODE_93' || preferred === 'RSS_14' || preferred === 'RSS_EXPANDED')) {
+        if (!decodeResult && (wantGs1Heavy || preferred === 'CODE_93' || preferred === 'UPC_E' || preferred === 'RSS_14')) {
           try {
             const invLum = new InvertedLuminanceSource(roiSource)
             const bitmapInv = new BinaryBitmap(new GlobalHistogramBinarizer(invLum))
@@ -519,7 +491,7 @@ const startZxingFallback = (videoElement) => {
     }
 
     fallbackTimer = setTimeout(processFrame, 60)
-    console.log('[CAMERA] ZXing auxiliary engine (Dual-Pass MultiFormat + Dedicated RSS_14, RSS_EXPANDED, CODE_93) aktif.')
+    console.log('[CAMERA] Scanner engine (ZXing-WASM fast-path + CODE_93 & UPC_E optimized) aktif.')
   } catch (err) {
     console.warn('[CAMERA] ZXing auxiliary engine could not bind:', err)
   }
@@ -886,7 +858,7 @@ const onScanSuccess = (decodedText, decodedResult) => {
   const hasAddOn = /\s+\d{2,5}$/.test(raw)
 
   if (
-    props.preferredFormat === 'UPC_EAN_EXTENSION' &&
+    (props.preferredFormat === 'UPC_EAN_EXTENSION' || !props.preferredFormat) &&
     isUpcEanMain &&
     !hasAddOn &&
     scannerState.value !== 'WAITING_FOR_EXTENSION'

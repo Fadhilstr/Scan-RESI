@@ -484,18 +484,17 @@ const renderCurrentBarcode = async () => {
 
   generatingBarcode.value = true
   try {
-    const isExpanded = fmt === 'RSS_EXPANDED'
     const is2D = ['QR_CODE', 'AZTEC', 'DATA_MATRIX'].includes(fmt)
     const isStacked = fmt === 'PDF_417'
 
     // Perbesar 45-60% untuk kenyamanan tampilan dan pemindaian di layar customer
     const res = await utilRenderBarcode(svgRef.value, resi, fmt, {
       scale: 4,
-      height: isExpanded ? 31 : 25,
+      height: 25,
       qrSize: is2D ? 210 : 185,
       width: isStacked ? 370 : undefined,
-      maxWidth: isExpanded ? '490px' : (is2D ? '210px' : (isStacked ? '370px' : '430px')),
-      maxHeight: is2D ? '210px' : (isExpanded ? '148px' : (isStacked ? '125px' : '132px')),
+      maxWidth: is2D ? '210px' : (isStacked ? '370px' : '430px'),
+      maxHeight: is2D ? '210px' : (isStacked ? '125px' : '132px'),
       background: '#ffffff',
       lineColor: '#000000'
     })

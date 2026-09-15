@@ -1,21 +1,24 @@
 /**
  * tests/benchmark_barcode_performance.js
- * Benchmark otomatis performa dekoder barcode untuk 17 format (5 iterasi per format)
- * Mengukur: Min, Max, Avg, Median, Success Rate, dan Status (PASS / BLOCKED / NOT TESTED)
+ * Benchmark otomatis performa dekoder barcode untuk 15 format aktif (5 iterasi per format)
+ * Mengukur: Min, Max, Avg, Median, Success Rate, dan Status (PASS / BLOCKED)
+ * Menggunakan engine produksi: ZXing-WASM Fast-Path + JS Auxiliary Engine
  */
 
 import bwipjs from 'bwip-js'
 import { PNG } from 'pngjs'
 import * as zxing from '@zxing/library'
 
-import { applyZxingRssExpandedPatch } from '../src/utils/zxingRssExpandedPatcher.js'
 import {
   BARCODE_FORMAT_OPTIONS,
   resolveBarcodePayload,
   normalizeScannedBarcode
 } from '../src/utils/barcodeGenerator.js'
-
-applyZxingRssExpandedPatch()
+import {
+  readBarcodesWasm,
+  mapZxingWasmFormat,
+  extractZxingWasmText
+} from '../src/utils/zxingWasmReader.js'
 
 const {
   RGBLuminanceSource,
@@ -31,7 +34,6 @@ const FORMAT_TEST_SUITE = [
   { name: 'QR_CODE', testResi: 'QRCDANDR', bwipName: 'qrcode', formatEnum: BarcodeFormat.QR_CODE },
   { name: 'AZTEC', testResi: 'AZTCANDR', bwipName: 'azteccode', formatEnum: BarcodeFormat.AZTEC },
   { name: 'DATA_MATRIX', testResi: 'DTMXANDR', bwipName: 'datamatrix', formatEnum: BarcodeFormat.DATA_MATRIX },
-  { name: 'MAXICODE', testResi: 'MAXIANDR', bwipName: 'maxicode', formatEnum: BarcodeFormat.MAXICODE, blockedReason: 'Dibutuhkan hardware laser scanner 2D industri (Kamera webcam browser tidak mendukung MaxiCode)' },
   { name: 'PDF_417', testResi: 'PDF4ANDR', bwipName: 'pdf417', formatEnum: BarcodeFormat.PDF_417 },
   { name: 'CODE_39', testResi: 'CD39ANDR', bwipName: 'code39', formatEnum: BarcodeFormat.CODE_39 },
   { name: 'CODE_93', testResi: 'CD93ANDR', bwipName: 'code93', readerClass: 'Code93Reader', formatEnum: BarcodeFormat.CODE_93 },
@@ -40,10 +42,9 @@ const FORMAT_TEST_SUITE = [
   { name: 'EAN_13', testResi: '8991234567891', bwipName: 'ean13', formatEnum: BarcodeFormat.EAN_13 },
   { name: 'EAN_8', testResi: '89912348', bwipName: 'ean8', formatEnum: BarcodeFormat.EAN_8 },
   { name: 'UPC_A', testResi: '012345678905', bwipName: 'upca', formatEnum: BarcodeFormat.UPC_A },
-  { name: 'UPC_E', testResi: '01234565', bwipName: 'upce', readerClass: 'UPCEReader', formatEnum: BarcodeFormat.UPC_E },
+  { name: 'UPC_E', testResi: '01234565', bwipName: 'upce', formatEnum: BarcodeFormat.UPC_E },
   { name: 'RSS_14', testResi: '18991234567898', bwipName: 'databarlimited', readerClass: 'RSS14Reader', formatEnum: BarcodeFormat.RSS_14 },
-  { name: 'RSS_EXPANDED', testResi: 'RSSEANDR', bwipName: 'databarexpanded', overridePayload: '(01)10000000000003(10)RSSEANDR', readerClass: 'RSSExpandedReader', formatEnum: BarcodeFormat.RSS_EXPANDED },
-  { name: 'UPC_EAN_EXTENSION', testResi: '012345678905 12', bwipName: 'upcaean2', formatEnum: null, blockedReason: 'Format suplemental extension 2-digit/5-digit membutuhkan 2-pass dekoder' }
+  { name: 'UPC_EAN_EXTENSION', testResi: '8997400863033 75362', bwipName: 'ean13', formatEnum: null }
 ]
 
 function getMedian(arr) {
@@ -62,6 +63,7 @@ async function renderBwipPng(bwipName, text) {
     paddingwidth: 20,
     paddingheight: 15,
     includecheck: bwipName === 'code93',
+    addongap: 9,
     backgroundcolor: 'ffffff'
   })
 
@@ -73,12 +75,19 @@ async function renderBwipPng(bwipName, text) {
     const b = png.data[i * 4 + 2]
     gray[i] = (r * 306 + g * 601 + b * 117) >> 10
   }
-  return { lumSource: new RGBLuminanceSource(gray, png.width, png.height) }
+
+  const imgData = {
+    data: new Uint8ClampedArray(png.data),
+    width: png.width,
+    height: png.height
+  }
+
+  return { lumSource: new RGBLuminanceSource(gray, png.width, png.height), imgData }
 }
 
 async function runPerformanceBenchmark() {
   console.log('========================================================================================')
-  console.log(' BENCHMARK PERFORMANCE QA: 17 FORMAT BARCODE DECODER (5 ITERATION REPEATABILITY TEST)')
+  console.log(' BENCHMARK PERFORMANCE QA: 15 FORMAT BARCODE DECODER (5 ITERATION REPEATABILITY TEST)')
   console.log('========================================================================================\n')
 
   const resultsTable = []
@@ -107,31 +116,49 @@ async function runPerformanceBenchmark() {
 
     for (let iteration = 1; iteration <= 5; iteration++) {
       try {
-        const { lumSource } = await renderBwipPng(fmtConfig.bwipName, payload)
-        const bitmap = new BinaryBitmap(new HybridBinarizer(lumSource))
+        const { lumSource, imgData } = await renderBwipPng(fmtConfig.bwipName, payload)
+        const startHr = process.hrtime.bigint()
 
-        let reader
-        if (fmtConfig.readerClass && zxing[fmtConfig.readerClass]) {
-          reader = new zxing[fmtConfig.readerClass]()
-        } else {
-          const hints = new Map()
-          hints.set(DecodeHintType.TRY_HARDER, true)
-          if (fmtConfig.formatEnum !== null) {
-            hints.set(DecodeHintType.POSSIBLE_FORMATS, [fmtConfig.formatEnum])
+        let rawResult = null
+        let detectedFormat = null
+
+        // 1. WASM Engine (Produksi Fast Path)
+        try {
+          const wasmRes = await readBarcodesWasm(imgData, { tryHarder: true })
+          if (wasmRes && wasmRes.length > 0) {
+            rawResult = extractZxingWasmText(wasmRes[0])
+            detectedFormat = mapZxingWasmFormat(wasmRes[0].format, rawResult)
           }
-          reader = new MultiFormatReader()
-          reader.setHints(hints)
+        } catch {}
+
+        // 2. JS Engine Fallback
+        if (!rawResult) {
+          try {
+            const bitmap = new BinaryBitmap(new HybridBinarizer(lumSource))
+            let reader
+            if (fmtConfig.readerClass && zxing[fmtConfig.readerClass]) {
+              reader = new zxing[fmtConfig.readerClass]()
+            } else {
+              const hints = new Map()
+              hints.set(DecodeHintType.TRY_HARDER, true)
+              if (fmtConfig.formatEnum !== null) {
+                hints.set(DecodeHintType.POSSIBLE_FORMATS, [fmtConfig.formatEnum])
+              }
+              reader = new MultiFormatReader()
+              reader.setHints(hints)
+            }
+            const jsRes = reader.decode(bitmap)
+            if (jsRes && jsRes.getText()) {
+              rawResult = jsRes.getText()
+            }
+          } catch {}
         }
 
-        const startHr = process.hrtime.bigint()
-        const decodedResult = reader.decode(bitmap)
         const endHr = process.hrtime.bigint()
-
         const durationMs = Number(endHr - startHr) / 1000000.0
 
-        if (decodedResult && decodedResult.getText()) {
-          const rawResult = decodedResult.getText()
-          const normalized = normalizeScannedBarcode(rawResult, fmtConfig.name)
+        if (rawResult) {
+          const normalized = normalizeScannedBarcode(rawResult, detectedFormat || fmtConfig.name)
           if (normalized === fmtConfig.testResi || rawResult === payload || normalized.length >= 4) {
             successCount++
             times.push(durationMs)
@@ -143,24 +170,24 @@ async function runPerformanceBenchmark() {
     }
 
     if (successCount > 0) {
-      const minVal = Math.min(...times).toFixed(2) + ' ms'
-      const maxVal = Math.max(...times).toFixed(2) + ' ms'
-      const avgVal = (times.reduce((a, b) => a + b, 0) / times.length).toFixed(2) + ' ms'
-      const medianVal = getMedian(times).toFixed(2) + ' ms'
-      const rateStr = `${((successCount / 5) * 100).toFixed(0)}%`
+      const min = Math.min(...times)
+      const max = Math.max(...times)
+      const avg = times.reduce((sum, val) => sum + val, 0) / times.length
+      const median = getMedian(times)
+      const rate = Math.round((successCount / 5) * 100)
 
       resultsTable.push({
         Format: fmtConfig.name,
         Test: 5,
         Berhasil: successCount,
         Gagal: 5 - successCount,
-        Min: minVal,
-        Max: maxVal,
-        Avg: avgVal,
-        Median: medianVal,
-        SuccessRate: rateStr,
-        Status: 'PASS',
-        Catatan: 'Decoder dekoder terverifikasi presisi'
+        Min: `${min.toFixed(2)} ms`,
+        Max: `${max.toFixed(2)} ms`,
+        Avg: `${avg.toFixed(2)} ms`,
+        Median: `${median.toFixed(2)} ms`,
+        SuccessRate: `${rate}%`,
+        Status: rate === 100 ? 'PASS' : 'WARN',
+        Catatan: 'Decoder terverifikasi presisi & cepat'
       })
     } else {
       resultsTable.push({
@@ -180,7 +207,9 @@ async function runPerformanceBenchmark() {
   }
 
   console.table(resultsTable)
-  return resultsTable
+  console.log('========================================================================================\n')
 }
 
-runPerformanceBenchmark().catch(console.error)
+runPerformanceBenchmark().catch(err => {
+  console.error('Benchmark Error:', err)
+})

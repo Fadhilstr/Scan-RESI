@@ -21,7 +21,7 @@ sub config {
         token_ttl      => $ENV{WAHANA_TOKEN_TTL}    // 86400,   
         smtp_host      => $ENV{SMTP_HOST}           // 'smtp.gmail.com',
         smtp_port      => $ENV{SMTP_PORT}           // 587,
-        smtp_user      => $ENV{SMTP_USER}           port// '',
+        smtp_user      => $ENV{SMTP_USER}           // '',
         smtp_pass      => $ENV{SMTP_PASSWORD}       // '',
         smtp_secure    => $ENV{SMTP_SECURE}         // 'false',
         smtp_from_name => $ENV{SMTP_FROM_NAME}      // 'DIJAK EXPRESS',

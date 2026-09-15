@@ -3,14 +3,13 @@ import bwipjs from 'bwip-js'
 /**
  * 15 Format Barcode standar yang didukung penuh oleh decoder kamera scanner:
  * QR_CODE, AZTEC, CODABAR, CODE_39, CODE_93, CODE_128, DATA_MATRIX, ITF,
- * EAN_13, EAN_8, PDF_417, RSS_14, RSS_EXPANDED, UPC_A, UPC_E.
+ * EAN_13, EAN_8, PDF_417, RSS_14, UPC_A, UPC_E, UPC_EAN_EXTENSION.
  */
 export const BARCODE_FORMAT_OPTIONS = [
   { label: 'CODE_128', value: 'CODE_128', supported: true, category: '1D' },
   { label: 'QR_CODE', value: 'QR_CODE', supported: true, category: '2D Matrix' },
   { label: 'AZTEC', value: 'AZTEC', supported: true, category: '2D Matrix' },
   { label: 'DATA_MATRIX', value: 'DATA_MATRIX', supported: true, category: '2D Matrix' },
-  { label: 'MAXICODE', value: 'MAXICODE', supported: true, category: '2D Matrix' },
   { label: 'PDF_417', value: 'PDF_417', supported: true, category: '2D Stacked' },
   { label: 'CODE_39', value: 'CODE_39', supported: true, category: '1D' },
   { label: 'CODE_93', value: 'CODE_93', supported: true, category: '1D' },
@@ -21,8 +20,7 @@ export const BARCODE_FORMAT_OPTIONS = [
   { label: 'UPC_A', value: 'UPC_A', supported: true, category: '1D Numerik' },
   { label: 'UPC_E', value: 'UPC_E', supported: true, category: '1D Numerik' },
   { label: 'UPC_EAN_EXTENSION', value: 'UPC_EAN_EXTENSION', supported: true, category: '1D Extension' },
-  { label: 'RSS_14 (GS1 DataBar)', value: 'RSS_14', supported: true, category: '1D GS1' },
-  { label: 'RSS_EXPANDED (GS1 Expanded)', value: 'RSS_EXPANDED', supported: true, category: '1D GS1' }
+  { label: 'RSS_14 (GS1 DataBar)', value: 'RSS_14', supported: true, category: '1D GS1' }
 ]
 
 /**
@@ -33,7 +31,6 @@ const BWIP_FORMAT_MAP = {
   QR_CODE: 'qrcode',
   AZTEC: 'azteccode',
   DATA_MATRIX: 'datamatrix',
-  MAXICODE: 'maxicode',
   PDF_417: 'pdf417',
   CODE_39: 'code39',
   CODE_93: 'code93',
@@ -44,8 +41,7 @@ const BWIP_FORMAT_MAP = {
   UPC_A: 'upca',
   UPC_E: 'upce',
   UPC_EAN_EXTENSION: 'ean13',
-  RSS_14: 'databaromni',
-  RSS_EXPANDED: 'databarexpanded'
+  RSS_14: 'databaromni'
 }
 
 /**
@@ -214,8 +210,8 @@ export function isValidResiFormat(str) {
   // 2. Codabar wrapped: A...B, C...D, dsb
   if (/^[ABCD][0-9\-\$\:\/\.\+]{6,20}[ABCD]$/.test(s)) return true
 
-  // 3. GS1 Expanded / RSS Expanded
-  if (s.includes('(10)') || s.includes('(01)')) return true
+  // 3. RSS_14
+  if (s.startsWith('(01)') || /^01\d{14}$/.test(s)) return true
 
   // 4. UPC/EAN with Supplemental Extension: 12-13 digit main + 2 atau 5 digit extension (contoh: 9781234567897 90000)
   if (/^\d{12,13}\s+\d{2,5}$/.test(s)) return true
@@ -268,43 +264,15 @@ export function normalizeScannedBarcode(raw, format = null) {
     // Nama string selalu diutamakan; angka hanya fallback legacy.
     const FORMAT_ENUM_MAP = {
       0: 'AZTEC', 1: 'CODABAR', 2: 'CODE_39', 3: 'CODE_93', 4: 'CODE_128',
-      5: 'DATA_MATRIX', 6: 'EAN_8', 7: 'EAN_13', 8: 'ITF', 9: 'MAXICODE', 10: 'PDF_417',
-      11: 'QR_CODE', 12: 'RSS_14', 13: 'RSS_EXPANDED', 14: 'UPC_A', 15: 'UPC_E', 18: 'CODABAR', 29: 'RSS_14'
+      5: 'DATA_MATRIX', 6: 'EAN_8', 7: 'EAN_13', 8: 'ITF', 10: 'PDF_417',
+      11: 'QR_CODE', 12: 'RSS_14', 14: 'UPC_A', 15: 'UPC_E', 18: 'CODABAR', 29: 'RSS_14'
     }
     fmt = FORMAT_ENUM_MAP[format] || ''
   } else if (format && typeof format === 'object') {
     fmt = String(format.formatName || format.name || '').toUpperCase()
   }
 
-  // 2. RSS_EXPANDED: Parsing format GS1 DataBar Expanded (01)GTIN-14(10)TrackingNo
-  if (fmt === 'RSS_EXPANDED' || /\(01\).+\(10\)/i.test(s) || /^01\d{14}10/i.test(s) || s.includes('(10)') || s.includes('(01)')) {
-    const mGs1 = s.match(/^(?:\(01\)|01)\s*\d{14}\s*(?:\(10\)|10)\s*([A-Z0-9]+)$/i)
-    if (mGs1 && mGs1[1]) {
-      const extracted = mGs1[1].toUpperCase()
-      return checkLocalStorage(extracted) || checkLocalStorage(s) || extracted
-    }
-    const m10Paren = s.match(/\(10\)\s*([A-Z0-9]+)$/i)
-    if (m10Paren && m10Paren[1]) {
-      const extracted = m10Paren[1].toUpperCase()
-      return checkLocalStorage(extracted) || checkLocalStorage(s) || extracted
-    }
-    // P2: fallback longgar — decode video terpotong sering hanya dapat (01)GTIN
-    // tanpa ekor (10). Jangan buang (return ''); kembalikan GTIN agar bisa
-    // lookup via barcode_value di backend.
-    const m01only = s.match(/^(?:\(01\)|01)\s*(\d{14})/i)
-    if (m01only && m01only[1]) {
-      const gtin = m01only[1]
-      return (
-        checkLocalStorage(gtin) ||
-        checkLocalStorage(`(01)${gtin}`) ||
-        checkLocalStorage(`01${gtin}`) ||
-        checkLocalStorage(s) ||
-        gtin
-      )
-    }
-  }
-
-  // 3. RSS_14: Parsing format GS1 DataBar Omni (01)GTIN-14 (14 digit angka murni)
+  // 2. RSS_14: Parsing format GS1 DataBar Omni (01)GTIN-14 (14 digit angka murni)
   if (fmt === 'RSS_14' || /^(?:\(01\)|01)\d{14}$/i.test(s)) {
     const m01 = s.match(/^(?:\(01\)|01)?(\d{14})$/i)
     if (m01 && m01[1]) {
@@ -315,20 +283,6 @@ export function normalizeScannedBarcode(raw, format = null) {
         checkLocalStorage(`01${gtin}`) ||
         gtin
       )
-    }
-  }
-
-  // 4. MAXICODE: Ekstrak tracking number jika scanner mendukung
-  if (fmt === 'MAXICODE' || s.includes('[C3') || s.includes('ANSI ') || s.includes('[)>')) {
-    const m10 = s.match(/\(10\)\s*([A-Z0-9]+)/i)
-    if (m10 && m10[1]) {
-      const extracted = m10[1].toUpperCase()
-      return checkLocalStorage(extracted) || checkLocalStorage(`(10)${extracted}`) || extracted
-    }
-    const mMaxi = s.match(/([A-Z0-9]{6,32})/i)
-    if (mMaxi && mMaxi[1]) {
-      const extracted = mMaxi[1].toUpperCase()
-      return checkLocalStorage(extracted) || extracted
     }
   }
 
@@ -378,9 +332,18 @@ export function normalizeScannedBarcode(raw, format = null) {
     }
   }
 
-  // 8. UPC-E: Ekspansi ke UPC-A dengan check digit
-  if (fmt === 'UPC_E' || /^0\d{7}$/.test(s) || /^0\d{6}$/.test(s)) {
+  // 8. UPC-E: Ekspansi ke UPC-A dengan check digit (termasuk hasil dekompresi ZXing/WASM)
+  if (fmt === 'UPC_E' || /^0\d{7}$/.test(s) || /^0\d{6}$/.test(s) || (fmt === 'UPC_E' && /^\d{12,13}$/.test(s))) {
     let upceStr = s.replace(/\D/g, '')
+    // Jika format UPC_E mengembalikan 12 atau 13 digit (hasil dekompresi ZXing/WASM 0012345000065 atau 012345000065),
+    // kompresi kembali menjadi 8-digit UPC-E
+    if (upceStr.length === 13 && upceStr.startsWith('00')) {
+      const comp = compressUpcaToUpce(upceStr.slice(1))
+      if (comp) upceStr = comp
+    } else if (upceStr.length === 12 && upceStr.startsWith('0')) {
+      const comp = compressUpcaToUpce(upceStr)
+      if (comp) upceStr = comp
+    }
     if (upceStr.length === 6) {
       const cd = calculateUpceCheckDigit(upceStr)
       upceStr = '0' + upceStr + cd
@@ -510,11 +473,6 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
     case 'DATA_MATRIX':
     case 'PDF_417':
       barcodeValue = cleanTracking
-      break
-
-    case 'MAXICODE':
-      barcodeValue = cleanTracking.startsWith('(10)') ? cleanTracking : `(10)${cleanTracking}`
-      isMapped = true
       break
 
     case 'CODE_39':
@@ -679,23 +637,6 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
       break
     }
 
-    case 'RSS_EXPANDED': {
-      if (/^\(01\)\d{14}/.test(cleanTracking)) {
-        isMapped = false
-        barcodeValue = cleanTracking
-      } else {
-        isMapped = true
-        // Generate GTIN-14 unik & deterministik dari cleanTracking (BUG-005)
-        // 1 digit prefix '1' + 12 digit hash unik + 1 digit mod10 check digit
-        const d13 = '1' + stringToDeterministicDigits(cleanTracking, 12)
-        const cd = calculateMod10CheckDigit(d13)
-        const uniqueGtin = d13 + cd
-        const cleanAlpha = cleanTracking.replace(/[^A-Za-z0-9]/g, '').slice(0, 16) || 'WAHANA'
-        barcodeValue = `(01)${uniqueGtin}(10)${cleanAlpha}`
-      }
-      break
-    }
-
     default:
       barcodeValue = cleanTracking
   }
@@ -729,25 +670,12 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
       if (format === 'EAN_8' && barcodeValue.length === 8) {
         localStorage.setItem(`barcode_mapping_${barcodeValue.slice(0, 7)}`, cleanTracking)
       }
-      if (format === 'MAXICODE') {
-        localStorage.setItem(`barcode_mapping_(10)${cleanTracking}`, cleanTracking)
-      }
       if (format === 'CODABAR') {
         const inner = barcodeValue.replace(/^[ABCD]|[ABCD]$/gi, '')
         localStorage.setItem(`barcode_mapping_${inner}`, cleanTracking)
       }
       if (format === 'RSS_14') {
         localStorage.setItem(`barcode_mapping_${barcodeValue.replace('(01)', '')}`, cleanTracking)
-      }
-      if (format === 'RSS_EXPANDED') {
-        localStorage.setItem(`barcode_mapping_(10)${cleanTracking}`, cleanTracking)
-        // P2: varian GTIN saja (tanpa ekor 10) untuk hasil scan video terpotong
-        const mGtin = String(barcodeValue).match(/\(01\)(\d{14})/)
-        if (mGtin && mGtin[1]) {
-          localStorage.setItem(`barcode_mapping_${mGtin[1]}`, cleanTracking)
-          localStorage.setItem(`barcode_mapping_(01)${mGtin[1]}`, cleanTracking)
-          localStorage.setItem(`barcode_mapping_01${mGtin[1]}`, cleanTracking)
-        }
       }
       if (format === 'CODE_93') {
         // P2: decoder bisa mengembalikan base+C&K (bwip includecheck:true),
@@ -785,17 +713,16 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
   const bcid = BWIP_FORMAT_MAP[format] || 'code128'
 
   try {
-    const is2DMatrix = ['QR_CODE', 'AZTEC', 'DATA_MATRIX', 'MAXICODE'].includes(format)
+    const is2DMatrix = ['QR_CODE', 'AZTEC', 'DATA_MATRIX'].includes(format)
     const isStacked = format === 'PDF_417'
 
     const isCode93 = format === 'CODE_93'
-    const isExpanded = format === 'RSS_EXPANDED'
 
     const bwipOptions = {
       bcid,
       text: payload.barcode_value,
-      // P0: CODE_93 & RSS_EXPANDED butuh modul lebih besar agar terbaca kamera HP 720p
-      scale: options.scale || (isCode93 || isExpanded ? 4 : 3),
+      // P0: CODE_93 butuh modul lebih besar agar terbaca kamera HP 720p
+      scale: options.scale || (isCode93 ? 4 : 3),
       includetext: false,
       backgroundcolor: 'ffffff'
     }
@@ -805,13 +732,17 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
       bwipOptions.includecheck = true
     }
 
+    if (format === 'UPC_EAN_EXTENSION') {
+      // addongap: 9 module widths (spesifikasi standar GS1/ISO untuk EAN/UPC extension agar terbaca dekoder)
+      bwipOptions.addongap = options.addongap || 9
+    }
+
     if (!is2DMatrix && !isStacked) {
       // Barcode 1D linear: tingkatkan tinggi dan beri quiet zone padding agar mudah dideteksi kamera
-      // P0: default lebih tinggi untuk CODE_93 (25) & RSS_EXPANDED (30), quiet zone lebih lega
-      const defaultHeight = isExpanded ? 30 : isCode93 ? 25 : 16
+      const defaultHeight = isCode93 ? 25 : 16
       bwipOptions.height = options.height || defaultHeight
-      bwipOptions.paddingwidth = options.paddingwidth || (isCode93 || isExpanded ? 20 : 15)
-      bwipOptions.paddingheight = options.paddingheight || (isCode93 || isExpanded ? 12 : 8)
+      bwipOptions.paddingwidth = options.paddingwidth || (isCode93 ? 20 : 15)
+      bwipOptions.paddingheight = options.paddingheight || (isCode93 ? 12 : 8)
     }
 
     const svgString = bwipjs.toSVG(bwipOptions)
@@ -826,15 +757,7 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
         svgEl.setAttribute('viewBox', newSvg.getAttribute('viewBox'))
       }
 
-      if (format === 'MAXICODE') {
-        const size = String(options.qrSize || 180)
-        svgEl.setAttribute('width', size)
-        svgEl.setAttribute('height', size)
-        svgEl.style.maxWidth = options.maxWidth || `${size}px`
-        svgEl.style.maxHeight = options.maxHeight || `${size}px`
-        svgEl.style.width = 'auto'
-        svgEl.style.height = 'auto'
-      } else if (is2DMatrix) {
+      if (is2DMatrix) {
         const size = String(options.qrSize || 120)
         svgEl.setAttribute('width', size)
         svgEl.setAttribute('height', size)
@@ -847,14 +770,6 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
         svgEl.setAttribute('width', w)
         svgEl.style.maxWidth = options.maxWidth || `${w}px`
         svgEl.style.maxHeight = options.maxHeight || '80px'
-        svgEl.style.width = 'auto'
-        svgEl.style.height = 'auto'
-      } else if (format === 'RSS_EXPANDED') {
-        svgEl.removeAttribute('width')
-        svgEl.removeAttribute('height')
-        svgEl.style.maxWidth = options.maxWidth || '490px'
-        svgEl.style.maxHeight = options.maxHeight || '148px'
-        // P0: jangan stretch width:100% agar modul tajam 1:1, mudah di-scan kamera HP
         svgEl.style.width = 'auto'
         svgEl.style.height = 'auto'
       } else if (format === 'CODE_93') {
@@ -932,9 +847,6 @@ export function generateClientResi(format = 'CODE_128') {
   if (fmt === 'UPC_EAN_EXTENSION') {
     const data = '899' + randomDigits(9)
     return `${data}${calculateMod10CheckDigit(data)} ${randomDigits(5)}`
-  }
-  if (fmt === 'MAXICODE') {
-    return '(10)' + randomChars(8)
   }
   return randomChars(8)
 }
