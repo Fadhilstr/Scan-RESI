@@ -58,16 +58,18 @@ async function runTests() {
   console.log('TEST SUITE: OPTIMASI KAMERA SCANNER CODE_93 & UPC_E (DIJAK EXPRESS)')
   console.log('========================================================================\n')
 
-  // TEST 1: Verifikasi MAXICODE & RSS_EXPANDED Telah Dihapus
-  console.log('TEST 1: Verifikasi MAXICODE & RSS_EXPANDED tidak ada di opsi format...')
+  // TEST 1: Verifikasi MAXICODE, RSS_EXPANDED & UPC_EAN_EXTENSION Telah Dihapus
+  console.log('TEST 1: Verifikasi MAXICODE, RSS_EXPANDED & UPC_EAN_EXTENSION tidak ada di opsi format...')
   const maxiOpt = BARCODE_FORMAT_OPTIONS.find(o => o.value === 'MAXICODE')
   const rssExpOpt = BARCODE_FORMAT_OPTIONS.find(o => o.value === 'RSS_EXPANDED')
+  const upcEanExtOpt = BARCODE_FORMAT_OPTIONS.find(o => o.value === 'UPC_EAN_EXTENSION')
   assert.strictEqual(maxiOpt, undefined, 'MAXICODE tidak boleh ada di BARCODE_FORMAT_OPTIONS!')
   assert.strictEqual(rssExpOpt, undefined, 'RSS_EXPANDED tidak boleh ada di BARCODE_FORMAT_OPTIONS!')
-  assert.strictEqual(BARCODE_FORMAT_OPTIONS.length, 15, 'Total format barcode harus tepat 15.')
+  assert.strictEqual(upcEanExtOpt, undefined, 'UPC_EAN_EXTENSION tidak boleh ada di BARCODE_FORMAT_OPTIONS!')
+  assert.strictEqual(BARCODE_FORMAT_OPTIONS.length, 14, 'Total format barcode harus tepat 14.')
   assert.ok(BARCODE_FORMAT_OPTIONS.some(o => o.value === 'CODE_93'), 'CODE_93 harus aktif.')
   assert.ok(BARCODE_FORMAT_OPTIONS.some(o => o.value === 'UPC_E'), 'UPC_E harus aktif.')
-  console.log('  -> PASS: MAXICODE & RSS_EXPANDED berhasil dihapus. Total 15 format aktif.\n')
+  console.log('  -> PASS: Format tidak terpakai berhasil dihapus. Total 14 format aktif.\n')
 
   // TEST 2: Benchmark & Akurasi CODE_93 via ZXing-WASM
   console.log('TEST 2: Menguji performa & presisi deteksi CODE_93...')
@@ -151,21 +153,6 @@ async function runTests() {
     assert.strictEqual(norm, tc.text, `Normalisasi ${tc.format} harus cocok`)
     console.log(`  -> PASS: [${tc.format}] terbaca dalam ${(t1 - t0).toFixed(2)} ms -> Resi: "${norm}"`)
   }
-
-  // TEST 6: Pengujian UPC_EAN_EXTENSION (Main Barcode + 5-Digit Add-On Extension)
-  console.log('\nTEST 6: Menguji pembacaan UPC_EAN_EXTENSION (Main + 5-digit add-on)...')
-  const extTestResi = '8997400863033 75362'
-  const imgDataExt = await renderBwipImageData('ean13', extTestResi, { addongap: 9 })
-  const tStartExt = performance.now()
-  const resultsExt = await readBarcodesWasm(imgDataExt, { formats: ['EANUPC'], eanAddOnSymbol: 'Read', tryHarder: true })
-  const tEndExt = performance.now()
-  assert.ok(resultsExt.length > 0, 'UPC_EAN_EXTENSION harus terdeteksi oleh ZXing-WASM')
-  const rawExtText = extractZxingWasmText(resultsExt[0])
-  const fmtExt = mapZxingWasmFormat(resultsExt[0].format, rawExtText)
-  assert.strictEqual(fmtExt, 'UPC_EAN_EXTENSION', 'Format harus terpetakan ke UPC_EAN_EXTENSION')
-  const normExt = normalizeScannedBarcode(rawExtText, fmtExt)
-  assert.strictEqual(normExt, extTestResi, 'Hasil normalisasi harus menyertakan 5-digit extension')
-  console.log(`  -> PASS: UPC_EAN_EXTENSION terbaca dalam ${(tEndExt - tStartExt).toFixed(2)} ms -> Resi: "${normExt}"`)
 
   console.log('\n========================================================================')
   console.log(' SEMUA PENGUJIAN KAMERA CODE_93 & UPC_E BERHASIL DENGAN SEMPURNA (PASS)')

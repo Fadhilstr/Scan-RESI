@@ -20,7 +20,7 @@ $dbh->do("DELETE FROM scan_events WHERE user_id = ?", undef, $wahyu_id);
 print "Reset task wahyu...\n";
 $dbh->do("UPDATE tasks SET progress = 0, status = 'PROSES_SCAN' WHERE user_id = ?", undef, $wahyu_id);
 
-my @formats = qw(CODE_128 QR_CODE AZTEC DATA_MATRIX PDF_417 CODE_39 CODE_93 CODABAR ITF EAN_13 EAN_8 UPC_A UPC_E RSS_14 RSS_EXPANDED);
+my @formats = qw(CODE_128 QR_CODE AZTEC DATA_MATRIX PDF_417 CODE_39 CODE_93 CODABAR ITF EAN_13 EAN_8 UPC_A UPC_E UPC_EAN_EXTENSION RSS_14);
 
 print "Membuat paket test untuk Andre...\n";
 my $draft_base = time();

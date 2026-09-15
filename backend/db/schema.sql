@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 -- Hanya paket TERDAFTAR yang boleh discan petugas (validasi backend).
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS paket (
-    nomor_resi VARCHAR(16) NOT NULL,
+    nomor_resi VARCHAR(64) NOT NULL,
     nama_barang VARCHAR(150) NULL,
     pengirim VARCHAR(100) NULL,
     alamat_pengirim VARCHAR(255) NULL,

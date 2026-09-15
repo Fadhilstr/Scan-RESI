@@ -139,8 +139,7 @@ const ALL_SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.EAN_8,
   Html5QrcodeSupportedFormats.PDF_417,
   Html5QrcodeSupportedFormats.RSS_14,
-  Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION
+  Html5QrcodeSupportedFormats.UPC_A
 ]
 
 const props = defineProps({
@@ -831,7 +830,7 @@ const onScanSuccess = (decodedText, decodedResult) => {
     isProcessingSync ||
     isPaused.value ||
     isProcessingScan.value ||
-    (scannerState.value !== 'SCANNING' && scannerState.value !== 'WAITING_FOR_EXTENSION') ||
+    scannerState.value !== 'SCANNING' ||
     status.value !== 'scanning'
   ) {
     return
@@ -846,40 +845,6 @@ const onScanSuccess = (decodedText, decodedResult) => {
     decodedResult?.format?.formatName ||
     decodedResult?.result?.formatName ||
     null
-
-  // Dua Tahap State Machine Khusus UPC_EAN_EXTENSION:
-  // Jika barcode utama (EAN13/UPCA/EAN8) terdeteksi TANPA extension saat mode UPC_EAN_EXTENSION,
-  // tahan sementara (350ms) di state WAITING_FOR_EXTENSION agar frame kamera berkesempatan membaca extension symbol
-  const isUpcEanMain =
-    formatName === 'EAN_13' ||
-    formatName === 'UPC_A' ||
-    formatName === 'EAN_8' ||
-    /^\d{12,13}$/.test(raw)
-  const hasAddOn = /\s+\d{2,5}$/.test(raw)
-
-  if (
-    (props.preferredFormat === 'UPC_EAN_EXTENSION' || !props.preferredFormat) &&
-    isUpcEanMain &&
-    !hasAddOn &&
-    scannerState.value !== 'WAITING_FOR_EXTENSION'
-  ) {
-    scannerState.value = 'WAITING_FOR_EXTENSION'
-    pendingMainBarcode = raw
-    if (waitingExtensionTimer) clearTimeout(waitingExtensionTimer)
-    waitingExtensionTimer = setTimeout(() => {
-      waitingExtensionTimer = null
-      if (scannerState.value === 'WAITING_FOR_EXTENSION') {
-        finalizeScan(pendingMainBarcode, formatName)
-      }
-    }, 350)
-    return
-  }
-
-  // Jika sedang di WAITING_FOR_EXTENSION dan sekarang dapat teks dengan extension (atau kode baru):
-  if (waitingExtensionTimer) {
-    clearTimeout(waitingExtensionTimer)
-    waitingExtensionTimer = null
-  }
 
   finalizeScan(raw, formatName)
 }

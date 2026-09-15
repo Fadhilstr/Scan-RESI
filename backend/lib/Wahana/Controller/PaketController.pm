@@ -115,9 +115,6 @@ sub generate_resi {
             my $data = '1' . join('', map { int rand(10) } 1 .. 12);
             my $chk = calc_mod10($data);
             $resi = $data . $chk;
-        } elsif ($format eq 'UPC_EAN_EXTENSION') {
-            # 5 digit angka numerik untuk EAN-5 supplemental extension
-            $resi = join('', map { int rand(10) } 1 .. 5);
         } else {
             # Alfanumerik standar (CODE_128, QR_CODE, AZTEC, CODE_39, CODE_93, DATA_MATRIX, PDF_417)
             $resi = join '',
@@ -144,7 +141,7 @@ sub generate_barcode_value {
     my $resi_up = uc($resi);
 
     # Format yang barcode_value == nomor_resi (tidak perlu konversi)
-    if ($format =~ /^(CODE_128|QR_CODE|AZTEC|DATA_MATRIX|PDF_417|CODE_39|CODE_93|UPC_EAN_EXTENSION)$/) {
+    if ($format =~ /^(CODE_128|QR_CODE|AZTEC|DATA_MATRIX|PDF_417|CODE_39|CODE_93)$/) {
         return $resi_up;
     }
 

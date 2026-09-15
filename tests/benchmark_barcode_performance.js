@@ -43,8 +43,7 @@ const FORMAT_TEST_SUITE = [
   { name: 'EAN_8', testResi: '89912348', bwipName: 'ean8', formatEnum: BarcodeFormat.EAN_8 },
   { name: 'UPC_A', testResi: '012345678905', bwipName: 'upca', formatEnum: BarcodeFormat.UPC_A },
   { name: 'UPC_E', testResi: '01234565', bwipName: 'upce', formatEnum: BarcodeFormat.UPC_E },
-  { name: 'RSS_14', testResi: '18991234567898', bwipName: 'databarlimited', readerClass: 'RSS14Reader', formatEnum: BarcodeFormat.RSS_14 },
-  { name: 'UPC_EAN_EXTENSION', testResi: '8997400863033 75362', bwipName: 'ean13', formatEnum: null }
+  { name: 'RSS_14', testResi: '18991234567898', bwipName: 'databarlimited', readerClass: 'RSS14Reader', formatEnum: BarcodeFormat.RSS_14 }
 ]
 
 function getMedian(arr) {

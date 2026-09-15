@@ -1,9 +1,9 @@
 import bwipjs from 'bwip-js'
 
 /**
- * 15 Format Barcode standar yang didukung penuh oleh decoder kamera scanner:
+ * 14 Format Barcode standar yang didukung penuh oleh decoder kamera scanner:
  * QR_CODE, AZTEC, CODABAR, CODE_39, CODE_93, CODE_128, DATA_MATRIX, ITF,
- * EAN_13, EAN_8, PDF_417, RSS_14, UPC_A, UPC_E, UPC_EAN_EXTENSION.
+ * EAN_13, EAN_8, PDF_417, RSS_14, UPC_A, UPC_E.
  */
 export const BARCODE_FORMAT_OPTIONS = [
   { label: 'CODE_128', value: 'CODE_128', supported: true, category: '1D' },
@@ -19,7 +19,6 @@ export const BARCODE_FORMAT_OPTIONS = [
   { label: 'EAN_8', value: 'EAN_8', supported: true, category: '1D Numerik' },
   { label: 'UPC_A', value: 'UPC_A', supported: true, category: '1D Numerik' },
   { label: 'UPC_E', value: 'UPC_E', supported: true, category: '1D Numerik' },
-  { label: 'UPC_EAN_EXTENSION', value: 'UPC_EAN_EXTENSION', supported: true, category: '1D Extension' },
   { label: 'RSS_14 (GS1 DataBar)', value: 'RSS_14', supported: true, category: '1D GS1' }
 ]
 
@@ -40,7 +39,6 @@ const BWIP_FORMAT_MAP = {
   EAN_8: 'ean8',
   UPC_A: 'upca',
   UPC_E: 'upce',
-  UPC_EAN_EXTENSION: 'ean13',
   RSS_14: 'databaromni'
 }
 
@@ -212,9 +210,6 @@ export function isValidResiFormat(str) {
 
   // 3. RSS_14
   if (s.startsWith('(01)') || /^01\d{14}$/.test(s)) return true
-
-  // 4. UPC/EAN with Supplemental Extension: 12-13 digit main + 2 atau 5 digit extension (contoh: 9781234567897 90000)
-  if (/^\d{12,13}\s+\d{2,5}$/.test(s)) return true
 
   return false
 }
@@ -414,20 +409,6 @@ export function normalizeScannedBarcode(raw, format = null) {
 
 
 
-  // 12. UPC_EAN_EXTENSION: Parsing format EAN/UPC + 2/5 digit extension
-  if (fmt === 'UPC_EAN_EXTENSION' || /^\d{12,13}\s+\d{2,5}$/.test(s)) {
-    const mExt = s.match(/^(\d{12,13})\s+(\d{2,5})$/)
-    if (mExt) {
-      const full = `${mExt[1]} ${mExt[2]}`
-      return (
-        checkLocalStorage(full) ||
-        checkLocalStorage(s) ||
-        checkLocalStorage(mExt[1]) ||
-        full
-      )
-    }
-  }
-
   // 13. ITF: ITF di sistem adalah 12 digit (genap 12 digit)
   if (fmt === 'ITF' || (fmt !== 'RSS_14' && /^\d{12}$/.test(s))) {
     const digits = s.replace(/\D/g, '')
@@ -598,23 +579,6 @@ export function resolveBarcodePayload(trackingNo, format = 'CODE_128') {
       break
     }
 
-    case 'UPC_EAN_EXTENSION': {
-      if (/^\d{13}\s+\d{2,5}$/.test(cleanTracking)) {
-        isMapped = false
-        barcodeValue = cleanTracking
-      } else if (/^\d{13}$/.test(cleanTracking)) {
-        isMapped = true
-        barcodeValue = `${cleanTracking} 90000`
-      } else {
-        isMapped = true
-        const d12 = stringToDeterministicDigits(cleanTracking, 12)
-        const cd = calculateMod10CheckDigit(d12)
-        const ext5 = stringToDeterministicDigits(cleanTracking + '_EXT', 5)
-        barcodeValue = `${d12}${cd} ${ext5}`
-      }
-      break
-    }
-
     case 'RSS_14': {
       if (/^\(01\)\d{13,14}$/.test(cleanTracking)) {
         isMapped = false
@@ -730,11 +694,6 @@ export async function renderBarcode(svgEl, rawTrackingNo, format = 'CODE_128', o
     if (format === 'CODE_93') {
       // Code 93 memerlukan 2 digit check characters C & K sesuai standar spesifikasi internasional
       bwipOptions.includecheck = true
-    }
-
-    if (format === 'UPC_EAN_EXTENSION') {
-      // addongap: 9 module widths (spesifikasi standar GS1/ISO untuk EAN/UPC extension agar terbaca dekoder)
-      bwipOptions.addongap = options.addongap || 9
     }
 
     if (!is2DMatrix && !isStacked) {
