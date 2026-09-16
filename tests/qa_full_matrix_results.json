@@ -42,7 +42,7 @@
       "category": "ADMIN",
       "mode": "Create Task Shift Allocation (/api/tasks)",
       "name": true,
-      "passed": "Created Task ID: TASK-042",
+      "passed": "Created Task ID: TASK-059",
       "detail": ""
     },
     {
@@ -63,7 +63,7 @@
       "category": "CUSTOMER",
       "mode": "Generate Draft Resi Server-Side (/api/paket/resi)",
       "name": true,
-      "passed": "Generated Resi: 2YVXNWNL",
+      "passed": "Generated Resi: Z92M5CW5",
       "detail": ""
     },
     {
@@ -106,21 +106,21 @@
       "mode": "ONLINE",
       "name": "Get Performance Stats (/api/scans/stats/:id)",
       "passed": true,
-      "detail": "Success: 55, Duplicate: 13"
+      "detail": "Success: 57, Duplicate: 14"
     },
     {
       "category": "PETUGAS_SCAN",
       "mode": "OFFLINE",
       "name": "Simulate Offline Scan & IndexedDB Queue Storage",
       "passed": true,
-      "detail": "Queued Resi: 62LS3S2M in pending_scans"
+      "detail": "Queued Resi: SLNXA7NV in pending_scans"
     },
     {
       "category": "PETUGAS_SCAN",
       "mode": "OFFLINE->ONLINE",
       "name": "Auto-Sync Pending Scans to Server MariaDB",
       "passed": true,
-      "detail": "Synced Resi: 62LS3S2M to Database"
+      "detail": "Synced Resi: SLNXA7NV to Database"
     },
     {
       "category": "SECURITY",

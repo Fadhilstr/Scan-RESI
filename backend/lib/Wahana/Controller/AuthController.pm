@@ -238,6 +238,7 @@ sub resend_otp {
             : $user->{username} . '@dijakexpress.com';
     }
 
+
     # Invalidate OTP lama
     $dbh->do(Wahana::Query->get('otp_invalidate_old'), undef, $user_id);
 

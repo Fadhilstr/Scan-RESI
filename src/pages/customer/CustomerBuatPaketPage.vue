@@ -762,7 +762,15 @@ onMounted(async () => {
       try {
         const parsed = JSON.parse(localUnassigned)
         if (parsed.form) Object.assign(form, parsed.form)
-        if (parsed.selectedFormat) selectedFormat.value = parsed.selectedFormat
+        if (parsed.selectedFormat) {
+          const isValidFormat = BARCODE_FORMAT_OPTIONS.some((opt) => opt.value === parsed.selectedFormat)
+          if (isValidFormat) {
+            selectedFormat.value = parsed.selectedFormat
+          } else {
+            // Hapus cache draft lama jika formatnya sudah tidak berlaku lagi
+            localStorage.removeItem(UNASSIGNED_DRAFT_KEY)
+          }
+        }
       } catch (_) {}
     }
     return
