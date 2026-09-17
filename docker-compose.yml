@@ -91,6 +91,8 @@ services:
       - backend
     volumes:
       - ./nginx/docker-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/swagger-ui.html:/etc/nginx/html/swagger-ui.html:ro
+      - ./backend/etc/api/scanresi.yaml:/etc/nginx/html/scanresi.yaml:ro
     ports:
       - "8080:80"
     networks:
