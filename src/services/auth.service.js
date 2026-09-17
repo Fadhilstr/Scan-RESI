@@ -126,6 +126,9 @@ export async function login(username, password) {
   // POST /api/auth/login
   try {
     const data = await api.post('/api/auth/login', { username, password })
+    if (!data.success) {
+      return { success: false, message: data.message || 'Login gagal.' }
+    }
     if (data.requires_otp) {
       return {
         success: true,
@@ -173,6 +176,9 @@ export async function quickLogin(userId) {
   // --- API MODE ---
   try {
     const data = await api.post('/api/auth/quick-login', { user_id: userId })
+    if (!data.success) {
+      return { success: false, message: data.message || 'Quick login gagal.' }
+    }
     if (data.requires_otp) {
       return {
         success: true,
@@ -260,6 +266,9 @@ export async function verifyOtp(preauth_token, otp) {
 
   try {
     const data = await api.post('/api/auth/verify-otp', { preauth_token, otp })
+    if (!data.success) {
+      return { success: false, message: data.message || 'Kode OTP salah atau kedaluwarsa.' }
+    }
     if (data.token) localStorage.setItem('wahana_token', data.token)
     return {
       success: true,
@@ -283,6 +292,9 @@ export async function resendOtp(preauth_token) {
 
   try {
     const data = await api.post('/api/auth/resend-otp', { preauth_token })
+    if (!data.success) {
+      return { success: false, message: data.message || 'Gagal mengirim ulang OTP.' }
+    }
     return {
       success: true,
       masked_email: data.masked_email,

@@ -21,12 +21,7 @@ sub generate_otp {
         $num = unpack('N', $bytes);
     } else {
         # Fallback jika /dev/urandom tidak tersedia (non-Unix)
-        srand(time() ^ ($$ << 15) ^ $$);G — lebih aman dari srand(time())
-    my $num;
-    if (open my $fh, '<:raw', '/dev/urandom') {
-        my $bytes = '';
-        read($fh, $bytes, 4);
-        close $fh;
+        srand(time() ^ ($$ << 15) ^ $$);
         $num = int(rand(0xFFFFFFFF));
     }
     return sprintf '%06d', ($num % 900000) + 100000;

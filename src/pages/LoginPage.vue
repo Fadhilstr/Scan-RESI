@@ -86,7 +86,7 @@
                 mask="######"
                 maxlength="6"
                 label="Kode OTP (6 Digit)"
-                placeholder="123456"
+                placeholder="· · · · · ·"
                 autofocus
                 class="text-h6 text-center"
                 :rules="[
@@ -204,7 +204,7 @@
                 mask="######"
                 maxlength="6"
                 label="Kode OTP (6 Digit)"
-                placeholder="123456"
+                placeholder="· · · · · ·"
                 autofocus
                 class="text-h6 text-center"
                 :rules="[
@@ -363,8 +363,14 @@ const startTimers = () => {
 }
 
 const stopTimers = () => {
-  if (expireInterval) clearInterval(expireInterval)
-  if (cooldownInterval) clearInterval(cooldownInterval)
+  if (expireInterval) {
+    clearInterval(expireInterval)
+    expireInterval = null
+  }
+  if (cooldownInterval) {
+    clearInterval(cooldownInterval)
+    cooldownInterval = null
+  }
 }
 
 onUnmounted(() => {
