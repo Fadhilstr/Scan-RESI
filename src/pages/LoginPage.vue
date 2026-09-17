@@ -176,7 +176,7 @@
               <div class="row justify-center q-mt-sm">
                 <q-btn flat dense no-caps color="grey-7" icon="arrow_back" label="Kembali ke Login" @click="cancelForgot" />
               </div>
-            </q-form>f
+            </q-form>
           </div>
 
           <!-- STEP 4: LUPA PASSWORD — VERIFIKASI OTP RESET -->

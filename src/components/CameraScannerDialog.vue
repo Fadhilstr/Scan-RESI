@@ -8,6 +8,35 @@
           SCAN BARCODE VIA KAMERA
         </div>
         <q-space />
+
+        <!-- Tombol Flash / Senter jika hardware HP mendukung -->
+        <q-btn
+          v-if="hasTorch"
+          flat
+          round
+          dense
+          :icon="isTorchOn ? 'flash_on' : 'flash_off'"
+          :color="isTorchOn ? 'amber-9' : 'grey-7'"
+          class="q-mr-xs"
+          @click="toggleTorch"
+        >
+          <q-tooltip>{{ isTorchOn ? 'Matikan Lampu Senter (Flash)' : 'Nyalakan Lampu Senter (Flash)' }}</q-tooltip>
+        </q-btn>
+
+        <!-- Tombol Toggle Auto-Flash di Tempat Gelap -->
+        <q-btn
+          v-if="hasTorch"
+          flat
+          round
+          dense
+          :icon="isAutoTorchEnabled ? 'auto_awesome' : 'flash_auto'"
+          :color="isAutoTorchEnabled ? 'primary' : 'grey-5'"
+          class="q-mr-xs"
+          @click="toggleAutoTorch"
+        >
+          <q-tooltip>{{ isAutoTorchEnabled ? 'Auto-Flash aktif jika ruangan gelap (Klik untuk mematikan)' : 'Auto-Flash nonaktif (Klik untuk mengaktifkan)' }}</q-tooltip>
+        </q-btn>
+
         <q-btn flat round dense icon="close" color="grey-7" @click="closeDialog">
           <q-tooltip>Tutup kamera</q-tooltip>
         </q-btn>
@@ -26,6 +55,39 @@
           <!-- Single Centered Scan Area Overlay & Line -->
           <div v-if="status === 'scanning'" class="scan-overlay-box">
             <div class="scan-line" :class="{ 'scan-line--paused': isPaused || scannerState !== 'SCANNING' }"></div>
+          </div>
+
+          <!-- Floating Status & Torch Indicator inside Camera View -->
+          <div v-if="status === 'scanning'" class="camera-floating-overlay">
+            <!-- Badge indikator pencahayaan / status flash -->
+            <div
+              v-if="isTorchOn || (isLowLight && isAutoTorchEnabled)"
+              class="light-status-pill row items-center q-gutter-x-xs"
+              :class="{ 'light-status-pill--active': isTorchOn }"
+            >
+              <q-icon :name="isTorchOn ? 'flash_on' : 'nightlight'" size="13px" />
+              <span>
+                {{ isTorchOn ? (autoTorchTriggered ? 'Flash Otomatis Menyala' : 'Flash Menyala') : 'Kondisi Minim Cahaya' }}
+              </span>
+            </div>
+
+            <!-- Tombol Floating Torch di pojok kanan preview (mudah dijangkau jempol di HP) -->
+            <q-btn
+              v-if="hasTorch"
+              round
+              dense
+              unelevated
+              size="sm"
+              :color="isTorchOn ? 'amber-8' : 'dark'"
+              :text-color="isTorchOn ? 'black' : 'white'"
+              :icon="isTorchOn ? 'flash_on' : 'flash_off'"
+              class="torch-floating-btn"
+              @click="toggleTorch"
+            >
+              <q-tooltip anchor="top middle" self="bottom middle">
+                {{ isTorchOn ? 'Matikan Senter' : 'Nyalakan Senter' }}
+              </q-tooltip>
+            </q-btn>
           </div>
 
           <!-- Overlay loading / error -->
@@ -200,6 +262,21 @@ const errorMessage = ref('')
 const technicalError = ref('')
 const latest = ref(null)
 const history = ref([])
+
+// Hardware Flash (Torch) & Ambient Light Detection State
+const hasTorch = ref(false)
+const isTorchOn = ref(false)
+const isAutoTorchEnabled = ref(true)
+const currentBrightness = ref(100)
+const autoTorchTriggered = ref(false)
+const isLowLight = computed(() => currentBrightness.value < 48)
+
+let activeVideoTrack = null
+let lightCheckTimer = null
+let consecutiveLowLightCount = 0
+let consecutiveBrightLightCount = 0
+let lightMeterCanvas = null
+let lightMeterCtx = null
 
 let feedbackTimer = null
 let lockFallbackTimer = null
@@ -504,8 +581,14 @@ const applyHardwareCameraConstraints = async (videoElement) => {
       const tracks = stream.getVideoTracks()
       if (tracks && tracks.length > 0) {
         const track = tracks[0]
+        activeVideoTrack = track
+
         if (typeof track.getCapabilities === 'function' && typeof track.applyConstraints === 'function') {
           const caps = track.getCapabilities() || {}
+          if (caps.torch) {
+            hasTorch.value = true
+          }
+
           const constraints = {}
           if (Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
             constraints.focusMode = 'continuous'
@@ -523,6 +606,124 @@ const applyHardwareCameraConstraints = async (videoElement) => {
   } catch {
     /* hardware constraint opsional */
   }
+}
+
+// ---------------------------------------------------------------------
+// KONTROL SENTER (TORCH) & DETEKSI CAHAYA OTOMATIS
+// ---------------------------------------------------------------------
+const setTorch = async (targetState, isAuto = false) => {
+  if (!activeVideoTrack || !hasTorch.value) return
+  try {
+    await activeVideoTrack.applyConstraints({
+      advanced: [{ torch: targetState }]
+    })
+    isTorchOn.value = targetState
+    autoTorchTriggered.value = targetState && isAuto
+    if (targetState && isAuto) {
+      $q.notify({
+        type: 'info',
+        icon: 'flash_on',
+        message: 'Kondisi minim cahaya: Lampu flash aktif otomatis.',
+        position: 'top',
+        timeout: 1800
+      })
+    }
+  } catch (err) {
+    console.warn('[CAMERA] Gagal mengatur status torch:', err)
+  }
+}
+
+const toggleTorch = () => {
+  autoTorchTriggered.value = false // override tindakan manual user
+  setTorch(!isTorchOn.value, false)
+}
+
+const toggleAutoTorch = () => {
+  isAutoTorchEnabled.value = !isAutoTorchEnabled.value
+  $q.notify({
+    type: 'info',
+    icon: isAutoTorchEnabled.value ? 'auto_awesome' : 'flash_auto',
+    message: isAutoTorchEnabled.value ? 'Auto-Flash di tempat gelap: AKTIF' : 'Auto-Flash: NONAKTIF',
+    position: 'top',
+    timeout: 1500
+  })
+}
+
+const checkAmbientLight = (videoElement) => {
+  if (!videoElement || videoElement.readyState < 2 || !show.value || status.value !== 'scanning') return
+
+  try {
+    if (!lightMeterCanvas) {
+      lightMeterCanvas = document.createElement('canvas')
+      lightMeterCanvas.width = 64
+      lightMeterCanvas.height = 48
+      lightMeterCtx = lightMeterCanvas.getContext('2d', { willReadFrequently: true })
+    }
+
+    lightMeterCtx.drawImage(videoElement, 0, 0, 64, 48)
+    const imgData = lightMeterCtx.getImageData(0, 0, 64, 48)
+    const data = imgData.data
+
+    let totalLum = 0
+    const len = data.length
+    // Step 16 = lompat setiap 4 piksel (sangat hemat CPU)
+    for (let i = 0; i < len; i += 16) {
+      totalLum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
+    }
+    const avgLum = Math.round(totalLum / (len / 16))
+    currentBrightness.value = avgLum
+
+    // Ambang batas gelap: jika rata-rata luminance < 48
+    if (avgLum < 48) {
+      consecutiveLowLightCount++
+      consecutiveBrightLightCount = 0
+
+      // Jika terdeteksi gelap 2x berturut-turut (~1.2 detik) dan auto-flash aktif
+      if (consecutiveLowLightCount >= 2 && isAutoTorchEnabled.value && hasTorch.value && !isTorchOn.value) {
+        setTorch(true, true)
+      }
+    } else if (avgLum > 85) {
+      consecutiveBrightLightCount++
+      consecutiveLowLightCount = 0
+
+      // Jika ruangan sudah terang kembali selama 4x (~2.4s) dan flash sebelumnya dinyalakan otomatis
+      if (consecutiveBrightLightCount >= 4 && autoTorchTriggered.value && isTorchOn.value) {
+        setTorch(false, false)
+      }
+    } else {
+      consecutiveLowLightCount = 0
+      consecutiveBrightLightCount = 0
+    }
+  } catch {
+    /* abaikan frame jika video belum ter-render */
+  }
+}
+
+const startLightDetection = (videoElement) => {
+  if (lightCheckTimer) clearInterval(lightCheckTimer)
+  lightCheckTimer = setInterval(() => {
+    checkAmbientLight(videoElement)
+  }, 600)
+}
+
+const stopLightDetection = () => {
+  if (lightCheckTimer) {
+    clearInterval(lightCheckTimer)
+    lightCheckTimer = null
+  }
+  if (isTorchOn.value && activeVideoTrack) {
+    try {
+      activeVideoTrack.applyConstraints({ advanced: [{ torch: false }] })
+    } catch {}
+  }
+  isTorchOn.value = false
+  autoTorchTriggered.value = false
+  hasTorch.value = false
+  activeVideoTrack = null
+  consecutiveLowLightCount = 0
+  consecutiveBrightLightCount = 0
+  lightMeterCanvas = null
+  lightMeterCtx = null
 }
 
 // Ikon sesuai tingkat hasil terakhir
@@ -692,12 +893,14 @@ const startCamera = async () => {
           bindInterval = null
           applyHardwareCameraConstraints(videoEl)
           startZxingFallback(videoEl)
+          startLightDetection(videoEl)
         } else if (bindAttempts > 20) {
           if (bindInterval) clearInterval(bindInterval)
           bindInterval = null
           if (videoEl) {
             applyHardwareCameraConstraints(videoEl)
             startZxingFallback(videoEl)
+            startLightDetection(videoEl)
           }
         }
       }, 200)
@@ -734,6 +937,7 @@ const stopCamera = () => {
   isProcessingSync = false
 
   stopZxing()
+  stopLightDetection()
 
   // Hentikan hardware track kamera secara eksplisit agar stream tidak bocor
   const videoEl = document.querySelector(`#${REGION_ID} video`)
@@ -1047,6 +1251,51 @@ onBeforeUnmount(stopCamera)
   0% { transform: translateY(-45px); opacity: 0.8; }
   50% { transform: translateY(45px); opacity: 1.0; }
   100% { transform: translateY(-45px); opacity: 0.8; }
+}
+
+/* Floating overlay untuk indikator cahaya & tombol senter */
+.camera-floating-overlay {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.light-status-pill {
+  background: rgba(0, 0, 0, 0.68);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: all 0.25s ease;
+}
+
+.light-status-pill--active {
+  background: rgba(245, 158, 11, 0.9);
+  color: #1e1b4b;
+  border-color: #f59e0b;
+}
+
+.torch-floating-btn {
+  margin-left: auto;
+  pointer-events: auto;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.torch-floating-btn:active {
+  transform: scale(0.92);
 }
 </style>
 
