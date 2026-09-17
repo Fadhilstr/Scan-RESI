@@ -23,7 +23,7 @@
                 v-model="username"
                 outlined
                 label="Username / Email"
-                placeholder="cth: fadhil, admin"
+                placeholder="cth: ******* "
                 autocomplete="username"
                 autofocus
                 :rules="[v => !!v || 'Username wajib diisi']"
@@ -176,7 +176,7 @@
               <div class="row justify-center q-mt-sm">
                 <q-btn flat dense no-caps color="grey-7" icon="arrow_back" label="Kembali ke Login" @click="cancelForgot" />
               </div>
-            </q-form>
+            </q-form>f
           </div>
 
           <!-- STEP 4: LUPA PASSWORD — VERIFIKASI OTP RESET -->
