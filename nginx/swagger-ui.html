@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,7 +11,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       padding: 0;
@@ -18,6 +22,7 @@
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       color: #1e293b;
     }
+
     .custom-header {
       background: linear-gradient(135deg, #0b2545 0%, #133a68 100%);
       color: #ffffff;
@@ -26,13 +31,15 @@
       align-items: center;
       justify-content: space-between;
       border-bottom: 3px solid #f26522;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
+
     .custom-brand {
       display: flex;
       align-items: center;
       gap: 12px;
     }
+
     .custom-logo {
       background: #f26522;
       color: #fff;
@@ -42,25 +49,29 @@
       border-radius: 6px;
       letter-spacing: 0.5px;
     }
+
     .custom-title {
       font-size: 18px;
       font-weight: 700;
       margin: 0;
       letter-spacing: -0.2px;
     }
+
     .custom-sub {
       font-size: 12px;
       color: #94a3b8;
       margin: 0;
     }
+
     .custom-actions {
       display: flex;
       align-items: center;
       gap: 10px;
     }
+
     .btn-download {
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.25);
       color: #f8fafc;
       padding: 6px 14px;
       border-radius: 6px;
@@ -72,12 +83,14 @@
       align-items: center;
       gap: 6px;
     }
+
     .btn-download:hover {
       background: #f26522;
       border-color: #f26522;
       color: #ffffff;
       transform: translateY(-1px);
     }
+
     .status-badge {
       background: #10b981;
       color: white;
@@ -89,6 +102,7 @@
       align-items: center;
       gap: 4px;
     }
+
     .status-dot {
       width: 6px;
       height: 6px;
@@ -96,33 +110,59 @@
       border-radius: 50%;
       animation: pulse 1.5s infinite;
     }
+
     @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.85); }
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.5;
+        transform: scale(0.85);
+      }
     }
-    .swagger-ui .topbar { display: none !important; }
-    .swagger-ui .info { margin: 24px 0 16px 0; }
-    .swagger-ui .info .title { font-family: 'Inter', sans-serif; font-weight: 700; }
+
+    .swagger-ui .topbar {
+      display: none !important;
+    }
+
+    .swagger-ui .info {
+      margin: 24px 0 16px 0;
+    }
+
+    .swagger-ui .info .title {
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+    }
+
     .swagger-ui .btn.authorize {
       border-color: #10b981;
       color: #10b981;
       font-weight: 600;
     }
-    .swagger-ui .btn.authorize svg { fill: #10b981; }
+
+    .swagger-ui .btn.authorize svg {
+      fill: #10b981;
+    }
+
     .swagger-ui .opblock {
       border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(0, 0, 0, 0.08);
       margin-bottom: 12px;
     }
   </style>
 </head>
+
 <body>
   <header class="custom-header">
     <div class="custom-brand">
-      <span class="custom-logo">WAHANA</span>
+      <span class="custom-logo">DIJAK</span>
       <div>
-        <h1 class="custom-title">Wahana Express Scan API</h1>
+        <h1 class="custom-title">DIJAK Express Scan API</h1>
         <p class="custom-sub">Interactive OpenAPI 3.0 Documentation & Tester</p>
       </div>
     </div>
@@ -139,7 +179,7 @@
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js" charset="UTF-8"></script>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js" charset="UTF-8"></script>
   <script>
-    window.onload = function() {
+    window.onload = function () {
       window.ui = SwaggerUIBundle({
         url: "/api/openapi.yaml?t=" + new Date().getTime(),
         dom_id: '#swagger-ui',
@@ -163,4 +203,5 @@
     };
   </script>
 </body>
+
 </html>
