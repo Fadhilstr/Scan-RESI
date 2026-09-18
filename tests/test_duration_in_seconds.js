@@ -198,6 +198,7 @@ async function runDetailedSecondsBenchmark() {
         Kategori: category,
         Status: 'PASS'
       })
+
     } else {
       console.log(`  Summary ${fmtConfig.name}: FAIL (0/5 berhasil)\n`)
       summaryRows.push({
